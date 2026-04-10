@@ -2109,6 +2109,71 @@ describe("createBubble", () => {
     }
   });
 
+  test("derives an accessible name from text content", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: " Save draft " });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.insertChild({ parentId: createdButtonId, childId: textId });
+
+      return createdButtonId;
+    });
+    const button = bubble.snapshot().query.getById(buttonId);
+
+    expect(button?.kind).toBe("element");
+
+    if (button?.kind === "element") {
+      expect(button.name).toBe("Save draft");
+    }
+  });
+
+  test("derives an accessible name from aria-label", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Visible text" });
+
+      tx.setAttribute({ nodeId: createdButtonId, name: "aria-label", value: "Hidden label" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.insertChild({ parentId: createdButtonId, childId: textId });
+
+      return createdButtonId;
+    });
+    const button = bubble.getNode(buttonId);
+
+    expect(button?.kind).toBe("element");
+
+    if (button?.kind === "element") {
+      expect(button.name).toBe("Hidden label");
+    }
+  });
+
+  test("prefers aria-label over text content for the accessible name", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Visible text" });
+
+      tx.setAttribute({ nodeId: createdButtonId, name: "aria-label", value: "Preferred label" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.insertChild({ parentId: createdButtonId, childId: textId });
+
+      return createdButtonId;
+    });
+    const button = bubble.snapshot().query.getById(buttonId);
+
+    expect(button?.kind).toBe("element");
+
+    if (button?.kind === "element") {
+      expect(button.name).toBe("Preferred label");
+    }
+  });
+
   test("mutating snapshot data does not mutate runtime state", () => {
     const bubble = createBubble();
 

@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 30: Accessible name derivation](./task-30-accessible-name-derivation.md)
+- None
 
 ## Definition of Done
 

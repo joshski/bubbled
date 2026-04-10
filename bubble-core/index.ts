@@ -18,6 +18,7 @@ export interface BubbleElementNode {
   attributes: Record<string, string>;
   properties: Record<string, unknown>;
   role: string | null;
+  name: string | null;
 }
 
 export interface BubbleTextNode {
@@ -323,6 +324,38 @@ function deriveElementRole(node: BubbleElementNode): string | null {
   return getExplicitRole(node) ?? deriveImplicitRole(node);
 }
 
+function normalizeAccessibleText(value: string): string | null {
+  const normalizedValue = value.replace(/\s+/g, " ").trim();
+
+  return normalizedValue.length === 0 ? null : normalizedValue;
+}
+
+function deriveTextContent(
+  nodeId: BubbleNodeId,
+  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>,
+): string {
+  const node = nodeLookup.get(nodeId) as BubbleNode;
+
+  if (node.kind === "text") {
+    return node.value;
+  }
+
+  return node.children.map((childId) => deriveTextContent(childId, nodeLookup)).join("");
+}
+
+function deriveElementName(
+  node: BubbleElementNode,
+  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>,
+): string | null {
+  const ariaLabel = normalizeAccessibleText(node.attributes["aria-label"] ?? "");
+
+  if (ariaLabel !== null) {
+    return ariaLabel;
+  }
+
+  return normalizeAccessibleText(deriveTextContent(node.id, nodeLookup));
+}
+
 export function createBubble(): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -373,6 +406,7 @@ export function createBubble(): BubbleRuntime {
         attributes: { ...node.attributes },
         properties: { ...node.properties },
         role: node.role,
+        name: node.name,
       };
     }
 
@@ -407,6 +441,13 @@ export function createBubble(): BubbleRuntime {
 
       Object.defineProperty(elementSnapshot, "role", {
         value: node.role,
+        enumerable: false,
+        writable: false,
+        configurable: false,
+      });
+
+      Object.defineProperty(elementSnapshot, "name", {
+        value: node.name,
         enumerable: false,
         writable: false,
         configurable: false,
@@ -699,6 +740,19 @@ export function createBubble(): BubbleRuntime {
     ]);
   };
 
+  const refreshDerivedElementMetadata = (
+    nodeLookup: Map<BubbleNodeId, BubbleNode>,
+  ): void => {
+    for (const node of nodeLookup.values()) {
+      if (node.kind !== "element") {
+        continue;
+      }
+
+      node.role = deriveElementRole(node);
+      node.name = deriveElementName(node, nodeLookup);
+    }
+  };
+
   return {
     rootId: root.id,
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
@@ -741,9 +795,8 @@ export function createBubble(): BubbleRuntime {
             attributes: {},
             properties: {},
             role: null,
+            name: null,
           };
-
-          elementNode.role = deriveElementRole(elementNode);
 
           draftNodes.set(id, elementNode);
           mutations.push({ type: "node-created", nodeId: id, kind: "element" });
@@ -841,7 +894,6 @@ export function createBubble(): BubbleRuntime {
 
           assertElementNode(node, nodeId, "Attributes");
           node.attributes[name] = value;
-          node.role = deriveElementRole(node);
           mutations.push({ type: "attribute-set", nodeId, name, value });
         },
         removeAttribute({ nodeId, name }) {
@@ -849,7 +901,6 @@ export function createBubble(): BubbleRuntime {
 
           assertElementNode(node, nodeId, "Attributes");
           delete node.attributes[name];
-          node.role = deriveElementRole(node);
           mutations.push({ type: "attribute-removed", nodeId, name });
         },
         setProperty({ nodeId, name, value }) {
@@ -857,7 +908,6 @@ export function createBubble(): BubbleRuntime {
 
           assertElementNode(node, nodeId, "Properties");
           node.properties[name] = value;
-          node.role = deriveElementRole(node);
           mutations.push({ type: "property-set", nodeId, name, value });
         },
         addEventListener({ nodeId, type, listener, capture = false }) {
@@ -912,6 +962,7 @@ export function createBubble(): BubbleRuntime {
 
       try {
         const result = fn(transaction);
+        refreshDerivedElementMetadata(draftNodes);
 
         nodes = draftNodes;
         eventListeners = draftEventListeners;
