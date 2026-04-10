@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 23: Explicit focus](./task-23-explicit-focus.md)
+- None
 
 ## Definition of Done
 

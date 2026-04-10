@@ -146,6 +146,8 @@ export interface BubbleRuntime {
   getRoot(): Readonly<BubbleRootNode>;
   snapshot(): BubbleSnapshot;
   dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult;
+  focus(id: BubbleNodeId): void;
+  getFocusedNodeId(): BubbleNodeId | null;
   subscribe(listener: BubbleRuntimeListener): () => void;
 }
 
@@ -157,6 +159,7 @@ const TEXT_VALUE_ERROR = "Text value must be a string";
 const EVENT_TYPE_ERROR = "Event type must be a non-empty string";
 const CHILD_INDEX_ERROR = "Child index must be an integer within the parent child range";
 const NESTED_TRANSACTION_ERROR = "Nested transactions are not supported";
+const FOCUSABLE_HTML_TAGS = new Set(["button", "input", "select", "textarea"]);
 
 let nextBubbleInstanceId = 0;
 
@@ -209,6 +212,16 @@ function assertEventTargetNode(
   }
 }
 
+function assertFocusableNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
+  if (node.kind !== "element") {
+    throw new Error(`Only element nodes can receive focus: ${nodeId}`);
+  }
+
+  if (node.namespace !== "html" || !FOCUSABLE_HTML_TAGS.has(node.tag)) {
+    throw new Error(`Node is not focusable: ${nodeId}`);
+  }
+}
+
 export function createBubble(): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -223,6 +236,7 @@ export function createBubble(): BubbleRuntime {
   let nextTransactionSequence = 0;
   let nextListenerId = 0;
   let transactionDepth = 0;
+  let focusedNodeId: BubbleNodeId | null = null;
   const listeners = new Set<BubbleRuntimeListener>();
   let eventListeners = new Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>();
 
@@ -737,6 +751,19 @@ export function createBubble(): BubbleRuntime {
       }
 
       return { defaultPrevented, delivered: true };
+    },
+    focus(id) {
+      const node = nodes.get(id);
+
+      if (node === undefined) {
+        throw new Error(`Unknown node ID: ${id}`);
+      }
+
+      assertFocusableNode(node, id);
+      focusedNodeId = id;
+    },
+    getFocusedNodeId() {
+      return focusedNodeId;
     },
     subscribe(listener) {
       listeners.add(listener);

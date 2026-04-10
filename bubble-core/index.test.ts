@@ -2034,6 +2034,74 @@ describe("createBubble", () => {
     expect(bubble.getNode("node:mutated")).toBeNull();
   });
 
+  test("focusing a focusable node sets active focus", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+
+      return createdButtonId;
+    });
+
+    bubble.focus(buttonId);
+
+    expect(bubble.getFocusedNodeId()).toBe(buttonId);
+  });
+
+  test("focusing a second node clears the first", () => {
+    const bubble = createBubble();
+
+    const { firstButtonId, secondButtonId } = bubble.transact((tx) => {
+      const createdFirstButtonId = tx.createElement({ tag: "button" });
+      const createdSecondButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFirstButtonId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSecondButtonId });
+
+      return {
+        firstButtonId: createdFirstButtonId,
+        secondButtonId: createdSecondButtonId,
+      };
+    });
+
+    bubble.focus(firstButtonId);
+    bubble.focus(secondButtonId);
+
+    expect(bubble.getFocusedNodeId()).toBe(secondButtonId);
+  });
+
+  test("rejects non-focusable targets", () => {
+    const bubble = createBubble();
+
+    const { divId, textId } = bubble.transact((tx) => {
+      const createdDivId = tx.createElement({ tag: "div" });
+      const createdTextId = tx.createText({ value: "Hello" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdDivId });
+
+      return { divId: createdDivId, textId: createdTextId };
+    });
+
+    expect(() => {
+      bubble.focus(divId);
+    }).toThrow(`Node is not focusable: ${divId}`);
+    expect(() => {
+      bubble.focus(textId);
+    }).toThrow(`Only element nodes can receive focus: ${textId}`);
+    expect(bubble.getFocusedNodeId()).toBeNull();
+  });
+
+  test("rejects focusing an unknown node", () => {
+    const bubble = createBubble();
+
+    expect(() => {
+      bubble.focus("missing");
+    }).toThrow("Unknown node ID: missing");
+    expect(bubble.getFocusedNodeId()).toBeNull();
+  });
+
   test("rejects invalid child mutations", () => {
     const bubble = createBubble();
     const otherBubble = createBubble();
