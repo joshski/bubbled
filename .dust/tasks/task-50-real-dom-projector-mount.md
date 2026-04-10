@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 49: Snapshot projector](./task-49-snapshot-projector.md)
+- None
 
 ## Definition of Done
 

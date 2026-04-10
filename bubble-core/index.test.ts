@@ -12,7 +12,7 @@ import {
   type BubbleViewport,
   type BubbleViewportState,
 } from "../bubble-capabilities";
-import { createBubble } from "./index";
+import { createBubble, serializeBubbleSnapshot } from "./index";
 
 function createFakeClock(initialTime: number) {
   let currentTime = initialTime;
@@ -3462,6 +3462,174 @@ describe("createBubble", () => {
       properties: {},
     });
     expect(bubble.getNode("node:mutated")).toBeNull();
+  });
+
+  test("serializes the current tree structure into a snapshot projection", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const sectionId = tx.createElement({ tag: "section" });
+      const buttonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: sectionId });
+      tx.insertChild({ parentId: sectionId, childId: buttonId });
+      tx.insertChild({ parentId: buttonId, childId: textId });
+    });
+
+    expect(serializeBubbleSnapshot(bubble.snapshot())).toBe(`{
+  "kind": "root",
+  "children": [
+    {
+      "kind": "element",
+      "tag": "section",
+      "namespace": "html",
+      "attributes": {},
+      "properties": {},
+      "children": [
+        {
+          "kind": "element",
+          "tag": "button",
+          "namespace": "html",
+          "attributes": {},
+          "properties": {},
+          "children": [
+            {
+              "kind": "text",
+              "value": "Save"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}`);
+  });
+
+  test("serializes attributes, properties, and text content correctly", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const articleId = tx.createElement({ tag: "article" });
+      const textId = tx.createText({ value: "Hello world" });
+
+      tx.setAttribute({ nodeId: articleId, name: "data-state", value: "ready" });
+      tx.setAttribute({ nodeId: articleId, name: "aria-live", value: "polite" });
+      tx.setProperty({
+        nodeId: articleId,
+        name: "dataset",
+        value: {
+          zebra: true,
+          alpha: ["first", { gamma: 2, beta: 1 }],
+        },
+      });
+      tx.setProperty({ nodeId: articleId, name: "metadata", value: null });
+      tx.setProperty({ nodeId: articleId, name: "tabIndex", value: 3 });
+      tx.insertChild({ parentId: bubble.rootId, childId: articleId });
+      tx.insertChild({ parentId: articleId, childId: textId });
+    });
+
+    expect(serializeBubbleSnapshot(bubble.snapshot())).toBe(`{
+  "kind": "root",
+  "children": [
+    {
+      "kind": "element",
+      "tag": "article",
+      "namespace": "html",
+      "attributes": {
+        "aria-live": "polite",
+        "data-state": "ready"
+      },
+      "properties": {
+        "dataset": {
+          "alpha": [
+            "first",
+            {
+              "beta": 1,
+              "gamma": 2
+            }
+          ],
+          "zebra": true
+        },
+        "metadata": null,
+        "tabIndex": 3
+      },
+      "children": [
+        {
+          "kind": "text",
+          "value": "Hello world"
+        }
+      ]
+    }
+  ]
+}`);
+  });
+
+  test("serializes snapshots deterministically", () => {
+    const firstBubble = createBubble();
+    const secondBubble = createBubble();
+
+    firstBubble.transact((tx) => {
+      const articleId = tx.createElement({ tag: "article" });
+      const textId = tx.createText({ value: "Same tree" });
+
+      tx.setAttribute({ nodeId: articleId, name: "zeta", value: "last" });
+      tx.setAttribute({ nodeId: articleId, name: "alpha", value: "first" });
+      tx.setProperty({
+        nodeId: articleId,
+        name: "config",
+        value: { zeta: 2, alpha: 1 },
+      });
+      tx.setProperty({ nodeId: articleId, name: "tabIndex", value: 1 });
+      tx.insertChild({ parentId: firstBubble.rootId, childId: articleId });
+      tx.insertChild({ parentId: articleId, childId: textId });
+    });
+
+    secondBubble.transact((tx) => {
+      const articleId = tx.createElement({ tag: "article" });
+      const textId = tx.createText({ value: "Same tree" });
+
+      tx.setAttribute({ nodeId: articleId, name: "alpha", value: "first" });
+      tx.setAttribute({ nodeId: articleId, name: "zeta", value: "last" });
+      tx.setProperty({ nodeId: articleId, name: "tabIndex", value: 1 });
+      tx.setProperty({
+        nodeId: articleId,
+        name: "config",
+        value: { alpha: 1, zeta: 2 },
+      });
+      tx.insertChild({ parentId: secondBubble.rootId, childId: articleId });
+      tx.insertChild({ parentId: articleId, childId: textId });
+    });
+
+    expect(serializeBubbleSnapshot(firstBubble.snapshot())).toBe(
+      serializeBubbleSnapshot(secondBubble.snapshot()),
+    );
+  });
+
+  test("rejects unsupported property values during snapshot serialization", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const buttonId = tx.createElement({ tag: "button" });
+
+      tx.setProperty({ nodeId: buttonId, name: "onClick", value: () => "nope" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    expect(() => {
+      serializeBubbleSnapshot(bubble.snapshot());
+    }).toThrow("Unsupported property value in snapshot serialization");
+  });
+
+  test("rejects snapshots that reference missing nodes during serialization", () => {
+    const bubble = createBubble();
+    const snapshot = bubble.snapshot();
+
+    (snapshot.nodes as Map<string, unknown>).delete(snapshot.rootId);
+
+    expect(() => {
+      serializeBubbleSnapshot(snapshot);
+    }).toThrow(`Cannot serialize missing node: ${snapshot.rootId}`);
   });
 
   test("query returns read-only views", () => {
