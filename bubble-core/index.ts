@@ -2,6 +2,7 @@ import {
   createCapabilityRegistry,
   type BubbleCapabilities,
   type BubbleCapabilityName,
+  type BubbleTimerHandle,
 } from "../bubble-capabilities";
 
 export type BubbleNodeId = string;
@@ -177,6 +178,8 @@ export interface BubbleRuntime {
   readonly rootId: BubbleNodeId;
   resolveCapability<Name extends BubbleCapabilityName>(name: Name): BubbleCapabilities[Name];
   now(): number;
+  setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle;
+  clearTimeout(handle: BubbleTimerHandle): void;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
@@ -1067,6 +1070,12 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     },
     now() {
       return capabilityRegistry.resolveCapability("clock").now();
+    },
+    setTimeout(callback, delayMs) {
+      return capabilityRegistry.resolveCapability("timers").setTimeout(callback, delayMs);
+    },
+    clearTimeout(handle) {
+      capabilityRegistry.resolveCapability("timers").clearTimeout(handle);
     },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       if (transactionDepth > 0) {

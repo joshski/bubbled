@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { BubbleUnsupportedCapabilityError } from "../bubble-capabilities";
+import {
+  BubbleUnsupportedCapabilityError,
+  type BubbleTimerHandle,
+} from "../bubble-capabilities";
 import { createBubble } from "./index";
 
 function createFakeClock(initialTime: number) {
@@ -12,6 +15,68 @@ function createFakeClock(initialTime: number) {
     },
     advanceBy: (deltaMs: number) => {
       currentTime += deltaMs;
+    },
+  };
+}
+
+function createFakeClockAndTimers(initialTime: number) {
+  let currentTime = initialTime;
+  let nextTimerId = 0;
+  let nextSequence = 0;
+  const scheduledTimers = new Map<
+    string,
+    {
+      callback: () => void;
+      dueTime: number;
+      sequence: number;
+    }
+  >();
+
+  const runDueTimers = () => {
+    while (true) {
+      const dueTimers = Array.from(scheduledTimers.entries())
+        .filter(([, timer]) => timer.dueTime <= currentTime)
+        .sort(
+          ([, left], [, right]) => left.dueTime - right.dueTime || left.sequence - right.sequence,
+        );
+
+      const nextDueTimer = dueTimers[0];
+
+      if (nextDueTimer === undefined) {
+        return;
+      }
+
+      const [timerId, timer] = nextDueTimer;
+      scheduledTimers.delete(timerId);
+      timer.callback();
+    }
+  };
+
+  return {
+    clock: {
+      now: () => currentTime,
+    },
+    timers: {
+      setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle {
+        nextTimerId += 1;
+        nextSequence += 1;
+
+        const handle = { id: `timer:${nextTimerId}` };
+        scheduledTimers.set(handle.id, {
+          callback,
+          dueTime: currentTime + delayMs,
+          sequence: nextSequence,
+        });
+
+        return handle;
+      },
+      clearTimeout(handle: BubbleTimerHandle) {
+        scheduledTimers.delete(handle.id);
+      },
+    },
+    advanceBy(deltaMs: number) {
+      currentTime += deltaMs;
+      runDueTimers();
     },
   };
 }
@@ -176,6 +241,76 @@ describe("createBubble", () => {
     } finally {
       Date.now = originalDateNow;
     }
+  });
+
+  test("fires a timer only after time advances to its due time", () => {
+    const fakeTime = createFakeClockAndTimers(100);
+    const bubble = createBubble({
+      capabilities: {
+        clock: fakeTime.clock,
+        timers: fakeTime.timers,
+      },
+    });
+    const firedAt: number[] = [];
+
+    bubble.setTimeout(() => {
+      firedAt.push(bubble.now());
+    }, 50);
+
+    expect(firedAt).toEqual([]);
+
+    fakeTime.advanceBy(49);
+
+    expect(firedAt).toEqual([]);
+
+    fakeTime.advanceBy(1);
+
+    expect(firedAt).toEqual([150]);
+  });
+
+  test("fires multiple timers in due-time order", () => {
+    const fakeTime = createFakeClockAndTimers(0);
+    const bubble = createBubble({
+      capabilities: {
+        clock: fakeTime.clock,
+        timers: fakeTime.timers,
+      },
+    });
+    const fired: string[] = [];
+
+    bubble.setTimeout(() => {
+      fired.push("third");
+    }, 30);
+    bubble.setTimeout(() => {
+      fired.push("first");
+    }, 10);
+    bubble.setTimeout(() => {
+      fired.push("second");
+    }, 20);
+
+    fakeTime.advanceBy(30);
+
+    expect(fired).toEqual(["first", "second", "third"]);
+  });
+
+  test("does not fire a cancelled timer", () => {
+    const fakeTime = createFakeClockAndTimers(25);
+    const bubble = createBubble({
+      capabilities: {
+        clock: fakeTime.clock,
+        timers: fakeTime.timers,
+      },
+    });
+    const fired: string[] = [];
+
+    const timerHandle = bubble.setTimeout(() => {
+      fired.push("cancelled");
+    }, 10);
+
+    bubble.clearTimeout(timerHandle);
+    fakeTime.advanceBy(10);
+
+    expect(fired).toEqual([]);
   });
 
   test("returns read-only root snapshots", () => {
