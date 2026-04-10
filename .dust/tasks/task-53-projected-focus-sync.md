@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 52: DOM-to-bubble event bridge](./task-52-dom-to-bubble-event-bridge.md)
+- None
 
 ## Definition of Done
 

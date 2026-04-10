@@ -13,6 +13,11 @@ abstract class FakeDomNode {
   abstract toMarkup(): string;
 }
 
+interface FakeDomEvent {
+  readonly type: string;
+  readonly target: FakeDomNode | null;
+}
+
 class FakeDomText extends FakeDomNode {
   constructor(data: string) {
     super();
@@ -29,6 +34,7 @@ class FakeDomText extends FakeDomNode {
 class FakeDomElement extends FakeDomNode {
   readonly childNodes: FakeDomNode[] = [];
   readonly attributes = new Map<string, string>();
+  readonly listeners = new Map<string, Array<(event: FakeDomEvent) => void>>();
 
   constructor(
     readonly ownerDocument: FakeDomDocument,
@@ -79,6 +85,38 @@ class FakeDomElement extends FakeDomNode {
 
   removeAttribute(name: string) {
     this.attributes.delete(name);
+  }
+
+  addEventListener(type: string, listener: (event: FakeDomEvent) => void) {
+    const listeners = this.listeners.get(type) ?? [];
+
+    listeners.push(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type: string, listener: (event: FakeDomEvent) => void) {
+    const listeners = this.listeners.get(type);
+
+    if (listeners === undefined) {
+      return;
+    }
+
+    const nextListeners = listeners.filter((registeredListener) => registeredListener !== listener);
+
+    if (nextListeners.length === 0) {
+      this.listeners.delete(type);
+      return;
+    }
+
+    this.listeners.set(type, nextListeners);
+  }
+
+  dispatchEvent(event: FakeDomEvent) {
+    for (const listener of this.listeners.get(event.type) ?? []) {
+      listener(event);
+    }
+
+    this.parentNode?.dispatchEvent(event);
   }
 
   getAttribute(name: string): string | null {
@@ -337,5 +375,166 @@ describe("createDomProjector", () => {
     });
 
     expect(markup()).toBe("<aside>Inserted</aside><main>Existing</main>");
+  });
+
+  test("click in DOM reaches bubble listener", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+      tx.insertChild({ parentId: buttonId, childId: textId });
+      tx.addEventListener({
+        nodeId: buttonId,
+        type: "click",
+        listener: () => {
+          calls.push("clicked");
+        },
+      });
+    });
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    (container.childNodes[0] as FakeDomElement).dispatchEvent({
+      type: "click",
+      target: container.childNodes[0] ?? null,
+    });
+
+    expect(buttonId).not.toBe("");
+    expect(calls).toEqual(["clicked"]);
+  });
+
+  test("bridged DOM clicks preserve the mapped bubble target", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+    let sectionId = "";
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      sectionId = tx.createElement({ tag: "section" });
+      buttonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: sectionId });
+      tx.insertChild({ parentId: sectionId, childId: buttonId });
+      tx.insertChild({ parentId: buttonId, childId: textId });
+      tx.addEventListener({
+        nodeId: sectionId,
+        type: "click",
+        listener: (event) => {
+          calls.push(`${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+    });
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    const section = container.childNodes[0] as FakeDomElement;
+    const button = section.childNodes[0] as FakeDomElement;
+
+    button.dispatchEvent({
+      type: "click",
+      target: button,
+    });
+
+    expect(buttonId).not.toBe(sectionId);
+    expect(calls).toEqual([`${buttonId}:${sectionId}:bubble`]);
+  });
+
+  test("unknown DOM targets fail safely", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    bubble.transact((tx) => {
+      const buttonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+      tx.addEventListener({
+        nodeId: buttonId,
+        type: "click",
+        listener: () => {
+          calls.push("clicked");
+        },
+      });
+    });
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+    const unknownTarget = container.ownerDocument.createElement("span");
+
+    projector.mount(container as unknown as HTMLElement);
+
+    expect(() => {
+      container.dispatchEvent({
+        type: "click",
+        target: unknownTarget,
+      });
+    }).not.toThrow();
+    expect(calls).toEqual([]);
+  });
+
+  test("null DOM targets fail safely", () => {
+    const bubble = createBubble();
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    expect(() => {
+      container.dispatchEvent({
+        type: "click",
+        target: null,
+      });
+    }).not.toThrow();
+  });
+
+  test("unmount removes bridged DOM event listeners", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    bubble.transact((tx) => {
+      const buttonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+      tx.addEventListener({
+        nodeId: buttonId,
+        type: "click",
+        listener: () => {
+          calls.push("clicked");
+        },
+      });
+    });
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+    const button = container.ownerDocument.createElement("button");
+
+    projector.mount(container as unknown as HTMLElement);
+    const projectedButton = container.childNodes[0] as FakeDomElement;
+
+    projectedButton.dispatchEvent({
+      type: "click",
+      target: projectedButton,
+    });
+
+    projector.unmount();
+
+    container.appendChild(button);
+    button.dispatchEvent({
+      type: "click",
+      target: button,
+    });
+
+    expect(calls).toEqual(["clicked"]);
   });
 });

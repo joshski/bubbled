@@ -33,8 +33,15 @@ interface DomTextNode extends DomChildNode {
 }
 
 interface DomElementNode extends DomChildNode, DomParentNode {
+  addEventListener(type: string, listener: (event: DomEvent) => void): void;
+  removeEventListener(type: string, listener: (event: DomEvent) => void): void;
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
+}
+
+interface DomEvent {
+  readonly type: string;
+  readonly target: DomChildNode | null;
 }
 
 interface DomDocument {
@@ -53,7 +60,9 @@ function getBubbleNode(bubble: BubbleRuntime, nodeId: BubbleNodeId): Readonly<Bu
 export function createDomProjector(options: CreateDomProjectorOptions): BubbleDomProjector {
   let mountedContainer: DomContainer | null = null;
   let unsubscribe: (() => void) | null = null;
+  let removeDomEventBridges: (() => void) | null = null;
   const nodeLookup = new Map<BubbleNodeId, DomChildNode>();
+  const bubbleIdByDomNode = new Map<DomChildNode, BubbleNodeId>();
 
   const ensureProjectedNode = (
     nodeId: BubbleNodeId,
@@ -71,12 +80,14 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
       const textNode = document.createTextNode(node.value);
 
       nodeLookup.set(nodeId, textNode);
+      bubbleIdByDomNode.set(textNode, nodeId);
       return textNode;
     }
 
     const element = document.createElement(node.tag);
 
     nodeLookup.set(nodeId, element);
+    bubbleIdByDomNode.set(element, nodeId);
 
     for (const [name, value] of Object.entries(node.attributes)) {
       element.setAttribute(name, value);
@@ -167,6 +178,22 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
     }
   };
 
+  const bridgeClickEvent = (event: DomEvent): void => {
+    const targetNode = event.target;
+
+    if (targetNode === null) {
+      return;
+    }
+
+    const targetId = bubbleIdByDomNode.get(targetNode);
+
+    if (targetId === undefined) {
+      return;
+    }
+
+    options.bubble.dispatchEvent({ type: "click", targetId });
+  };
+
   return Object.freeze({
     mount(container) {
       if (mountedContainer !== null) {
@@ -186,20 +213,35 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
 
       mountedContainer = domContainer;
       unsubscribe = options.bubble.subscribe(handleRuntimeEvent);
+
+      if (options.bridgeEvents === true) {
+        domContainer.addEventListener("click", bridgeClickEvent);
+        removeDomEventBridges = () => {
+          domContainer.removeEventListener("click", bridgeClickEvent);
+        };
+      }
     },
     unmount() {
       if (mountedContainer === null) {
         return;
       }
 
+      removeDomEventBridges?.();
+      removeDomEventBridges = null;
       unsubscribe?.();
       unsubscribe = null;
 
       for (const childId of options.bubble.getRoot().children) {
-        nodeLookup.get(childId)?.remove();
+        const projectedNode = nodeLookup.get(childId);
+
+        projectedNode?.remove();
+        if (projectedNode !== undefined) {
+          bubbleIdByDomNode.delete(projectedNode);
+        }
       }
 
       nodeLookup.clear();
+      bubbleIdByDomNode.clear();
       mountedContainer = null;
     },
   });
