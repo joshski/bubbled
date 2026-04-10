@@ -1,6 +1,5 @@
 import { createBubble, type BubbleRuntime } from '../../bubble-core'
 import { createBubbleReactRoot, type BubbleReactRoot } from '../../bubble-react'
-
 import { TodoAppView } from './todo-app.tsx'
 import {
   createTodoStore,

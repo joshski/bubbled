@@ -1,7 +1,6 @@
 import { afterAll, expect, test } from 'bun:test'
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-
 import { chromium, type Browser, type Page } from 'playwright'
 
 async function launchBrowser() {

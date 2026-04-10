@@ -13,6 +13,7 @@ import type {
   BubbleRuntime,
   BubbleTransaction,
 } from '../bubble-core'
+
 import {
   readReactClientInternals,
   type BubbleReactClientInternals,

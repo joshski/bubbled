@@ -1,5 +1,6 @@
-import * as ReactNamespace from 'react'
 import type { Dispatch, SetStateAction } from 'react'
+
+import * as ReactNamespace from 'react'
 
 export interface BubbleReactHookDispatcher {
   useState<TValue>(

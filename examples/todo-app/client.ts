@@ -1,8 +1,8 @@
+import type { TodoItem } from './todo-store.ts'
+
 import { createDomProjector } from '../../bubble-browser'
 import { createBubble } from '../../bubble-core'
-
 import { mountTodoApp } from './mount.tsx'
-import type { TodoItem } from './todo-store.ts'
 
 async function loadInitialTodos(): Promise<readonly TodoItem[]> {
   const response = await fetch('/api/todos')

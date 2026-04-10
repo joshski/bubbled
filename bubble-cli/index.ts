@@ -1,4 +1,3 @@
-import { serializeBubbleSnapshot } from '../bubble-core'
 import {
   createController,
   type BubbleCommand,
@@ -8,6 +7,7 @@ import {
   type BubbleQueryResult,
   type BubbleSession,
 } from '../bubble-control'
+import { serializeBubbleSnapshot } from '../bubble-core'
 
 interface BubbleCliWriter {
   write(chunk: string): void

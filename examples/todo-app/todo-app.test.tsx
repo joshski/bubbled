@@ -7,7 +7,6 @@ import {
   type BubbleSerializedNode,
 } from '../../bubble-core'
 import { createSemanticAssertions } from '../../bubble-test'
-
 import { mountTodoApp } from './mount.tsx'
 import { SAMPLE_TODO_LABELS } from './todo-store.ts'
 
