@@ -54,6 +54,11 @@ export interface BubbleTransaction {
     nodeId: BubbleNodeId;
     name: string;
   }): void;
+  setProperty(input: {
+    nodeId: BubbleNodeId;
+    name: string;
+    value: unknown;
+  }): void;
 }
 
 export interface BubbleRuntime {
@@ -90,9 +95,13 @@ function assertValidChildIndex(index: unknown, childCount: number): asserts inde
   }
 }
 
-function assertElementNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
+function assertElementNode(
+  node: BubbleNode,
+  nodeId: BubbleNodeId,
+  target: "Attributes" | "Properties",
+): asserts node is BubbleElementNode {
   if (node.kind !== "element") {
-    throw new Error(`Attributes are only supported on element nodes: ${nodeId}`);
+    throw new Error(`${target} are only supported on element nodes: ${nodeId}`);
   }
 }
 
@@ -280,14 +289,20 @@ export function createBubble(): BubbleRuntime {
         setAttribute({ nodeId, name, value }) {
           const node = getMutableNode(nodeId);
 
-          assertElementNode(node, nodeId);
+          assertElementNode(node, nodeId, "Attributes");
           node.attributes[name] = value;
         },
         removeAttribute({ nodeId, name }) {
           const node = getMutableNode(nodeId);
 
-          assertElementNode(node, nodeId);
+          assertElementNode(node, nodeId, "Attributes");
           delete node.attributes[name];
+        },
+        setProperty({ nodeId, name, value }) {
+          const node = getMutableNode(nodeId);
+
+          assertElementNode(node, nodeId, "Properties");
+          node.properties[name] = value;
         },
       };
 

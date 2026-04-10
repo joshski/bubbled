@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 11: Set properties](./task-11-set-properties.md)
+(none)
 
 ## Definition of Done
 

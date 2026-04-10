@@ -576,6 +576,54 @@ describe("createBubble", () => {
     });
   });
 
+  test("sets and overwrites an element property", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "input" });
+
+      tx.setProperty({ nodeId: createdElementId, name: "value", value: "first@example.com" });
+      tx.setProperty({ nodeId: createdElementId, name: "value", value: "second@example.com" });
+
+      return createdElementId;
+    });
+
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "input",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: { value: "second@example.com" },
+    });
+  });
+
+  test("stores attributes and properties independently", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdElementId, name: "value", value: "attribute-value" });
+      tx.setProperty({ nodeId: createdElementId, name: "value", value: "property-value" });
+
+      return createdElementId;
+    });
+
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "input",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: { value: "attribute-value" },
+      properties: { value: "property-value" },
+    });
+  });
+
   test("allows empty text values", () => {
     const bubble = createBubble();
 
@@ -836,6 +884,21 @@ describe("createBubble", () => {
       expect(() => {
         tx.removeAttribute({ nodeId: textId, name: "role" });
       }).toThrow(`Attributes are only supported on element nodes: ${textId}`);
+    });
+  });
+
+  test("rejects property mutations on unsupported node types", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const textId = tx.createText({ value: "Save" });
+
+      expect(() => {
+        tx.setProperty({ nodeId: bubble.rootId, name: "value", value: "app" });
+      }).toThrow(`Properties are only supported on element nodes: ${bubble.rootId}`);
+      expect(() => {
+        tx.setProperty({ nodeId: textId, name: "value", value: "label" });
+      }).toThrow(`Properties are only supported on element nodes: ${textId}`);
     });
   });
 
