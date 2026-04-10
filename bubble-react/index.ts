@@ -1,6 +1,5 @@
 import {
   Children,
-  __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE,
   isValidElement,
   type Dispatch,
   type ReactNode,
@@ -14,6 +13,11 @@ import type {
   BubbleRuntime,
   BubbleTransaction,
 } from "../bubble-core";
+import {
+  readReactClientInternals,
+  type BubbleReactClientInternals,
+  type BubbleReactHookDispatcher,
+} from "./react-client-internals";
 
 export interface BubbleReactRoot {
   render(node: ReactNode): void;
@@ -94,19 +98,14 @@ interface BubbleReactHookState<TValue> {
 }
 
 interface BubbleReactComponentState {
-  hooks: BubbleReactHookState<unknown>[];
+  hooks: unknown[];
 }
 
 interface BubbleReactPlanningContext {
   getComponentState(path: string): BubbleReactComponentState;
+  getReactClientInternals(): BubbleReactClientInternals;
   markComponentAsUsed(path: string): void;
   scheduleRender(): void;
-}
-
-interface BubbleReactHookDispatcher {
-  useState<TValue>(
-    initialState: TValue | (() => TValue),
-  ): [TValue, Dispatch<SetStateAction<TValue>>];
 }
 
 function normalizeAttributeName(name: string): string {
@@ -161,7 +160,7 @@ function createUnsupportedHook(): () => never {
 
 function planFunctionComponent(
   componentPath: string,
-  component: (props: Record<string, unknown>) => ReactNode,
+  component: (props: Record<string, unknown>) => ReactNode | Promise<ReactNode>,
   props: Record<string, unknown>,
   context: BubbleReactPlanningContext,
 ): readonly BubbleReactPlan[] {
@@ -219,15 +218,22 @@ function planFunctionComponent(
     useSyncExternalStore: createUnsupportedHook(),
     useTransition: createUnsupportedHook(),
   };
-  const previousDispatcher = __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H;
+  const reactClientInternals = context.getReactClientInternals();
+  const previousDispatcher = reactClientInternals.H;
 
-  __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H = dispatcher;
+  reactClientInternals.H = dispatcher;
 
   try {
     context.markComponentAsUsed(componentPath);
-    return planReactNode(component(props), context, componentPath);
+    const renderedNode = component(props);
+
+    if (renderedNode instanceof Promise) {
+      throw new Error(UNSUPPORTED_REACT_NODE_TYPE_ERROR);
+    }
+
+    return planReactNode(renderedNode, context, componentPath);
   } finally {
-    __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H = previousDispatcher;
+    reactClientInternals.H = previousDispatcher;
   }
 }
 
@@ -260,7 +266,14 @@ function planReactNode(
     const key = child.key === null ? null : String(child.key);
 
     if (typeof child.type === "function") {
-      plans.push(...planFunctionComponent(childPath, child.type, props, context));
+      plans.push(
+        ...planFunctionComponent(
+          childPath,
+          child.type as (props: Record<string, unknown>) => ReactNode | Promise<ReactNode>,
+          props,
+          context,
+        ),
+      );
       return;
     }
 
@@ -288,7 +301,7 @@ function canReuseNode(currentNode: BubbleReactNode, plan: BubbleReactPlan): bool
   return (
     currentNode.key === plan.key &&
     currentNode.kind === plan.kind &&
-    (plan.kind !== "element" || currentNode.tag === plan.tag)
+    (plan.kind === "text" || (currentNode.kind === "element" && currentNode.tag === plan.tag))
   );
 }
 
@@ -459,26 +472,25 @@ function reconcileNode(
     };
   }
 
-  reconcileAttributes(currentNode as BubbleReactElementNode, plan as BubbleReactElementPlan, tx);
-  reconcileProperties(currentNode as BubbleReactElementNode, plan as BubbleReactElementPlan, tx);
-  const eventHandlers = reconcileEventHandlers(
-    currentNode as BubbleReactElementNode,
-    plan as BubbleReactElementPlan,
-    tx,
-  );
+  const currentElementNode = currentNode as BubbleReactElementNode;
+  const elementPlan = plan as BubbleReactElementPlan;
+
+  reconcileAttributes(currentElementNode, elementPlan, tx);
+  reconcileProperties(currentElementNode, elementPlan, tx);
+  const eventHandlers = reconcileEventHandlers(currentElementNode, elementPlan, tx);
 
   return {
     kind: "element",
-    key: plan.key,
-    nodeId: currentNode.nodeId,
-    tag: currentNode.tag,
-    attributes: { ...(plan as BubbleReactElementPlan).attributes },
-    properties: { ...(plan as BubbleReactElementPlan).properties },
+    key: elementPlan.key,
+    nodeId: currentElementNode.nodeId,
+    tag: currentElementNode.tag,
+    attributes: { ...elementPlan.attributes },
+    properties: { ...elementPlan.properties },
     eventHandlers,
     children: reconcileChildren({
-      parentId: currentNode.nodeId,
-      currentChildren: (currentNode as BubbleReactElementNode).children,
-      nextPlans: (plan as BubbleReactElementPlan).children,
+      parentId: currentElementNode.nodeId,
+      currentChildren: currentElementNode.children,
+      nextPlans: elementPlan.children,
       tx,
     }),
   };
@@ -635,6 +647,7 @@ export function createBubbleReactRoot(options: CreateBubbleReactRootOptions): Bu
         const usedComponentPaths = new Set<string>();
         const nextPlans = planReactNode(currentNode, {
           getComponentState,
+          getReactClientInternals: readReactClientInternals,
           markComponentAsUsed(path) {
             usedComponentPaths.add(path);
           },

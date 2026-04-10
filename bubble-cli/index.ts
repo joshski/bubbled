@@ -107,9 +107,12 @@ export async function main(
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
   const createCliController = options.createController ?? createController;
-  const [category, type] = positional;
+  const category = positional[0];
+  const type = positional[1];
 
   if (
+    category === undefined ||
+    type === undefined ||
     (category !== "command" && category !== "query") ||
     positional.length !== 2
   ) {

@@ -247,10 +247,10 @@ export interface CreateBubbleOptions {
 
 export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): BubbleQueryApi {
   return Object.freeze({
-    getById(id) {
+    getById(id: BubbleNodeId): Readonly<BubbleNode> | null {
       return snapshot.nodes.get(id) ?? null;
     },
-    getByTag(tag) {
+    getByTag(tag: string): ReadonlyArray<Readonly<BubbleElementNode>> {
       const matchingNodes: Readonly<BubbleElementNode>[] = [];
 
       for (const node of snapshot.nodes.values()) {
@@ -261,7 +261,10 @@ export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): Bubb
 
       return Object.freeze(matchingNodes);
     },
-    getByRole(role, options) {
+    getByRole(
+      role: string,
+      options?: { name?: string },
+    ): ReadonlyArray<Readonly<BubbleElementNode>> {
       const matchingNodes: Readonly<BubbleElementNode>[] = [];
 
       for (const node of snapshot.nodes.values()) {
@@ -278,7 +281,7 @@ export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): Bubb
 
       return Object.freeze(matchingNodes);
     },
-    getControlForLabel(labelId) {
+    getControlForLabel(labelId: BubbleNodeId): Readonly<BubbleElementNode> | null {
       return resolveLabelControl(labelId, snapshot.nodes);
     },
   });
@@ -409,7 +412,7 @@ function assertValidEventType(type: unknown): asserts type is string {
 }
 
 function assertValidChildIndex(index: unknown, childCount: number): asserts index is number {
-  if (!Number.isInteger(index) || index < 0 || index > childCount) {
+  if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index > childCount) {
     throw new Error(CHILD_INDEX_ERROR);
   }
 }
@@ -679,11 +682,13 @@ function resolveLabelControl(
   const explicitControlId = labelNode.attributes.for;
 
   if (explicitControlId !== undefined) {
-    const explicitControl = Array.from(nodeLookup.values()).find((node) => {
-      return isLabelableElement(node) && node.attributes.id === explicitControlId;
-    });
+    for (const node of nodeLookup.values()) {
+      if (isLabelableElement(node) && node.attributes.id === explicitControlId) {
+        return node;
+      }
+    }
 
-    return explicitControl ?? null;
+    return null;
   }
 
   return findFirstLabelableDescendant(labelId, nodeLookup);
@@ -797,7 +802,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
         id: node.id,
         kind: node.kind,
         children: Object.freeze([...node.children]),
-      });
+      }) as Readonly<BubbleRootNode>;
     }
 
     if (node.kind === "element") {
@@ -1140,6 +1145,17 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       delivered: initialResult.delivered || forwardedResult.delivered,
     };
   };
+
+  function dispatchEvent(input: BubbleSubmitDispatchInput): BubbleSubmitDispatchResult;
+  function dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult;
+  function dispatchEvent({
+    type,
+    targetId,
+    data = {},
+    cancelable = type === "submit",
+  }: BubbleDispatchInput): BubbleDispatchResult | BubbleSubmitDispatchResult {
+    return dispatchEventToTarget({ type, targetId, data, cancelable });
+  }
 
   const getTabOrder = (): readonly BubbleNodeId[] => {
     const visitedElementIds: BubbleNodeId[] = [];
@@ -1525,9 +1541,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     serializeForm(formId) {
       return serializeForm(formId);
     },
-    dispatchEvent({ type, targetId, data = {}, cancelable = type === "submit" }) {
-      return dispatchEventToTarget({ type, targetId, data, cancelable });
-    },
+    dispatchEvent,
     focus(id) {
       const node = nodes.get(id);
 

@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { createBubble } from "../bubble-core";
+import {
+  type BubbleElementNode,
+  createBubble,
+  type BubbleRootNode,
+  type BubbleRuntime,
+  type BubbleRuntimeListener,
+  type BubbleTextNode,
+} from "../bubble-core";
 import { createDomLayout, createDomProjector, measureAndPlacePopover, placePopover } from "./index";
 
 abstract class FakeDomNode {
@@ -198,6 +205,84 @@ function createContainer() {
       return container.childNodes.map((child) => child.toMarkup()).join("");
     },
   };
+}
+
+function createProjectorTestBubble(
+  overrides: Partial<BubbleRuntime>,
+): BubbleRuntime {
+  return {
+    rootId: "root",
+    resolveCapability() {
+      throw new Error("not implemented");
+    },
+    now() {
+      return 0;
+    },
+    setTimeout() {
+      throw new Error("not implemented");
+    },
+    clearTimeout() {},
+    queueMicrotask() {},
+    measureElement() {
+      throw new Error("not implemented");
+    },
+    getViewportState() {
+      return { width: 0, height: 0, scrollX: 0, scrollY: 0 };
+    },
+    subscribeToViewport() {
+      return () => {};
+    },
+    fetch() {
+      throw new Error("not implemented");
+    },
+    transact(fn) {
+      throw new Error(`not implemented: ${String(fn)}`);
+    },
+    getNode() {
+      return null;
+    },
+    getRoot() {
+      return { id: "root", kind: "root", children: [] };
+    },
+    snapshot() {
+      return {
+        rootId: "root",
+        nodes: new Map([["root", { id: "root", kind: "root", children: [] }]]),
+        query: {
+          getById() {
+            return null;
+          },
+          getByTag() {
+            return [];
+          },
+          getByRole() {
+            return [];
+          },
+          getControlForLabel() {
+            return null;
+          },
+        },
+      };
+    },
+    serializeForm() {
+      return [];
+    },
+    dispatchEvent() {
+      return { defaultPrevented: false, delivered: false };
+    },
+    focus() {},
+    blur() {},
+    getFocusedNodeId() {
+      return null;
+    },
+    getTabOrder() {
+      return [];
+    },
+    subscribe() {
+      return () => {};
+    },
+    ...overrides,
+  } as BubbleRuntime;
 }
 
 describe("createDomProjector", () => {
@@ -849,7 +934,9 @@ describe("createDomProjector", () => {
     projector.mount(container as unknown as HTMLElement);
     bubble.focus(buttonId);
 
-    expect(container.ownerDocument.activeElement).toBe(container.childNodes[0]);
+    expect(container.ownerDocument.activeElement).toBe(
+      (container.childNodes[0] as FakeDomElement | undefined) ?? null,
+    );
     expect(bubble.getFocusedNodeId()).toBe(buttonId);
   });
 
@@ -867,9 +954,15 @@ describe("createDomProjector", () => {
 
     projector.mount(container as unknown as HTMLElement);
 
-    (container.childNodes[0] as FakeDomElement).focus();
+    const projectedButton = container.childNodes[0];
 
-    expect(container.ownerDocument.activeElement).toBe(container.childNodes[0]);
+    if (!(projectedButton instanceof FakeDomElement)) {
+      throw new Error("Expected the projected button to exist.");
+    }
+
+    projectedButton.focus();
+
+    expect(container.ownerDocument.activeElement).toBe(projectedButton);
     expect(bubble.getFocusedNodeId()).toBe(buttonId);
   });
 
@@ -897,6 +990,7 @@ describe("createDomProjector", () => {
     (container.childNodes[0] as FakeDomElement).dispatchEvent({
       type: "focus",
       target: container.childNodes[0] ?? null,
+      preventDefault() {},
     });
 
     expect(observedFocus).toEqual([buttonId]);
@@ -955,8 +1049,177 @@ describe("createDomProjector", () => {
       (container.childNodes[0] as FakeDomElement).dispatchEvent({
         type: "focus",
         target: null,
+        preventDefault() {},
       });
     }).not.toThrow();
     expect(bubble.getFocusedNodeId()).toBeNull();
+  });
+
+  test("mount fails clearly when the bubble snapshot references an unknown node", () => {
+    const bubble = createProjectorTestBubble({
+      snapshot() {
+        return {
+          rootId: "root",
+          nodes: new Map([["root", { id: "root", kind: "root", children: ["missing"] }]]),
+          query: {
+            getById() {
+              return null;
+            },
+            getByTag() {
+              return [];
+            },
+            getByRole() {
+              return [];
+            },
+            getControlForLabel() {
+              return null;
+            },
+          },
+        };
+      },
+    });
+    const projector = createDomProjector({ bubble });
+    const { container } = createContainer();
+
+    expect(() => projector.mount(container as unknown as HTMLElement)).toThrow("Unknown node ID: missing");
+  });
+
+  test("mount fails clearly when the bubble snapshot is missing the root node", () => {
+    const bubble = createProjectorTestBubble({
+      snapshot() {
+        return {
+          rootId: "root",
+          nodes: new Map(),
+          query: {
+            getById() {
+              return null;
+            },
+            getByTag() {
+              return [];
+            },
+            getByRole() {
+              return [];
+            },
+            getControlForLabel() {
+              return null;
+            },
+          },
+        };
+      },
+    });
+    const projector = createDomProjector({ bubble });
+    const { container } = createContainer();
+
+    expect(() => projector.mount(container as unknown as HTMLElement)).toThrow(
+      "Bubble snapshot is missing root node root.",
+    );
+  });
+
+  test("mount fails clearly when the bubble snapshot tries to project the root node as a child", () => {
+    const rootNode: BubbleRootNode = { id: "root", kind: "root", children: ["root"] };
+    const bubble = createProjectorTestBubble({
+      getNode(nodeId) {
+        return nodeId === "root" ? rootNode : null;
+      },
+      snapshot() {
+        return {
+          rootId: "root",
+          nodes: new Map([["root", rootNode]]),
+          query: {
+            getById() {
+              return null;
+            },
+            getByTag() {
+              return [];
+            },
+            getByRole() {
+              return [];
+            },
+            getControlForLabel() {
+              return null;
+            },
+          },
+        };
+      },
+    });
+    const projector = createDomProjector({ bubble });
+    const { container } = createContainer();
+
+    expect(() => projector.mount(container as unknown as HTMLElement)).toThrow(
+      "Cannot project bubble root node root into the DOM.",
+    );
+  });
+
+  test("incremental updates fail clearly when a text node is treated as a parent", () => {
+    let runtimeListener: BubbleRuntimeListener | null = null;
+    const rootNode: BubbleRootNode = { id: "root", kind: "root", children: [] };
+    const textNode: BubbleTextNode = { id: "text:1", kind: "text", parentId: "root", value: "Hello" };
+    const childNode: BubbleElementNode = {
+      id: "node:child",
+      kind: "element",
+      tag: "span",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+      value: null,
+      checked: null,
+      role: null,
+      name: null,
+    };
+    const bubble = createProjectorTestBubble({
+      getNode(nodeId) {
+        if (nodeId === "root") return rootNode;
+        if (nodeId === "text:1") return textNode;
+        if (nodeId === "node:child") return childNode;
+        return null;
+      },
+      snapshot() {
+        return {
+          rootId: "root",
+          nodes: new Map([["root", rootNode]]),
+          query: {
+            getById() {
+              return null;
+            },
+            getByTag() {
+              return [];
+            },
+            getByRole() {
+              return [];
+            },
+            getControlForLabel() {
+              return null;
+            },
+          },
+        };
+      },
+      subscribe(listener: BubbleRuntimeListener) {
+        runtimeListener = listener;
+        return () => {
+          runtimeListener = null;
+        };
+      },
+    });
+    const projector = createDomProjector({ bubble });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    if (runtimeListener === null) {
+      throw new Error("Expected the projector to subscribe to bubble runtime events.");
+    }
+    const deliverRuntimeEvent = runtimeListener as BubbleRuntimeListener;
+
+    expect(() =>
+      deliverRuntimeEvent({
+        type: "transaction-committed",
+        record: {
+          sequence: 1,
+          mutations: [{ type: "child-inserted", parentId: "text:1", childId: "node:child", index: 0 }],
+        },
+      }),
+    ).toThrow("Text nodes cannot have children: text:1");
   });
 });

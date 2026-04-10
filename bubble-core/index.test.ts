@@ -12,7 +12,13 @@ import {
   type BubbleViewport,
   type BubbleViewportState,
 } from "../bubble-capabilities";
-import { createBubble, serializeBubbleSnapshot } from "./index";
+import {
+  type BubbleElementNode,
+  type BubbleNode,
+  type BubbleSnapshot,
+  createBubble,
+  serializeBubbleSnapshot,
+} from "./index";
 
 function createFakeClock(initialTime: number) {
   let currentTime = initialTime;
@@ -203,6 +209,110 @@ function createScriptedNetwork(
   };
 }
 
+function expectedElementNode(input: {
+  id: string;
+  tag: string;
+  namespace: "html" | "svg";
+  parentId: string | null;
+  children: string[];
+  attributes: Record<string, string>;
+  properties: Record<string, unknown>;
+  value?: string | null;
+  checked?: boolean | null;
+  role?: string | null;
+  name?: string | null;
+}): Readonly<BubbleElementNode> {
+  const inputType =
+    input.tag === "input" && typeof input.attributes.type === "string" ? input.attributes.type : null;
+  const derivedRole =
+    input.role ??
+    (input.tag === "button"
+      ? "button"
+      : input.tag === "textarea"
+        ? "textbox"
+      : input.tag === "input" && inputType === "checkbox"
+        ? "checkbox"
+        : input.tag === "input" && (inputType === null || inputType === "text")
+          ? "textbox"
+          : null);
+  const derivedValue =
+    input.value ??
+    ((input.tag === "input" && (inputType === null || inputType === "text")) ||
+    input.tag === "textarea"
+      ? typeof input.properties.value === "string"
+        ? input.properties.value
+        : ""
+      : null);
+  const derivedChecked =
+    input.checked ??
+    (input.tag === "input" && inputType === "checkbox"
+      ? typeof input.properties.checked === "boolean"
+        ? input.properties.checked
+        : false
+      : null);
+
+  const snapshot = {
+    ...input,
+    kind: "element",
+    children: Object.freeze([...input.children]),
+    attributes: Object.freeze({ ...input.attributes }),
+    properties: Object.freeze({ ...input.properties }),
+  };
+
+  Object.defineProperty(snapshot, "role", {
+    value: derivedRole,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+
+  Object.defineProperty(snapshot, "name", {
+    value: input.name ?? input.attributes["aria-label"] ?? null,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+
+  Object.defineProperty(snapshot, "value", {
+    value: derivedValue,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+
+  Object.defineProperty(snapshot, "checked", {
+    value: derivedChecked,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+
+  return Object.freeze(snapshot) as Readonly<BubbleElementNode>;
+}
+
+function getSnapshotNodeOrThrow(snapshot: BubbleSnapshot, nodeId: string): Readonly<BubbleNode> {
+  const node = snapshot.nodes.get(nodeId);
+
+  if (node === undefined) {
+    throw new Error(`Expected snapshot node ${nodeId} to exist.`);
+  }
+
+  return node;
+}
+
+function getSnapshotElementOrThrow(
+  snapshot: BubbleSnapshot,
+  nodeId: string,
+): Readonly<BubbleElementNode> {
+  const node = getSnapshotNodeOrThrow(snapshot, nodeId);
+
+  if (node.kind !== "element") {
+    throw new Error(`Expected snapshot node ${nodeId} to be an element.`);
+  }
+
+  return node;
+}
+
 describe("createBubble", () => {
   test("returns a root node with the expected shape", () => {
     const bubble = createBubble();
@@ -231,27 +341,29 @@ describe("createBubble", () => {
     expect(firstRoot).not.toBe(secondRoot);
     expect(firstRoot.children).not.toBe(secondRoot.children);
     expect(firstElementId).not.toBe(secondElementId);
-    expect(firstBubble.getNode(firstElementId)).toEqual({
-      id: firstElementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(firstBubble.getNode(firstElementId)).toEqual(
+      expectedElementNode({
+        id: firstElementId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
     expect(secondBubble.getNode(firstElementId)).toBeNull();
-    expect(secondBubble.getNode(secondElementId)).toEqual({
-      id: secondElementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(secondBubble.getNode(secondElementId)).toEqual(
+      expectedElementNode({
+        id: secondElementId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
   });
 
   test("resolves registered capabilities from explicit createBubble options", () => {
@@ -803,26 +915,28 @@ describe("createBubble", () => {
       svgElementId: tx.createElement({ tag: "circle", namespace: "svg" }),
     }));
 
-    expect(bubble.getNode(htmlElementId)).toEqual({
-      id: htmlElementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(svgElementId)).toEqual({
-      id: svgElementId,
-      kind: "element",
-      tag: "circle",
-      namespace: "svg",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(htmlElementId)).toEqual(
+      expectedElementNode({
+        id: htmlElementId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(svgElementId)).toEqual(
+      expectedElementNode({
+        id: svgElementId,
+        tag: "circle",
+        namespace: "svg",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
   });
 
   test("defaults element namespaces to html explicitly", () => {
@@ -831,16 +945,17 @@ describe("createBubble", () => {
     const elementId = bubble.transact((tx) => tx.createElement({ tag: "section" }));
     const element = bubble.getNode(elementId);
 
-    expect(element).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "section",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(element).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "section",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
     expect(element?.kind).toBe("element");
 
     if (element?.kind === "element") {
@@ -914,16 +1029,17 @@ describe("createBubble", () => {
       kind: "root",
       children: [elementId],
     });
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
   });
 
   test("inserts children at the front, middle, and end", () => {
@@ -959,36 +1075,39 @@ describe("createBubble", () => {
         childIds.endId,
       ],
     });
-    expect(bubble.getNode(childIds.frontId)).toEqual({
-      id: childIds.frontId,
-      kind: "element",
-      tag: "nav",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(childIds.middleId)).toEqual({
-      id: childIds.middleId,
-      kind: "element",
-      tag: "section",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(childIds.endId)).toEqual({
-      id: childIds.endId,
-      kind: "element",
-      tag: "aside",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(childIds.frontId)).toEqual(
+      expectedElementNode({
+        id: childIds.frontId,
+        tag: "nav",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(childIds.middleId)).toEqual(
+      expectedElementNode({
+        id: childIds.middleId,
+        tag: "section",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(childIds.endId)).toEqual(
+      expectedElementNode({
+        id: childIds.endId,
+        tag: "aside",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
   });
 
   test("removes an only child from its parent", () => {
@@ -1008,16 +1127,17 @@ describe("createBubble", () => {
       kind: "root",
       children: [],
     });
-    expect(bubble.getNode(childId)).toEqual({
-      id: childId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(childId)).toEqual(
+      expectedElementNode({
+        id: childId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
   });
 
   test("removes the first, middle, and last child", () => {
@@ -1046,46 +1166,50 @@ describe("createBubble", () => {
       kind: "root",
       children: [childIds.middleId],
     });
-    expect(bubble.getNode(childIds.firstId)).toEqual({
-      id: childIds.firstId,
-      kind: "element",
-      tag: "header",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(childIds.remainingId)).toEqual({
-      id: childIds.remainingId,
-      kind: "element",
-      tag: "section",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(childIds.lastId)).toEqual({
-      id: childIds.lastId,
-      kind: "element",
-      tag: "footer",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(childIds.middleId)).toEqual({
-      id: childIds.middleId,
-      kind: "element",
-      tag: "main",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(childIds.firstId)).toEqual(
+      expectedElementNode({
+        id: childIds.firstId,
+        tag: "header",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(childIds.remainingId)).toEqual(
+      expectedElementNode({
+        id: childIds.remainingId,
+        tag: "section",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(childIds.lastId)).toEqual(
+      expectedElementNode({
+        id: childIds.lastId,
+        tag: "footer",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(childIds.middleId)).toEqual(
+      expectedElementNode({
+        id: childIds.middleId,
+        tag: "main",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
   });
 
   test("detaches a removed node cleanly", () => {
@@ -1108,26 +1232,28 @@ describe("createBubble", () => {
       };
     });
 
-    expect(bubble.getNode(parentId)).toEqual({
-      id: parentId,
-      kind: "element",
-      tag: "article",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(childId)).toEqual({
-      id: childId,
-      kind: "element",
-      tag: "section",
-      namespace: "html",
-      parentId: null,
-      children: [grandchildId],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(parentId)).toEqual(
+      expectedElementNode({
+        id: parentId,
+        tag: "article",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(childId)).toEqual(
+      expectedElementNode({
+        id: childId,
+        tag: "section",
+        namespace: "html",
+        parentId: null,
+        children: [grandchildId],
+        attributes: {},
+        properties: {},
+      }),
+    );
     expect(bubble.getNode(grandchildId)).toEqual({
       id: grandchildId,
       kind: "text",
@@ -1159,26 +1285,28 @@ describe("createBubble", () => {
       kind: "root",
       children: [childIds.thirdId, childIds.secondId, childIds.firstId],
     });
-    expect(bubble.getNode(childIds.firstId)).toEqual({
-      id: childIds.firstId,
-      kind: "element",
-      tag: "header",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(childIds.thirdId)).toEqual({
-      id: childIds.thirdId,
-      kind: "element",
-      tag: "footer",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(childIds.firstId)).toEqual(
+      expectedElementNode({
+        id: childIds.firstId,
+        tag: "header",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
+    expect(bubble.getNode(childIds.thirdId)).toEqual(
+      expectedElementNode({
+        id: childIds.thirdId,
+        tag: "footer",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
   });
 
   test("preserves node identity after moving a child", () => {
@@ -1201,18 +1329,19 @@ describe("createBubble", () => {
       };
     });
 
-    expect(bubble.getNode(childId)).toEqual({
-      id: childId,
-      kind: "element",
-      tag: "section",
-      namespace: "html",
-      parentId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(childId)).toEqual(
+      expectedElementNode({
+        id: childId,
+        tag: "section",
+        namespace: "html",
+        parentId,
+        children: [],
+        attributes: {},
+        properties: {},
+      }),
+    );
     expect(bubble.getNode(childId)?.id).toBe(childId);
-    expect(bubble.getNode(parentId)).toEqual({
+    expect(bubble.getNode(parentId)).toMatchObject({
       id: parentId,
       kind: "element",
       tag: "article",
@@ -1297,9 +1426,8 @@ describe("createBubble", () => {
           kind: "root",
           children: [elementId],
         },
-        element: {
+        element: expectedElementNode({
           id: elementId,
-          kind: "element",
           tag: "button",
           namespace: "html",
           parentId: bubble.rootId,
@@ -1309,7 +1437,9 @@ describe("createBubble", () => {
             role: "status",
           },
           properties: {},
-        },
+          role: "status",
+          name: "Committed",
+        }),
         text: {
           id: textId,
           kind: "text",
@@ -1325,13 +1455,20 @@ describe("createBubble", () => {
     let transactionRecord: { sequence: number; mutations: readonly unknown[] } | null = null;
 
     bubble.subscribe((event) => {
-      transactionRecord = event.record;
+      if (event.type === "transaction-committed") {
+        transactionRecord = event.record;
+      }
     });
 
     const nodeId = bubble.transact((tx) => tx.createElement({ tag: "button" }));
 
     expect(nodeId).toMatch(/^node:\d+:\d+$/);
-    expect(transactionRecord).toEqual({
+    if (transactionRecord === null) {
+      throw new Error("Expected a committed transaction record.");
+    }
+    const committedRecord = transactionRecord;
+
+    expect(committedRecord as unknown).toEqual({
       sequence: 1,
       mutations: [{ type: "node-created", nodeId, kind: "element" }],
     });
@@ -1342,7 +1479,9 @@ describe("createBubble", () => {
     const observedRecords: Array<{ sequence: number; mutations: readonly unknown[] }> = [];
 
     bubble.subscribe((event) => {
-      observedRecords.push(event.record);
+      if (event.type === "transaction-committed") {
+        observedRecords.push(event.record);
+      }
     });
 
     const ids = bubble.transact((tx) => {
@@ -1389,7 +1528,9 @@ describe("createBubble", () => {
     const observedRecords: Array<{ sequence: number; mutations: readonly unknown[] }> = [];
 
     bubble.subscribe((event) => {
-      observedRecords.push(event.record);
+      if (event.type === "transaction-committed") {
+        observedRecords.push(event.record);
+      }
     });
 
     bubble.transact(() => undefined);
@@ -1455,7 +1596,10 @@ describe("createBubble", () => {
     expect(bubble.getNode(initialTree.titleId)).toEqual(titleBefore);
     expect(bubble.getNode(initialTree.textId)).toEqual(textBefore);
     expect(failedChildId).not.toBeNull();
-    expect(bubble.getNode(failedChildId as string)).toBeNull();
+    if (failedChildId === null) {
+      throw new Error("Expected the failed child ID to be captured.");
+    }
+    expect(bubble.getNode(failedChildId)).toBeNull();
   });
 
   test("preserves node identities and child order after rolling back a failed reorder", () => {
@@ -1494,16 +1638,17 @@ describe("createBubble", () => {
     expect(bubble.getNode(tree.firstId)).toEqual(firstBefore);
     expect(bubble.getNode(tree.secondId)).toEqual(secondBefore);
     expect(bubble.getNode(tree.thirdId)).toEqual(thirdBefore);
-    expect(bubble.getNode(tree.parentId)).toEqual({
-      id: tree.parentId,
-      kind: "element",
-      tag: "ul",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [tree.firstId, tree.secondId, tree.thirdId],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(tree.parentId)).toEqual(
+      expectedElementNode({
+        id: tree.parentId,
+        tag: "ul",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [tree.firstId, tree.secondId, tree.thirdId],
+        attributes: {},
+        properties: {},
+      }),
+    );
     expect(bubble.getNode(tree.firstId)?.id).toBe(tree.firstId);
     expect(bubble.getNode(tree.secondId)?.id).toBe(tree.secondId);
     expect(bubble.getNode(tree.thirdId)?.id).toBe(tree.thirdId);
@@ -2391,16 +2536,18 @@ describe("createBubble", () => {
       return createdElementId;
     });
 
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: { type: "button" },
-      properties: {},
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: { type: "button" },
+        properties: {},
+        role: "button",
+      }),
+    );
   });
 
   test("updates an existing attribute on an element", () => {
@@ -2415,16 +2562,18 @@ describe("createBubble", () => {
       return createdElementId;
     });
 
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "input",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: { type: "email" },
-      properties: {},
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "input",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: { type: "email" },
+        properties: {},
+        value: "",
+      }),
+    );
   });
 
   test("removes an attribute from an element", () => {
@@ -2439,16 +2588,18 @@ describe("createBubble", () => {
       return createdElementId;
     });
 
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+        role: "button",
+      }),
+    );
   });
 
   test("sets and overwrites an element property", () => {
@@ -2463,16 +2614,18 @@ describe("createBubble", () => {
       return createdElementId;
     });
 
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "input",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: { value: "second@example.com" },
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "input",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: { value: "second@example.com" },
+        value: "second@example.com",
+      }),
+    );
   });
 
   test("defaults text input values to an empty string", () => {
@@ -2483,16 +2636,18 @@ describe("createBubble", () => {
 
     expect(input.kind).toBe("element");
     expect(input.value).toBe("");
-    expect(bubble.getNode(inputId)).toEqual({
-      id: inputId,
-      kind: "element",
-      tag: "input",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(inputId)).toEqual(
+      expectedElementNode({
+        id: inputId,
+        tag: "input",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+        value: "",
+      }),
+    );
   });
 
   test("exposes the current text input value property", () => {
@@ -2777,16 +2932,18 @@ describe("createBubble", () => {
       return createdElementId;
     });
 
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "input",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: { value: "attribute-value" },
-      properties: { value: "property-value" },
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "input",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: { value: "attribute-value" },
+        properties: { value: "property-value" },
+        value: "property-value",
+      }),
+    );
   });
 
   test("allows empty text values", () => {
@@ -2873,26 +3030,32 @@ describe("createBubble", () => {
       return { elementId: createdElementId, textId: createdTextId };
     });
 
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [textId],
-      attributes: {},
-      properties: {},
-    });
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [textId],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [textId],
+        attributes: {},
+        properties: {},
+        role: "button",
+        name: "Save",
+      }),
+    );
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [textId],
+        attributes: {},
+        properties: {},
+        role: "button",
+        name: "Save",
+      }),
+    );
     expect(bubble.getNode(textId)).toEqual({
       id: textId,
       kind: "text",
@@ -2933,16 +3096,18 @@ describe("createBubble", () => {
       kind: "root",
       children: [],
     });
-    expect(bubble.getNode(removedElementId)).toEqual({
-      id: removedElementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(removedElementId)).toEqual(
+      expectedElementNode({
+        id: removedElementId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [],
+        attributes: {},
+        properties: {},
+        role: "button",
+      }),
+    );
     expect(bubble.getNode(removedTextId)).toEqual({
       id: removedTextId,
       kind: "text",
@@ -3003,16 +3168,19 @@ describe("createBubble", () => {
       text.value = "Changed";
     }).toThrow(TypeError);
 
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: null,
-      children: [textId],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "button",
+        namespace: "html",
+        parentId: null,
+        children: [textId],
+        attributes: {},
+        properties: {},
+        role: "button",
+        name: "Save",
+      }),
+    );
     expect(bubble.getNode(textId)).toEqual({
       id: textId,
       kind: "text",
@@ -3043,16 +3211,19 @@ describe("createBubble", () => {
       kind: "root",
       children: [sectionId],
     });
-    expect(snapshot.nodes.get(sectionId)).toEqual({
-      id: sectionId,
-      kind: "element",
-      tag: "section",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [textId],
-      attributes: { role: "status" },
-      properties: {},
-    });
+    expect(snapshot.nodes.get(sectionId)).toEqual(
+      expectedElementNode({
+        id: sectionId,
+        tag: "section",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [textId],
+        attributes: { role: "status" },
+        properties: {},
+        role: "status",
+        name: "Hello",
+      }),
+    );
     expect(snapshot.nodes.get(textId)).toEqual({
       id: textId,
       kind: "text",
@@ -3080,26 +3251,30 @@ describe("createBubble", () => {
 
     const snapshotAfter = bubble.snapshot();
 
-    expect(snapshotBefore.nodes.get(buttonId)).toEqual({
-      id: buttonId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(snapshotAfter.nodes.get(buttonId)).toEqual({
-      id: buttonId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: { type: "button" },
-      properties: {},
-    });
+    expect(snapshotBefore.nodes.get(buttonId)).toEqual(
+      expectedElementNode({
+        id: buttonId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+        role: "button",
+      }),
+    );
+    expect(snapshotAfter.nodes.get(buttonId)).toEqual(
+      expectedElementNode({
+        id: buttonId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: { type: "button" },
+        properties: {},
+        role: "button",
+      }),
+    );
   });
 
   test("query locates existing and missing nodes by ID", () => {
@@ -3115,7 +3290,7 @@ describe("createBubble", () => {
 
     const snapshot = bubble.snapshot();
 
-    expect(snapshot.query.getById(buttonId)).toEqual(snapshot.nodes.get(buttonId));
+    expect(snapshot.query.getById(buttonId)).toEqual(getSnapshotNodeOrThrow(snapshot, buttonId));
     expect(snapshot.query.getById("missing")).toBeNull();
   });
 
@@ -3139,10 +3314,10 @@ describe("createBubble", () => {
     const snapshot = bubble.snapshot();
 
     expect(snapshot.query.getByTag("button")).toEqual([
-      snapshot.nodes.get(nodeIds.firstButtonId),
-      snapshot.nodes.get(nodeIds.secondButtonId),
+      getSnapshotElementOrThrow(snapshot, nodeIds.firstButtonId),
+      getSnapshotElementOrThrow(snapshot, nodeIds.secondButtonId),
     ]);
-    expect(snapshot.query.getByTag("p")).toEqual([snapshot.nodes.get(nodeIds.paragraphId)]);
+    expect(snapshot.query.getByTag("p")).toEqual([getSnapshotElementOrThrow(snapshot, nodeIds.paragraphId)]);
     expect(snapshot.query.getByTag("text")).toEqual([]);
   });
 
@@ -3166,11 +3341,11 @@ describe("createBubble", () => {
     const snapshot = bubble.snapshot();
 
     expect(snapshot.query.getByRole("button")).toEqual([
-      snapshot.nodes.get(nodeIds.cancelButtonId),
-      snapshot.nodes.get(nodeIds.saveButtonId),
+      getSnapshotElementOrThrow(snapshot, nodeIds.cancelButtonId),
+      getSnapshotElementOrThrow(snapshot, nodeIds.saveButtonId),
     ]);
     expect(snapshot.query.getByRole("button", { name: "Save" })).toEqual([
-      snapshot.nodes.get(nodeIds.saveButtonId),
+      getSnapshotElementOrThrow(snapshot, nodeIds.saveButtonId),
     ]);
     expect(snapshot.query.getByRole("button", { name: "Missing" })).toEqual([]);
   });
@@ -3346,7 +3521,9 @@ describe("createBubble", () => {
     });
     const snapshot = bubble.snapshot();
 
-    expect(snapshot.query.getControlForLabel(nodeIds.labelId)).toEqual(snapshot.nodes.get(nodeIds.inputId));
+    expect(snapshot.query.getControlForLabel(nodeIds.labelId)).toEqual(
+      getSnapshotElementOrThrow(snapshot, nodeIds.inputId),
+    );
   });
 
   test("resolves a nested label control", () => {
@@ -3365,7 +3542,9 @@ describe("createBubble", () => {
     });
     const snapshot = bubble.snapshot();
 
-    expect(snapshot.query.getControlForLabel(nodeIds.labelId)).toEqual(snapshot.nodes.get(nodeIds.inputId));
+    expect(snapshot.query.getControlForLabel(nodeIds.labelId)).toEqual(
+      getSnapshotElementOrThrow(snapshot, nodeIds.inputId),
+    );
   });
 
   test("returns null when a label association cannot be resolved", () => {
@@ -3451,16 +3630,18 @@ describe("createBubble", () => {
       kind: "root",
       children: [elementId],
     });
-    expect(bubble.getNode(elementId)).toEqual({
-      id: elementId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(bubble.getNode(elementId)).toEqual(
+      expectedElementNode({
+        id: elementId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+        role: "button",
+      }),
+    );
     expect(bubble.getNode("node:mutated")).toBeNull();
   });
 
@@ -3663,27 +3844,31 @@ describe("createBubble", () => {
       queriedButtons.push("node:mutated");
     }).toThrow(TypeError);
 
-    expect(snapshot.query.getById(buttonId)).toEqual({
-      id: buttonId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
-    expect(snapshot.query.getByTag("button")).toEqual([snapshot.nodes.get(buttonId)]);
-    expect(bubble.getNode(buttonId)).toEqual({
-      id: buttonId,
-      kind: "element",
-      tag: "button",
-      namespace: "html",
-      parentId: bubble.rootId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
+    expect(snapshot.query.getById(buttonId)).toEqual(
+      expectedElementNode({
+        id: buttonId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+        role: "button",
+      }),
+    );
+    expect(snapshot.query.getByTag("button")).toEqual([getSnapshotElementOrThrow(snapshot, buttonId)]);
+    expect(bubble.getNode(buttonId)).toEqual(
+      expectedElementNode({
+        id: buttonId,
+        tag: "button",
+        namespace: "html",
+        parentId: bubble.rootId,
+        children: [],
+        attributes: {},
+        properties: {},
+        role: "button",
+      }),
+    );
   });
 
   test("focusing a focusable node sets active focus", () => {

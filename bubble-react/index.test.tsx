@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 
 import { createBubble, serializeBubbleSnapshot } from "../bubble-core";
 import { createBubbleReactRoot } from "./index";
+import { readReactClientInternals } from "./react-client-internals";
 
 function readSnapshot(bubble: ReturnType<typeof createBubble>) {
   return JSON.parse(serializeBubbleSnapshot(bubble.snapshot()));
@@ -584,7 +585,7 @@ describe("createBubbleReactRoot", () => {
   test("passes the bubble event shape to click handlers", () => {
     const bubble = createBubble();
     const root = createBubbleReactRoot({ bubble });
-    let receivedEvent: Parameters<NonNullable<JSX.IntrinsicElements["button"]["onClick"]>>[0] | null =
+    let receivedEvent: Parameters<NonNullable<ComponentProps<"button">["onClick"]>>[0] | null =
       null;
 
     root.render(
@@ -601,7 +602,12 @@ describe("createBubbleReactRoot", () => {
 
     bubble.dispatchEvent({ type: "click", targetId: buttonId });
 
-    expect(receivedEvent).toEqual({
+    if (receivedEvent === null) {
+      throw new Error("Expected the click handler to receive a bubble event.");
+    }
+    const bubbleEvent = receivedEvent;
+
+    expect(bubbleEvent as unknown).toEqual({
       type: "click",
       targetId: buttonId,
       currentTargetId: buttonId,
@@ -974,6 +980,43 @@ describe("createBubbleReactRoot", () => {
     expect(callCount).toBe(0);
   });
 
+  test("replaces keyed nodes when their keys change", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render([<span key="first">One</span>, <span key="second">Two</span>]);
+
+    const [firstNodeId, secondNodeId] = bubble.getRoot().children;
+
+    root.render([<span key="third">Three</span>, <span key="fourth">Four</span>]);
+
+    const [thirdNodeId, fourthNodeId] = bubble.getRoot().children;
+
+    expect(thirdNodeId).not.toBe(firstNodeId);
+    expect(fourthNodeId).not.toBe(secondNodeId);
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "span",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [{ kind: "text", value: "Three" }],
+        },
+        {
+          kind: "element",
+          tag: "span",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [{ kind: "text", value: "Four" }],
+        },
+      ],
+    });
+  });
+
   test("throws for unsupported non-element React nodes without mutating the bubble", () => {
     const bubble = createBubble();
     const root = createBubbleReactRoot({ bubble });
@@ -1019,5 +1062,29 @@ describe("createBubbleReactRoot", () => {
       kind: "root",
       children: [],
     });
+  });
+
+  test("throws for async function components without mutating the bubble", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    async function AsyncButton() {
+      return <button>Later</button>;
+    }
+
+    expect(() => root.render(<AsyncButton />)).toThrow(
+      "bubble-react only supports host elements and text nodes in this slice",
+    );
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [],
+    });
+  });
+
+  test("throws when React client hook internals are unavailable", () => {
+    expect(() =>
+      readReactClientInternals({} as typeof import("react"))).toThrow(
+      "bubble-react could not access the React client hook dispatcher internals",
+    );
   });
 });

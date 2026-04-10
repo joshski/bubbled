@@ -8,6 +8,14 @@ import {
   createSemanticQueries,
 } from "./index";
 
+function requireId(value: string | null | undefined, message: string): string {
+  if (value === null || value === undefined) {
+    throw new Error(message);
+  }
+
+  return value;
+}
+
 function createSemanticHarness(bubble = createBubble()) {
   const renderHarness = createRenderHarness(bubble);
 
@@ -30,7 +38,11 @@ describe("createRenderHarness", () => {
 
     const buttonId = harness.getByRole("button", { name: "Save" });
     const button = harness.bubble.getNode(buttonId);
-    const textId = harness.bubble.getRoot().children.length === 1 && button?.kind === "element" ? button.children[0] : null;
+    const textId =
+      harness.bubble.getRoot().children.length === 1 && button?.kind === "element"
+        ? button.children[0]
+        : null;
+    const requiredTextId = requireId(textId, "Expected the rendered button text node to exist.");
 
     expect(harness.bubble.getRoot().children).toEqual([buttonId]);
     expect(button?.id).toBe(buttonId);
@@ -39,7 +51,7 @@ describe("createRenderHarness", () => {
       expect(button.tag).toBe("button");
       expect(button.namespace).toBe("html");
       expect(button.parentId).toBe(harness.bubble.rootId);
-      expect(button.children).toEqual([textId]);
+      expect(button.children).toEqual([requiredTextId]);
       expect(button.attributes).toEqual({ type: "button" });
       expect(button.properties).toEqual({});
       expect(button.value).toBeNull();
@@ -47,9 +59,8 @@ describe("createRenderHarness", () => {
       expect(button.role).toBe("button");
       expect(button.name).toBe("Save");
     }
-    expect(textId).not.toBeNull();
-    expect(harness.bubble.getNode(textId as string)).toEqual({
-      id: textId,
+    expect(harness.bubble.getNode(requiredTextId)).toEqual({
+      id: requiredTextId,
       kind: "text",
       parentId: buttonId,
       value: "Save",
@@ -61,7 +72,10 @@ describe("createRenderHarness", () => {
 
     harness.render("first");
 
-    const firstTextId = harness.bubble.getRoot().children[0];
+    const firstTextId = requireId(
+      harness.bubble.getRoot().children[0],
+      "Expected the first rendered text node to exist.",
+    );
     const bubbleBeforeRerender = harness.bubble;
 
     harness.render("second");
@@ -87,7 +101,10 @@ describe("createRenderHarness", () => {
       ],
     });
 
-    const sectionId = harness.bubble.getRoot().children[0];
+    const sectionId = requireId(
+      harness.bubble.getRoot().children[0],
+      "Expected the rendered section to exist.",
+    );
     const buttonId = harness.getByRole("button", { name: "Save" });
 
     harness.render({
@@ -188,7 +205,10 @@ describe("createRenderHarness", () => {
 
     harness.render("Done");
 
-    const [textId] = harness.bubble.getRoot().children;
+    const textId = requireId(
+      harness.bubble.getRoot().children[0],
+      "Expected the replacement text node to exist.",
+    );
 
     expect(harness.bubble.getRoot().children).toEqual([textId]);
     expect(textId).not.toBe(saveButtonId);
@@ -206,11 +226,17 @@ describe("createRenderHarness", () => {
 
     harness.render({ tag: "button", children: ["Save"] });
 
-    const previousRootChildId = harness.bubble.getRoot().children[0];
+    const previousRootChildId = requireId(
+      harness.bubble.getRoot().children[0],
+      "Expected the previous root child to exist.",
+    );
 
     harness.render({ tag: "section", children: ["Saved"] });
 
-    const nextRootChildId = harness.bubble.getRoot().children[0];
+    const nextRootChildId = requireId(
+      harness.bubble.getRoot().children[0],
+      "Expected the next root child to exist.",
+    );
 
     expect(nextRootChildId).not.toBe(previousRootChildId);
     expect(harness.bubble.getNode(nextRootChildId)).toMatchObject({
@@ -496,7 +522,9 @@ describe("semantic helpers", () => {
     });
 
     const textboxId = queries.getByRole("textbox", { name: "Email" });
-    const form = renderHarness.bubble.getNode(renderHarness.bubble.getRoot().children[0]);
+    const form = renderHarness.bubble.getNode(
+      requireId(renderHarness.bubble.getRoot().children[0], "Expected the rendered form to exist."),
+    );
     const checkboxId = form?.kind === "element" ? form.children[1] : null;
     const buttonId = queries.getByRole("button", { name: "Save" });
     const buttonTextId = queries.getByText("Save");
@@ -506,8 +534,10 @@ describe("semantic helpers", () => {
     assertions.expectRole(textboxId, "textbox");
     assertions.expectName(textboxId, "Email");
     assertions.expectValue(textboxId, "josh@example.com");
-    expect(checkboxId).not.toBeNull();
-    assertions.expectChecked(checkboxId as string, true);
+    assertions.expectChecked(
+      requireId(checkboxId, "Expected the rendered checkbox node to exist."),
+      true,
+    );
     assertions.expectText(buttonId, "Save");
     assertions.expectFocused(textboxId);
     assertions.expectText(buttonTextId, "Save");
@@ -566,9 +596,17 @@ describe("semantic helpers", () => {
       { tag: "button", children: ["Save"] },
     ]);
 
-    const [checkboxId, buttonId] = renderHarness.bubble.getRoot().children;
+    const checkboxId = requireId(
+      renderHarness.bubble.getRoot().children[0],
+      "Expected the rendered checkbox to exist.",
+    );
+    const buttonId = requireId(
+      renderHarness.bubble.getRoot().children[1],
+      "Expected the rendered button to exist.",
+    );
     const button = renderHarness.bubble.getNode(buttonId);
     const textId = button?.kind === "element" ? button.children[0] : null;
+    const requiredTextId = requireId(textId, "Expected the rendered button text node to exist.");
 
     expect(() => assertions.expectFocused(buttonId)).toThrow(
       `Expected focused node to be ${buttonId}. Received null.`,
@@ -576,8 +614,8 @@ describe("semantic helpers", () => {
     expect(() => assertions.expectChecked(checkboxId, false)).toThrow(
       `Expected checked state for ${checkboxId} to be false. Received true.`,
     );
-    expect(() => assertions.expectRole(textId as string, "button")).toThrow(
-      `Expected an element node for ${textId}. Received ${textId} <text "Save">.`,
+    expect(() => assertions.expectRole(requiredTextId, "button")).toThrow(
+      `Expected an element node for ${requiredTextId}. Received ${requiredTextId} <text "Save">.`,
     );
     expect(() => assertions.expectValue("missing", "value")).toThrow("Unknown node ID: missing");
   });

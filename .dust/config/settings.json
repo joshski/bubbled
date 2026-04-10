@@ -4,6 +4,10 @@
     {
       "name": "test",
       "command": "bun test"
+    },
+    {
+      "name": "typecheck",
+      "command": "bunx tsc --noEmit"
     }
   ]
 }

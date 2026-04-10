@@ -99,10 +99,10 @@ export interface BubbleCapabilityRegistry {
 export function createCapabilityRegistry(
   capabilities: Partial<BubbleCapabilities> = {},
 ): BubbleCapabilityRegistry {
-  const registeredCapabilities = { ...capabilities };
+  const registeredCapabilities: Partial<BubbleCapabilities> = { ...capabilities };
 
   return Object.freeze({
-    resolveCapability(name) {
+    resolveCapability<Name extends BubbleCapabilityName>(name: Name): BubbleCapabilities[Name] {
       const capability = registeredCapabilities[name];
 
       if (capability === undefined) {

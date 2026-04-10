@@ -62,6 +62,12 @@ export interface BubbleSemanticAssertions {
 
 export type BubbleHarness = BubbleRenderHarness & BubbleSemanticQueries & BubbleSemanticAssertions;
 
+function isRenderContentArray(
+  value: BubbleRenderContent | readonly BubbleRenderContent[],
+): value is readonly BubbleRenderContent[] {
+  return Array.isArray(value);
+}
+
 function formatNameMatcher(name: string | RegExp): string {
   return typeof name === "string" ? JSON.stringify(name) : name.toString();
 }
@@ -155,11 +161,11 @@ function createSemanticContext(target: BubbleHarnessContext) {
 
 export function createRenderHarness(bubble: BubbleRuntime = createBubble()): BubbleRenderHarness {
   let currentBubble = bubble;
-  let renderedRoots: RenderedNode[] = [];
+  let renderedRoots: readonly RenderedNode[] = [];
 
   const getRootContent = (
     content: BubbleRenderContent | readonly BubbleRenderContent[],
-  ): readonly BubbleRenderContent[] => (Array.isArray(content) ? content : [content]);
+  ): readonly BubbleRenderContent[] => (isRenderContentArray(content) ? content : [content]);
 
   const createRenderedNode = (
     tx: BubbleTransaction,
@@ -267,8 +273,8 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
           reconcileRenderedNode(
             tx,
             previousNode.nodeId,
-            previousNode.children[childIndex],
-            nextChildrenContent[childIndex],
+            previousNode.children[childIndex]!,
+            nextChildrenContent[childIndex]!,
             childIndex,
           ),
         );
@@ -281,13 +287,13 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
       ) {
         tx.removeChild({
           parentId: previousNode.nodeId,
-          childId: previousNode.children[childIndex].nodeId,
+          childId: previousNode.children[childIndex]!.nodeId,
         });
       }
 
       for (let childIndex = sharedLength; childIndex < nextChildrenContent.length; childIndex += 1) {
         nextChildren.push(
-          createRenderedNode(tx, previousNode.nodeId, nextChildrenContent[childIndex], childIndex),
+          createRenderedNode(tx, previousNode.nodeId, nextChildrenContent[childIndex]!, childIndex),
         );
       }
 
@@ -327,19 +333,27 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
 
         for (let index = 0; index < sharedLength; index += 1) {
           nextRenderedRoots.push(
-            reconcileRenderedNode(tx, currentBubble.rootId, renderedRoots[index], rootContent[index], index),
+            reconcileRenderedNode(
+              tx,
+              currentBubble.rootId,
+              renderedRoots[index]!,
+              rootContent[index]!,
+              index,
+            ),
           );
         }
 
         for (let index = renderedRoots.length - 1; index >= rootContent.length; index -= 1) {
           tx.removeChild({
             parentId: currentBubble.rootId,
-            childId: renderedRoots[index].nodeId,
+            childId: renderedRoots[index]!.nodeId,
           });
         }
 
         for (let index = sharedLength; index < rootContent.length; index += 1) {
-          nextRenderedRoots.push(createRenderedNode(tx, currentBubble.rootId, rootContent[index], index));
+          nextRenderedRoots.push(
+            createRenderedNode(tx, currentBubble.rootId, rootContent[index]!, index),
+          );
         }
 
         return Object.freeze(nextRenderedRoots);
@@ -364,7 +378,11 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
 
       if (options.shift) {
         if (currentIndex === -1) {
-          currentBubble.focus(tabOrder.at(-1) as string);
+          const lastTabStop = tabOrder.at(-1);
+
+          if (lastTabStop !== undefined) {
+            currentBubble.focus(lastTabStop);
+          }
           return;
         }
 
@@ -372,12 +390,20 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
           return;
         }
 
-        currentBubble.focus(tabOrder[currentIndex - 1]);
+        const previousTabStop = tabOrder[currentIndex - 1];
+
+        if (previousTabStop !== undefined) {
+          currentBubble.focus(previousTabStop);
+        }
         return;
       }
 
       if (currentIndex === -1) {
-        currentBubble.focus(tabOrder[0]);
+        const firstTabStop = tabOrder[0];
+
+        if (firstTabStop !== undefined) {
+          currentBubble.focus(firstTabStop);
+        }
         return;
       }
 
@@ -385,7 +411,11 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
         return;
       }
 
-      currentBubble.focus(tabOrder[currentIndex + 1]);
+      const nextTabStop = tabOrder[currentIndex + 1];
+
+      if (nextTabStop !== undefined) {
+        currentBubble.focus(nextTabStop);
+      }
     },
   };
 }

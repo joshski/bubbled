@@ -1,8 +1,10 @@
 import type { BubbleLayout, BubbleRect, BubbleViewportState } from "../bubble-capabilities";
 import type {
+  BubbleElementNode,
   BubbleMutation,
   BubbleNode,
   BubbleNodeId,
+  BubbleRootNode,
   BubbleRuntime,
   BubbleRuntimeEvent,
 } from "../bubble-core";
@@ -83,6 +85,10 @@ interface DomContainer extends DomParentNode {
 
 const projectedElementLookupByProjector = new WeakMap<BubbleDomProjector, Map<BubbleNodeId, DomElementNode>>();
 
+function isDomElementNode(node: DomChildNode): node is DomElementNode {
+  return "focus" in node;
+}
+
 export function placePopover(input: PlacementInput): PlacementOutput {
   const fitsBelow =
     input.anchor.y + input.anchor.height + input.overlay.height <= input.viewport.height;
@@ -116,7 +122,7 @@ export function measureAndPlacePopover(
 
 export function createDomLayout(options: { projector: BubbleDomProjector }): BubbleLayout {
   return Object.freeze({
-    measureElement(nodeId) {
+    measureElement(nodeId: BubbleNodeId) {
       const projectedElements = projectedElementLookupByProjector.get(options.projector);
 
       if (projectedElements === undefined) {
@@ -146,7 +152,26 @@ export function createDomLayout(options: { projector: BubbleDomProjector }): Bub
 }
 
 function getBubbleNode(bubble: BubbleRuntime, nodeId: BubbleNodeId): Readonly<BubbleNode> {
-  return bubble.getNode(nodeId) as Readonly<BubbleNode>;
+  const node = bubble.getNode(nodeId);
+
+  if (node === null) {
+    throw new Error(`Unknown node ID: ${nodeId}`);
+  }
+
+  return node;
+}
+
+function getBubbleContainerNode(
+  bubble: BubbleRuntime,
+  nodeId: BubbleNodeId,
+): Readonly<BubbleRootNode | BubbleElementNode> {
+  const node = getBubbleNode(bubble, nodeId);
+
+  if (node.kind === "text") {
+    throw new Error(`Text nodes cannot have children: ${nodeId}`);
+  }
+
+  return node;
 }
 
 export function createDomProjector(options: CreateDomProjectorOptions): BubbleDomProjector {
@@ -174,7 +199,7 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
 
     const projectedNode = nodeLookup.get(nodeId);
 
-    if (projectedNode === undefined || "focus" in projectedNode === false) {
+    if (projectedNode === undefined || !isDomElementNode(projectedNode)) {
       return;
     }
 
@@ -205,6 +230,10 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
       nodeLookup.set(nodeId, textNode);
       bubbleIdByDomNode.set(textNode, nodeId);
       return textNode;
+    }
+
+    if (node.kind !== "element") {
+      throw new Error(`Cannot project bubble root node ${nodeId} into the DOM.`);
     }
 
     const element = document.createElement(node.tag);
@@ -261,7 +290,7 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
     parentId: BubbleNodeId,
     index: number,
   ): DomChildNode | null => {
-    const parent = getBubbleNode(options.bubble, parentId);
+    const parent = getBubbleContainerNode(options.bubble, parentId);
 
     for (const siblingId of parent.children.slice(index + 1)) {
       const siblingNode = nodeLookup.get(siblingId);
@@ -371,17 +400,18 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
   };
 
   const projector = Object.freeze({
-    mount(container) {
+    mount(container: HTMLElement) {
       if (mountedContainer !== null) {
         throw new Error("Bubble DOM projector is already mounted.");
       }
 
       const domContainer = container as unknown as DomContainer;
       const snapshot = options.bubble.snapshot();
-      const root = snapshot.nodes.get(snapshot.rootId) as Readonly<BubbleNode> & {
-        readonly kind: "root";
-        readonly children: readonly BubbleNodeId[];
-      };
+      const root = snapshot.nodes.get(snapshot.rootId);
+
+      if (root === undefined || root.kind !== "root") {
+        throw new Error(`Bubble snapshot is missing root node ${snapshot.rootId}.`);
+      }
 
       for (const childId of root.children) {
         domContainer.appendChild(ensureProjectedNode(childId, domContainer.ownerDocument));
