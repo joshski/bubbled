@@ -150,6 +150,7 @@ export interface BubbleRuntime {
   focus(id: BubbleNodeId): void;
   blur(): void;
   getFocusedNodeId(): BubbleNodeId | null;
+  getTabOrder(): readonly BubbleNodeId[];
   subscribe(listener: BubbleRuntimeListener): () => void;
 }
 
@@ -222,6 +223,38 @@ function assertFocusableNode(node: BubbleNode, nodeId: BubbleNodeId): asserts no
   if (node.namespace !== "html" || !FOCUSABLE_HTML_TAGS.has(node.tag)) {
     throw new Error(`Node is not focusable: ${nodeId}`);
   }
+}
+
+function getTabIndexValue(node: BubbleElementNode): number | null {
+  const propertyValue = node.properties.tabIndex;
+
+  if (typeof propertyValue === "number" && Number.isInteger(propertyValue)) {
+    return propertyValue;
+  }
+
+  const attributeValue = node.attributes.tabindex;
+
+  if (attributeValue === undefined) {
+    return null;
+  }
+
+  const parsedValue = Number.parseInt(attributeValue, 10);
+
+  return Number.isNaN(parsedValue) ? null : parsedValue;
+}
+
+function isDisabledElement(node: BubbleElementNode): boolean {
+  return node.attributes.disabled !== undefined || node.properties.disabled === true;
+}
+
+function isTabbableElement(node: BubbleElementNode): boolean {
+  if (node.namespace !== "html" || !FOCUSABLE_HTML_TAGS.has(node.tag) || isDisabledElement(node)) {
+    return false;
+  }
+
+  const tabIndex = getTabIndexValue(node);
+
+  return tabIndex === null || tabIndex >= 0;
 }
 
 export function createBubble(): BubbleRuntime {
@@ -537,6 +570,54 @@ export function createBubble(): BubbleRuntime {
     return { defaultPrevented, delivered: true };
   };
 
+  const getTabOrder = (): readonly BubbleNodeId[] => {
+    const visitedElementIds: BubbleNodeId[] = [];
+
+    const visitNode = (nodeId: BubbleNodeId): void => {
+      const node = nodes.get(nodeId) as BubbleNode;
+
+      if (node.kind === "element") {
+        visitedElementIds.push(nodeId);
+      }
+
+      if (node.kind === "text") {
+        return;
+      }
+
+      for (const childId of node.children) {
+        visitNode(childId);
+      }
+    };
+
+    visitNode(root.id);
+
+    const tabbableEntries = visitedElementIds
+      .map((nodeId, domIndex) => {
+        const node = nodes.get(nodeId) as BubbleElementNode;
+
+        if (!isTabbableElement(node)) {
+          return null;
+        }
+
+        return {
+          nodeId,
+          domIndex,
+          tabIndex: getTabIndexValue(node) ?? 0,
+        };
+      })
+      .filter((entry): entry is { nodeId: BubbleNodeId; domIndex: number; tabIndex: number } => entry !== null);
+
+    const positiveTabIndexEntries = tabbableEntries
+      .filter((entry) => entry.tabIndex > 0)
+      .sort((left, right) => left.tabIndex - right.tabIndex || left.domIndex - right.domIndex);
+    const naturalTabIndexEntries = tabbableEntries.filter((entry) => entry.tabIndex === 0);
+
+    return Object.freeze([
+      ...positiveTabIndexEntries.map((entry) => entry.nodeId),
+      ...naturalTabIndexEntries.map((entry) => entry.nodeId),
+    ]);
+  };
+
   return {
     rootId: root.id,
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
@@ -808,6 +889,9 @@ export function createBubble(): BubbleRuntime {
     },
     getFocusedNodeId() {
       return focusedNodeId;
+    },
+    getTabOrder() {
+      return getTabOrder();
     },
     subscribe(listener) {
       listeners.add(listener);

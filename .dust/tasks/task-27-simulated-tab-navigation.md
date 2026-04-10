@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 26: Basic tab order](./task-26-basic-tab-order.md)
+- Task 26: Basic tab order
 
 ## Definition of Done
 

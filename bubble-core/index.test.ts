@@ -2286,6 +2286,93 @@ describe("createBubble", () => {
     expect(bubble.getFocusedNodeId()).toBeNull();
   });
 
+  test("computes tab order in natural DOM order for simple focusable elements", () => {
+    const bubble = createBubble();
+
+    const { firstButtonId, inputId, nestedButtonId } = bubble.transact((tx) => {
+      const createdFirstButtonId = tx.createElement({ tag: "button" });
+      const createdContainerId = tx.createElement({ tag: "section" });
+      const createdInputId = tx.createElement({ tag: "input" });
+      const createdNestedButtonId = tx.createElement({ tag: "button" });
+      const createdTextId = tx.createText({ value: "Ignored text" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFirstButtonId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdContainerId });
+      tx.insertChild({ parentId: createdContainerId, childId: createdInputId });
+      tx.insertChild({ parentId: createdContainerId, childId: createdTextId, index: 1 });
+      tx.insertChild({ parentId: createdContainerId, childId: createdNestedButtonId });
+
+      return {
+        firstButtonId: createdFirstButtonId,
+        inputId: createdInputId,
+        nestedButtonId: createdNestedButtonId,
+      };
+    });
+
+    expect(bubble.getTabOrder()).toEqual([firstButtonId, inputId, nestedButtonId]);
+  });
+
+  test("applies supported tabIndex overrides before natural DOM order", () => {
+    const bubble = createBubble();
+
+    const { defaultButtonId, attributeButtonId, propertyInputId, naturalButtonId } = bubble.transact(
+      (tx) => {
+        const createdDefaultButtonId = tx.createElement({ tag: "button" });
+        const createdAttributeButtonId = tx.createElement({ tag: "button" });
+        const createdPropertyInputId = tx.createElement({ tag: "input" });
+        const createdNaturalButtonId = tx.createElement({ tag: "button" });
+
+        tx.setAttribute({ nodeId: createdAttributeButtonId, name: "tabindex", value: "3" });
+        tx.setProperty({ nodeId: createdPropertyInputId, name: "tabIndex", value: 1 });
+
+        tx.insertChild({ parentId: bubble.rootId, childId: createdDefaultButtonId });
+        tx.insertChild({ parentId: bubble.rootId, childId: createdAttributeButtonId });
+        tx.insertChild({ parentId: bubble.rootId, childId: createdPropertyInputId });
+        tx.insertChild({ parentId: bubble.rootId, childId: createdNaturalButtonId });
+
+        return {
+          defaultButtonId: createdDefaultButtonId,
+          attributeButtonId: createdAttributeButtonId,
+          propertyInputId: createdPropertyInputId,
+          naturalButtonId: createdNaturalButtonId,
+        };
+      },
+    );
+
+    expect(bubble.getTabOrder()).toEqual([
+      propertyInputId,
+      attributeButtonId,
+      defaultButtonId,
+      naturalButtonId,
+    ]);
+  });
+
+  test("skips disabled elements when computing tab order", () => {
+    const bubble = createBubble();
+
+    const { enabledButtonId, enabledInputId } = bubble.transact((tx) => {
+      const createdEnabledButtonId = tx.createElement({ tag: "button" });
+      const createdDisabledButtonId = tx.createElement({ tag: "button" });
+      const createdDisabledInputId = tx.createElement({ tag: "input" });
+      const createdEnabledInputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdDisabledButtonId, name: "disabled", value: "" });
+      tx.setProperty({ nodeId: createdDisabledInputId, name: "disabled", value: true });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdEnabledButtonId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdDisabledButtonId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdDisabledInputId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdEnabledInputId });
+
+      return {
+        enabledButtonId: createdEnabledButtonId,
+        enabledInputId: createdEnabledInputId,
+      };
+    });
+
+    expect(bubble.getTabOrder()).toEqual([enabledButtonId, enabledInputId]);
+  });
+
   test("rejects invalid child mutations", () => {
     const bubble = createBubble();
     const otherBubble = createBubble();
