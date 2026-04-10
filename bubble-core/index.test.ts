@@ -1161,6 +1161,146 @@ describe("createBubble", () => {
     });
   });
 
+  test("snapshot contains the current tree structure", () => {
+    const bubble = createBubble();
+
+    const { sectionId, textId } = bubble.transact((tx) => {
+      const createdSectionId = tx.createElement({ tag: "section" });
+      const createdTextId = tx.createText({ value: "Hello" });
+
+      tx.setAttribute({ nodeId: createdSectionId, name: "role", value: "status" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSectionId });
+      tx.insertChild({ parentId: createdSectionId, childId: createdTextId });
+
+      return { sectionId: createdSectionId, textId: createdTextId };
+    });
+
+    const snapshot = bubble.snapshot();
+
+    expect(snapshot.rootId).toBe(bubble.rootId);
+    expect(snapshot.nodes.get(snapshot.rootId)).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [sectionId],
+    });
+    expect(snapshot.nodes.get(sectionId)).toEqual({
+      id: sectionId,
+      kind: "element",
+      tag: "section",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [textId],
+      attributes: { role: "status" },
+      properties: {},
+    });
+    expect(snapshot.nodes.get(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: sectionId,
+      value: "Hello",
+    });
+  });
+
+  test("snapshot updates after commit", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+
+      return createdButtonId;
+    });
+
+    const snapshotBefore = bubble.snapshot();
+
+    bubble.transact((tx) => {
+      tx.setAttribute({ nodeId: buttonId, name: "type", value: "button" });
+    });
+
+    const snapshotAfter = bubble.snapshot();
+
+    expect(snapshotBefore.nodes.get(buttonId)).toEqual({
+      id: buttonId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(snapshotAfter.nodes.get(buttonId)).toEqual({
+      id: buttonId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: { type: "button" },
+      properties: {},
+    });
+  });
+
+  test("mutating snapshot data does not mutate runtime state", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
+
+      return createdElementId;
+    });
+
+    const snapshot = bubble.snapshot();
+    const snapshotRoot = snapshot.nodes.get(snapshot.rootId) as {
+      id: string;
+      kind: "root";
+      children: string[];
+    };
+    const snapshotElement = snapshot.nodes.get(elementId) as {
+      id: string;
+      kind: "element";
+      children: string[];
+      attributes: Record<string, string>;
+      properties: Record<string, unknown>;
+      parentId: string | null;
+      tag: string;
+      namespace: "html" | "svg";
+    };
+
+    expect(() => {
+      snapshotRoot.children.push("node:mutated");
+    }).toThrow(TypeError);
+    expect(() => {
+      snapshotElement.attributes.role = "mutated";
+    }).toThrow(TypeError);
+    (snapshot.nodes as Map<string, unknown>).set("node:mutated", {
+      id: "node:mutated",
+      kind: "text",
+      parentId: null,
+      value: "Mutated",
+    });
+
+    expect(bubble.getRoot()).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [elementId],
+    });
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode("node:mutated")).toBeNull();
+  });
+
   test("rejects invalid child mutations", () => {
     const bubble = createBubble();
     const otherBubble = createBubble();

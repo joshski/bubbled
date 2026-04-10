@@ -87,11 +87,17 @@ export type BubbleRuntimeEvent = {
 
 export type BubbleRuntimeListener = (event: BubbleRuntimeEvent) => void;
 
+export interface BubbleSnapshot {
+  readonly rootId: BubbleNodeId;
+  readonly nodes: ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>;
+}
+
 export interface BubbleRuntime {
   readonly rootId: BubbleNodeId;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
+  snapshot(): BubbleSnapshot;
   subscribe(listener: BubbleRuntimeListener): () => void;
 }
 
@@ -217,6 +223,19 @@ export function createBubble(): BubbleRuntime {
       kind: node.kind,
       parentId: node.parentId,
       value: node.value,
+    });
+  };
+
+  const createSnapshot = (): BubbleSnapshot => {
+    const snapshotNodes = new Map<BubbleNodeId, Readonly<BubbleNode>>();
+
+    for (const [nodeId, node] of nodes) {
+      snapshotNodes.set(nodeId, snapshotNode(node));
+    }
+
+    return Object.freeze({
+      rootId: root.id,
+      nodes: snapshotNodes as ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>,
     });
   };
 
@@ -445,6 +464,9 @@ export function createBubble(): BubbleRuntime {
     },
     getRoot() {
       return snapshotNode(nodes.get(root.id) as BubbleRootNode) as Readonly<BubbleRootNode>;
+    },
+    snapshot() {
+      return createSnapshot();
     },
     subscribe(listener) {
       listeners.add(listener);
