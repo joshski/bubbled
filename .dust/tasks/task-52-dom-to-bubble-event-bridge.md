@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 51: Real DOM projector updates](./task-51-real-dom-projector-updates.md)
+- None
 
 ## Definition of Done
 
