@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 16: Read-only tree snapshots](./task-16-read-only-tree-snapshots.md)
+(none)
 
 ## Definition of Done
 
