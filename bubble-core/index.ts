@@ -103,10 +103,15 @@ export interface BubbleTransactionRecord {
   mutations: readonly BubbleMutation[];
 }
 
-export type BubbleRuntimeEvent = {
-  type: "transaction-committed";
-  record: BubbleTransactionRecord;
-};
+export type BubbleRuntimeEvent =
+  | {
+    type: "transaction-committed";
+    record: BubbleTransactionRecord;
+  }
+  | {
+    type: "focus-changed";
+    nodeId: BubbleNodeId | null;
+  };
 
 export type BubbleRuntimeListener = (event: BubbleRuntimeEvent) => void;
 
@@ -733,6 +738,12 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   });
   const listeners = new Set<BubbleRuntimeListener>();
   let eventListeners = new Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>();
+
+  const emitRuntimeEvent = (event: BubbleRuntimeEvent): void => {
+    for (const listener of listeners) {
+      listener(event);
+    }
+  };
 
   const allocateNodeId = (): BubbleNodeId => {
     nextNodeId += 1;
@@ -1492,9 +1503,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
           record: { sequence: nextTransactionSequence, mutations },
         };
 
-        for (const listener of listeners) {
-          listener(event);
-        }
+        emitRuntimeEvent(event);
 
         return result;
       } catch (error) {
@@ -1537,6 +1546,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
 
       focusedNodeId = id;
       dispatchEventToTarget({ type: "focus", targetId: id, mode: "target-only" });
+      emitRuntimeEvent({ type: "focus-changed", nodeId: id });
     },
     blur() {
       if (focusedNodeId === null) {
@@ -1546,6 +1556,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       const previouslyFocusedNodeId = focusedNodeId;
       focusedNodeId = null;
       dispatchEventToTarget({ type: "blur", targetId: previouslyFocusedNodeId, mode: "target-only" });
+      emitRuntimeEvent({ type: "focus-changed", nodeId: null });
     },
     getFocusedNodeId() {
       return focusedNodeId;

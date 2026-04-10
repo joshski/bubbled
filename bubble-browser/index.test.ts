@@ -87,6 +87,31 @@ class FakeDomElement extends FakeDomNode {
     this.attributes.delete(name);
   }
 
+  focus() {
+    if (this.ownerDocument.activeElement === this) {
+      return;
+    }
+
+    this.ownerDocument.activeElement?.blur();
+    this.ownerDocument.activeElement = this;
+    this.dispatchEvent({
+      type: "focus",
+      target: this,
+    });
+  }
+
+  blur() {
+    if (this.ownerDocument.activeElement !== this) {
+      return;
+    }
+
+    this.ownerDocument.activeElement = null;
+    this.dispatchEvent({
+      type: "blur",
+      target: this,
+    });
+  }
+
   addEventListener(type: string, listener: (event: FakeDomEvent) => void) {
     const listeners = this.listeners.get(type) ?? [];
 
@@ -134,6 +159,8 @@ class FakeDomElement extends FakeDomNode {
 }
 
 class FakeDomDocument {
+  activeElement: FakeDomElement | null = null;
+
   createElement(tag: string): FakeDomElement {
     return new FakeDomElement(this, tag);
   }
@@ -536,5 +563,131 @@ describe("createDomProjector", () => {
     });
 
     expect(calls).toEqual(["clicked"]);
+  });
+
+  test("bubble focus updates the projected DOM focus when sync is enabled", () => {
+    const bubble = createBubble();
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    const projector = createDomProjector({ bubble, syncFocus: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+    bubble.focus(buttonId);
+
+    expect(container.ownerDocument.activeElement).toBe(container.childNodes[0]);
+    expect(bubble.getFocusedNodeId()).toBe(buttonId);
+  });
+
+  test("projected DOM focus updates bubble focus when sync is enabled", () => {
+    const bubble = createBubble();
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    const projector = createDomProjector({ bubble, syncFocus: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    (container.childNodes[0] as FakeDomElement).focus();
+
+    expect(container.ownerDocument.activeElement).toBe(container.childNodes[0]);
+    expect(bubble.getFocusedNodeId()).toBe(buttonId);
+  });
+
+  test("already-synchronized projected focus is ignored safely", () => {
+    const bubble = createBubble();
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    const projector = createDomProjector({ bubble, syncFocus: true });
+    const { container } = createContainer();
+    const observedFocus: Array<string | null> = [];
+
+    bubble.subscribe((event) => {
+      if (event.type === "focus-changed") {
+        observedFocus.push(event.nodeId);
+      }
+    });
+
+    projector.mount(container as unknown as HTMLElement);
+    bubble.focus(buttonId);
+    (container.childNodes[0] as FakeDomElement).dispatchEvent({
+      type: "focus",
+      target: container.childNodes[0] ?? null,
+    });
+
+    expect(observedFocus).toEqual([buttonId]);
+    expect(bubble.getFocusedNodeId()).toBe(buttonId);
+  });
+
+  test("bubble blur clears the projected DOM focus when sync is enabled", () => {
+    const bubble = createBubble();
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    const projector = createDomProjector({ bubble, syncFocus: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+    bubble.focus(buttonId);
+    bubble.blur();
+
+    expect(container.ownerDocument.activeElement).toBeNull();
+    expect(bubble.getFocusedNodeId()).toBeNull();
+  });
+
+  test("focusing a detached bubble node does not throw when sync is enabled", () => {
+    const bubble = createBubble();
+    const detachedButtonId = bubble.transact((tx) => tx.createElement({ tag: "button" }));
+    const projector = createDomProjector({ bubble, syncFocus: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    expect(() => {
+      bubble.focus(detachedButtonId);
+    }).not.toThrow();
+    expect(container.ownerDocument.activeElement).toBeNull();
+    expect(bubble.getFocusedNodeId()).toBe(detachedButtonId);
+  });
+
+  test("null projected DOM focus targets fail safely when sync is enabled", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const buttonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    const projector = createDomProjector({ bubble, syncFocus: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    expect(() => {
+      (container.childNodes[0] as FakeDomElement).dispatchEvent({
+        type: "focus",
+        target: null,
+      });
+    }).not.toThrow();
+    expect(bubble.getFocusedNodeId()).toBeNull();
   });
 });

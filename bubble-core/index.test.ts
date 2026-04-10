@@ -3749,6 +3749,30 @@ describe("createBubble", () => {
     expect(bubble.getFocusedNodeId()).toBeNull();
   });
 
+  test("publishes focus changes to runtime subscribers", () => {
+    const bubble = createBubble();
+    const observedFocus: Array<string | null> = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+
+      return createdButtonId;
+    });
+
+    bubble.subscribe((event) => {
+      if (event.type === "focus-changed") {
+        observedFocus.push(event.nodeId);
+      }
+    });
+
+    bubble.focus(buttonId);
+    bubble.blur();
+
+    expect(observedFocus).toEqual([buttonId, null]);
+  });
+
   test("focus event fires on the focus target", () => {
     const bubble = createBubble();
     const observedEvents: Array<{

@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 53: Projected focus sync](./task-53-projected-focus-sync.md)
+- None
 
 ## Definition of Done
 

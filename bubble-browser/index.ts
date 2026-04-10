@@ -35,6 +35,8 @@ interface DomTextNode extends DomChildNode {
 interface DomElementNode extends DomChildNode, DomParentNode {
   addEventListener(type: string, listener: (event: DomEvent) => void): void;
   removeEventListener(type: string, listener: (event: DomEvent) => void): void;
+  focus(): void;
+  blur(): void;
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
 }
@@ -45,6 +47,7 @@ interface DomEvent {
 }
 
 interface DomDocument {
+  activeElement: DomElementNode | null;
   createElement(tag: string): DomElementNode;
   createTextNode(value: string): DomTextNode;
 }
@@ -63,6 +66,36 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
   let removeDomEventBridges: (() => void) | null = null;
   const nodeLookup = new Map<BubbleNodeId, DomChildNode>();
   const bubbleIdByDomNode = new Map<DomChildNode, BubbleNodeId>();
+  let isSyncingFocusFromBubble = false;
+  let isSyncingFocusFromDom = false;
+
+  const syncDomFocus = (nodeId: BubbleNodeId | null): void => {
+    const activeElement = (mountedContainer as DomContainer).ownerDocument.activeElement;
+
+    if (nodeId === null) {
+      if (activeElement !== null && bubbleIdByDomNode.has(activeElement)) {
+        isSyncingFocusFromBubble = true;
+        activeElement.blur();
+        isSyncingFocusFromBubble = false;
+      }
+
+      return;
+    }
+
+    const projectedNode = nodeLookup.get(nodeId);
+
+    if (projectedNode === undefined || "focus" in projectedNode === false) {
+      return;
+    }
+
+    if (activeElement === projectedNode) {
+      return;
+    }
+
+    isSyncingFocusFromBubble = true;
+    projectedNode.focus();
+    isSyncingFocusFromBubble = false;
+  };
 
   const ensureProjectedNode = (
     nodeId: BubbleNodeId,
@@ -88,6 +121,30 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
 
     nodeLookup.set(nodeId, element);
     bubbleIdByDomNode.set(element, nodeId);
+
+    if (options.syncFocus === true) {
+      element.addEventListener("focus", (event) => {
+        if (isSyncingFocusFromBubble || isSyncingFocusFromDom) {
+          return;
+        }
+
+        const targetNode = event.target;
+
+        if (targetNode === null) {
+          return;
+        }
+
+        const targetId = bubbleIdByDomNode.get(targetNode);
+
+        if (targetId === undefined || options.bubble.getFocusedNodeId() === targetId) {
+          return;
+        }
+
+        isSyncingFocusFromDom = true;
+        options.bubble.focus(targetId);
+        isSyncingFocusFromDom = false;
+      });
+    }
 
     for (const [name, value] of Object.entries(node.attributes)) {
       element.setAttribute(name, value);
@@ -173,8 +230,16 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
   };
 
   const handleRuntimeEvent = (event: BubbleRuntimeEvent): void => {
-    for (const mutation of event.record.mutations) {
-      applyMutation(mutation);
+    if (event.type === "transaction-committed") {
+      for (const mutation of event.record.mutations) {
+        applyMutation(mutation);
+      }
+
+      return;
+    }
+
+    if (options.syncFocus === true) {
+      syncDomFocus(event.nodeId);
     }
   };
 
@@ -219,6 +284,10 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
         removeDomEventBridges = () => {
           domContainer.removeEventListener("click", bridgeClickEvent);
         };
+      }
+
+      if (options.syncFocus === true) {
+        syncDomFocus(options.bubble.getFocusedNodeId());
       }
     },
     unmount() {
