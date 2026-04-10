@@ -20,12 +20,36 @@ describe("createBubble", () => {
     const firstBubble = createBubble();
     const secondBubble = createBubble();
 
+    const firstElementId = firstBubble.transact((tx) => tx.createElement({ tag: "button" }));
+    const secondElementId = secondBubble.transact((tx) => tx.createElement({ tag: "button" }));
+
     const firstRoot = firstBubble.getRoot();
     const secondRoot = secondBubble.getRoot();
 
     expect(firstRoot).toEqual(secondRoot);
     expect(firstRoot).not.toBe(secondRoot);
     expect(firstRoot.children).not.toBe(secondRoot.children);
+    expect(firstElementId).toBe(secondElementId);
+    expect(firstBubble.getNode(firstElementId)).toEqual({
+      id: firstElementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(secondBubble.getNode(firstElementId)).toEqual({
+      id: secondElementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
   });
 
   test("returns read-only root snapshots", () => {
@@ -43,6 +67,203 @@ describe("createBubble", () => {
       id: "root",
       kind: "root",
       children: [],
+    });
+  });
+
+  test("assigns unique IDs to nodes within a bubble instance", () => {
+    const bubble = createBubble();
+
+    const nodeIds = bubble.transact((tx) => [
+      tx.createElement({ tag: "button" }),
+      tx.createElement({ tag: "span", namespace: "svg" }),
+      tx.createText({ value: "Save" }),
+    ]);
+
+    expect(new Set([bubble.rootId, ...nodeIds]).size).toBe(4);
+  });
+
+  test("keeps node IDs stable across read operations", () => {
+    const bubble = createBubble();
+
+    const { elementId, textId } = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+      const createdTextId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
+      tx.insertChild({ parentId: createdElementId, childId: createdTextId });
+
+      return { elementId: createdElementId, textId: createdTextId };
+    });
+
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [textId],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [textId],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: elementId,
+      value: "Save",
+    });
+    expect(bubble.getNode(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: elementId,
+      value: "Save",
+    });
+  });
+
+  test("does not reuse IDs after node removal in the same session", () => {
+    const bubble = createBubble();
+
+    const { removedElementId, removedTextId, replacementId } = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+      const createdTextId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
+      tx.insertChild({ parentId: createdElementId, childId: createdTextId });
+      tx.removeChild({ parentId: createdElementId, childId: createdTextId });
+      tx.removeChild({ parentId: bubble.rootId, childId: createdElementId });
+
+      return {
+        removedElementId: createdElementId,
+        removedTextId: createdTextId,
+        replacementId: tx.createText({ value: "Later" }),
+      };
+    });
+
+    expect(replacementId).not.toBe(removedElementId);
+    expect(replacementId).not.toBe(removedTextId);
+    expect(bubble.getRoot()).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [],
+    });
+    expect(bubble.getNode(removedElementId)).toEqual({
+      id: removedElementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(removedTextId)).toEqual({
+      id: removedTextId,
+      kind: "text",
+      parentId: null,
+      value: "Save",
+    });
+    expect(bubble.getNode(replacementId)).toEqual({
+      id: replacementId,
+      kind: "text",
+      parentId: null,
+      value: "Later",
+    });
+  });
+
+  test("returns read-only snapshots for created nodes", () => {
+    const bubble = createBubble();
+
+    const { elementId, textId } = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+      const createdTextId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: createdElementId, childId: createdTextId });
+
+      return { elementId: createdElementId, textId: createdTextId };
+    });
+
+    const element = bubble.getNode(elementId) as {
+      id: string;
+      kind: "element";
+      children: string[];
+      attributes: Record<string, string>;
+      properties: Record<string, unknown>;
+      parentId: string | null;
+      tag: string;
+      namespace: "html" | "svg";
+    };
+    const text = bubble.getNode(textId) as {
+      id: string;
+      kind: "text";
+      parentId: string | null;
+      value: string;
+    };
+
+    expect(() => {
+      element.children.push("node:99");
+    }).toThrow(TypeError);
+    expect(() => {
+      element.attributes.role = "button";
+    }).toThrow(TypeError);
+    expect(() => {
+      element.properties.disabled = true;
+    }).toThrow(TypeError);
+    expect(() => {
+      text.value = "Changed";
+    }).toThrow(TypeError);
+
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [textId],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: elementId,
+      value: "Save",
+    });
+  });
+
+  test("rejects invalid child mutations", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const elementId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Save" });
+
+      expect(() => {
+        tx.insertChild({ parentId: textId, childId: elementId });
+      }).toThrow(`Text nodes cannot have children: ${textId}`);
+      expect(() => {
+        tx.removeChild({ parentId: textId, childId: elementId });
+      }).toThrow(`Text nodes cannot have children: ${textId}`);
+      expect(() => {
+        tx.insertChild({ parentId: bubble.rootId, childId: "missing" });
+      }).toThrow("Unknown node ID: missing");
+      expect(() => {
+        tx.insertChild({ parentId: bubble.rootId, childId: bubble.rootId });
+      }).toThrow("The root node cannot be inserted as a child");
+      expect(() => {
+        tx.removeChild({ parentId: bubble.rootId, childId: elementId });
+      }).toThrow(`Node ${elementId} is not a child of ${bubble.rootId}`);
+      expect(() => {
+        tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
+      }).toThrow("The root node cannot be removed as a child");
     });
   });
 });

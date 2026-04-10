@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 04: Stable node IDs](./task-04-stable-node-ids.md)
+(none)
 
 ## Definition of Done
 
