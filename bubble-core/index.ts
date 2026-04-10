@@ -40,6 +40,11 @@ export interface BubbleTransaction {
     parentId: BubbleNodeId;
     childId: BubbleNodeId;
   }): void;
+  moveChild(input: {
+    parentId: BubbleNodeId;
+    childId: BubbleNodeId;
+    index: number;
+  }): void;
 }
 
 export interface BubbleRuntime {
@@ -156,6 +161,23 @@ export function createBubble(): BubbleRuntime {
     parent.children.splice(childIndex, 1);
   };
 
+  const moveWithinParent = (
+    parent: BubbleRootNode | BubbleElementNode,
+    childId: BubbleNodeId,
+    index: number,
+  ): void => {
+    const childIndex = parent.children.indexOf(childId);
+
+    if (childIndex === -1) {
+      throw new Error(`Node ${childId} is not a child of ${parent.id}`);
+    }
+
+    assertValidChildIndex(index, parent.children.length - 1);
+
+    parent.children.splice(childIndex, 1);
+    parent.children.splice(index, 0, childId);
+  };
+
   return {
     rootId: root.id,
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
@@ -221,6 +243,24 @@ export function createBubble(): BubbleRuntime {
 
           removeFromParent(parent, childId);
           child.parentId = null;
+        },
+        moveChild({ parentId, childId, index }) {
+          const parent = getMutableNode(parentId);
+          const child = getMutableNode(childId);
+
+          if (parent.kind === "text") {
+            throw new Error(`Text nodes cannot have children: ${parentId}`);
+          }
+
+          if (child.kind === "root") {
+            throw new Error("The root node cannot be moved as a child");
+          }
+
+          if (child.parentId !== parentId) {
+            throw new Error(`Node ${childId} is not a child of ${parentId}`);
+          }
+
+          moveWithinParent(parent, childId, index);
         },
       };
 

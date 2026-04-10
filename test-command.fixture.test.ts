@@ -16,13 +16,17 @@ test("test command fixture", () => {
   expect(bubble.getNode("missing")).toBeNull();
   expect(bubble.getNode(bubble.rootId)).toEqual(bubble.getRoot());
 
-  const { elementId, textId, replacementTextId, svgElementId } = bubble.transact((tx) => {
+  const { elementId, textId, replacementTextId, svgElementId, movedElementId } = bubble.transact((tx) => {
     const createdElementId = tx.createElement({ tag: "button" });
     const createdTextId = tx.createText({ value: "Save" });
     const createdSvgElementId = tx.createElement({ tag: "circle", namespace: "svg" });
+    const createdMovedElementId = tx.createElement({ tag: "aside" });
 
     tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
     tx.insertChild({ parentId: createdElementId, childId: createdTextId });
+    tx.insertChild({ parentId: bubble.rootId, childId: createdSvgElementId });
+    tx.insertChild({ parentId: bubble.rootId, childId: createdMovedElementId });
+    tx.moveChild({ parentId: bubble.rootId, childId: createdMovedElementId, index: 1 });
 
     expect(() => {
       tx.insertChild({ parentId: createdTextId, childId: createdElementId });
@@ -40,6 +44,9 @@ test("test command fixture", () => {
       tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
     }).toThrow("The root node cannot be removed as a child");
     expect(() => {
+      tx.moveChild({ parentId: bubble.rootId, childId: bubble.rootId, index: 0 });
+    }).toThrow("The root node cannot be moved as a child");
+    expect(() => {
       tx.createElement({ tag: "" });
     }).toThrow("Element tag must be a non-empty string");
 
@@ -55,13 +62,20 @@ test("test command fixture", () => {
       textId: createdTextId,
       replacementTextId: tx.createText({ value: "Later" }),
       svgElementId: createdSvgElementId,
+      movedElementId: createdMovedElementId,
     };
   });
 
   expect(elementId).toMatch(/^node:\d+:1$/);
   expect(textId).toMatch(/^node:\d+:2$/);
   expect(svgElementId).toMatch(/^node:\d+:3$/);
-  expect(replacementTextId).toMatch(/^node:\d+:4$/);
+  expect(movedElementId).toMatch(/^node:\d+:4$/);
+  expect(replacementTextId).toMatch(/^node:\d+:5$/);
+  expect(bubble.getRoot()).toEqual({
+    id: "root",
+    kind: "root",
+    children: [movedElementId, svgElementId],
+  });
   expect(bubble.getNode(elementId)).toEqual({
     id: elementId,
     kind: "element",
@@ -83,7 +97,17 @@ test("test command fixture", () => {
     kind: "element",
     tag: "circle",
     namespace: "svg",
-    parentId: null,
+    parentId: bubble.rootId,
+    children: [],
+    attributes: {},
+    properties: {},
+  });
+  expect(bubble.getNode(movedElementId)).toEqual({
+    id: movedElementId,
+    kind: "element",
+    tag: "aside",
+    namespace: "html",
+    parentId: bubble.rootId,
     children: [],
     attributes: {},
     properties: {},

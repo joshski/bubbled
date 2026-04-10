@@ -23,7 +23,7 @@ implement
 
 ## Blocked By
 
-- [Task 09: Move a child node](./task-09-move-a-child-node.md)
+(none)
 
 ## Definition of Done
 

@@ -404,6 +404,107 @@ describe("createBubble", () => {
     });
   });
 
+  test("moves children forward and backward", () => {
+    const bubble = createBubble();
+
+    const childIds = bubble.transact((tx) => {
+      const firstId = tx.createElement({ tag: "header" });
+      const secondId = tx.createElement({ tag: "main" });
+      const thirdId = tx.createElement({ tag: "footer" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: firstId });
+      tx.insertChild({ parentId: bubble.rootId, childId: secondId });
+      tx.insertChild({ parentId: bubble.rootId, childId: thirdId });
+
+      tx.moveChild({ parentId: bubble.rootId, childId: firstId, index: 2 });
+      tx.moveChild({ parentId: bubble.rootId, childId: thirdId, index: 0 });
+
+      return { firstId, secondId, thirdId };
+    });
+
+    expect(bubble.getRoot()).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [childIds.thirdId, childIds.secondId, childIds.firstId],
+    });
+    expect(bubble.getNode(childIds.firstId)).toEqual({
+      id: childIds.firstId,
+      kind: "element",
+      tag: "header",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childIds.thirdId)).toEqual({
+      id: childIds.thirdId,
+      kind: "element",
+      tag: "footer",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+  });
+
+  test("preserves node identity after moving a child", () => {
+    const bubble = createBubble();
+
+    const { parentId, childId, childBeforeMove } = bubble.transact((tx) => {
+      const createdParentId = tx.createElement({ tag: "article" });
+      const createdChildId = tx.createElement({ tag: "section" });
+      const siblingId = tx.createElement({ tag: "aside" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdParentId });
+      tx.insertChild({ parentId: createdParentId, childId: createdChildId });
+      tx.insertChild({ parentId: createdParentId, childId: siblingId });
+
+      const createdChild = bubble.getNode(createdChildId);
+
+      tx.moveChild({ parentId: createdParentId, childId: createdChildId, index: 1 });
+
+      return {
+        parentId: createdParentId,
+        childId: createdChildId,
+        childBeforeMove: createdChild,
+      };
+    });
+
+    expect(childBeforeMove).toEqual({
+      id: childId,
+      kind: "element",
+      tag: "section",
+      namespace: "html",
+      parentId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childId)).toEqual({
+      id: childId,
+      kind: "element",
+      tag: "section",
+      namespace: "html",
+      parentId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childId)?.id).toBe(childId);
+    expect(bubble.getNode(parentId)).toEqual({
+      id: parentId,
+      kind: "element",
+      tag: "article",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: expect.arrayContaining([childId]),
+      attributes: {},
+      properties: {},
+    });
+  });
+
   test("allows empty text values", () => {
     const bubble = createBubble();
 
@@ -616,11 +717,30 @@ describe("createBubble", () => {
         tx.insertChild({ parentId: bubble.rootId, childId: elementId, index: -1 });
       }).toThrow("Child index must be an integer within the parent child range");
       expect(() => {
+        tx.moveChild({ parentId: textId, childId: elementId, index: 0 });
+      }).toThrow(`Text nodes cannot have children: ${textId}`);
+      expect(() => {
+        tx.moveChild({ parentId: bubble.rootId, childId: "missing", index: 0 });
+      }).toThrow("Unknown node ID: missing");
+      expect(() => {
+        tx.moveChild({ parentId: bubble.rootId, childId: bubble.rootId, index: 0 });
+      }).toThrow("The root node cannot be moved as a child");
+      expect(() => {
+        tx.moveChild({ parentId: bubble.rootId, childId: elementId, index: 0 });
+      }).toThrow(`Node ${elementId} is not a child of ${bubble.rootId}`);
+      tx.insertChild({ parentId: bubble.rootId, childId: elementId });
+      expect(() => {
+        tx.moveChild({ parentId: bubble.rootId, childId: elementId, index: -1 });
+      }).toThrow("Child index must be an integer within the parent child range");
+      expect(() => {
+        tx.moveChild({ parentId: bubble.rootId, childId: elementId, index: 1 });
+      }).toThrow("Child index must be an integer within the parent child range");
+      expect(() => {
         tx.insertChild({ parentId: bubble.rootId, childId: bubble.rootId });
       }).toThrow("The root node cannot be inserted as a child");
       expect(() => {
-        tx.removeChild({ parentId: bubble.rootId, childId: elementId });
-      }).toThrow(`Node ${elementId} is not a child of ${bubble.rootId}`);
+        tx.removeChild({ parentId: elementId, childId: textId });
+      }).toThrow(`Node ${textId} is not a child of ${elementId}`);
       expect(() => {
         tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
       }).toThrow("The root node cannot be removed as a child");
@@ -641,6 +761,24 @@ describe("createBubble", () => {
 
       expect(() => {
         tx.removeChild({ parentId, childId });
+      }).toThrow(`Node ${childId} is not a child of ${parentId}`);
+    });
+  });
+
+  test("rejects moving a node that is not a child of the parent", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const parentId = tx.createElement({ tag: "article" });
+      const actualParentId = tx.createElement({ tag: "section" });
+      const childId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: parentId });
+      tx.insertChild({ parentId: bubble.rootId, childId: actualParentId });
+      tx.insertChild({ parentId: actualParentId, childId: childId });
+
+      expect(() => {
+        tx.moveChild({ parentId, childId, index: 0 });
       }).toThrow(`Node ${childId} is not a child of ${parentId}`);
     });
   });
