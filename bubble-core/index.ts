@@ -28,6 +28,16 @@ export interface BubbleTextNode {
 
 export type BubbleNode = BubbleRootNode | BubbleElementNode | BubbleTextNode;
 
+export type BubbleMutation =
+  | { type: "node-created"; nodeId: BubbleNodeId; kind: "element" | "text" }
+  | { type: "child-inserted"; parentId: BubbleNodeId; childId: BubbleNodeId; index: number }
+  | { type: "child-removed"; parentId: BubbleNodeId; childId: BubbleNodeId; index: number }
+  | { type: "child-moved"; parentId: BubbleNodeId; childId: BubbleNodeId; index: number }
+  | { type: "attribute-set"; nodeId: BubbleNodeId; name: string; value: string }
+  | { type: "attribute-removed"; nodeId: BubbleNodeId; name: string }
+  | { type: "property-set"; nodeId: BubbleNodeId; name: string; value: unknown }
+  | { type: "text-set"; nodeId: BubbleNodeId; value: string };
+
 export interface BubbleTransaction {
   createElement(input: { tag: string; namespace?: BubbleNamespace }): BubbleNodeId;
   createText(input: { value: string }): BubbleNodeId;
@@ -66,7 +76,8 @@ export interface BubbleTransaction {
 }
 
 export interface BubbleTransactionRecord {
-  mutations: readonly [];
+  sequence: number;
+  mutations: readonly BubbleMutation[];
 }
 
 export type BubbleRuntimeEvent = {
@@ -139,6 +150,7 @@ export function createBubble(): BubbleRuntime {
   nextBubbleInstanceId += 1;
   const bubbleInstanceId = nextBubbleInstanceId;
   let nextNodeId = 0;
+  let nextTransactionSequence = 0;
   let transactionDepth = 0;
   const listeners = new Set<BubbleRuntimeListener>();
 
@@ -220,7 +232,7 @@ export function createBubble(): BubbleRuntime {
   const removeFromParent = (
     parent: BubbleRootNode | BubbleElementNode,
     childId: BubbleNodeId,
-  ): void => {
+  ): number => {
     const childIndex = parent.children.indexOf(childId);
 
     if (childIndex === -1) {
@@ -228,6 +240,8 @@ export function createBubble(): BubbleRuntime {
     }
 
     parent.children.splice(childIndex, 1);
+
+    return childIndex;
   };
 
   const moveWithinParent = (
@@ -271,6 +285,8 @@ export function createBubble(): BubbleRuntime {
         return node;
       };
 
+      const mutations: BubbleMutation[] = [];
+
       const transaction: BubbleTransaction = {
         createElement({ tag, namespace = "html" }) {
           assertValidElementTag(tag);
@@ -287,6 +303,7 @@ export function createBubble(): BubbleRuntime {
             attributes: {},
             properties: {},
           });
+          mutations.push({ type: "node-created", nodeId: id, kind: "element" });
 
           return id;
         },
@@ -301,6 +318,7 @@ export function createBubble(): BubbleRuntime {
             parentId: null,
             value,
           });
+          mutations.push({ type: "node-created", nodeId: id, kind: "text" });
 
           return id;
         },
@@ -310,6 +328,7 @@ export function createBubble(): BubbleRuntime {
           assertValidTextValue(value);
           assertTextNode(node, nodeId);
           node.value = value;
+          mutations.push({ type: "text-set", nodeId, value });
         },
         insertChild({ parentId, childId, index }) {
           const parent = getDraftNode(parentId);
@@ -324,7 +343,15 @@ export function createBubble(): BubbleRuntime {
           }
 
           child.parentId = parentId;
-          insertIntoParent(parent, childId, index);
+          const insertionIndex = index ?? parent.children.length;
+
+          insertIntoParent(parent, childId, insertionIndex);
+          mutations.push({
+            type: "child-inserted",
+            parentId,
+            childId,
+            index: insertionIndex,
+          });
         },
         removeChild({ parentId, childId }) {
           const parent = getDraftNode(parentId);
@@ -338,8 +365,14 @@ export function createBubble(): BubbleRuntime {
             throw new Error("The root node cannot be removed as a child");
           }
 
-          removeFromParent(parent, childId);
+          const removedIndex = removeFromParent(parent, childId);
           child.parentId = null;
+          mutations.push({
+            type: "child-removed",
+            parentId,
+            childId,
+            index: removedIndex,
+          });
         },
         moveChild({ parentId, childId, index }) {
           const parent = getDraftNode(parentId);
@@ -358,24 +391,28 @@ export function createBubble(): BubbleRuntime {
           }
 
           moveWithinParent(parent, childId, index);
+          mutations.push({ type: "child-moved", parentId, childId, index });
         },
         setAttribute({ nodeId, name, value }) {
           const node = getDraftNode(nodeId);
 
           assertElementNode(node, nodeId, "Attributes");
           node.attributes[name] = value;
+          mutations.push({ type: "attribute-set", nodeId, name, value });
         },
         removeAttribute({ nodeId, name }) {
           const node = getDraftNode(nodeId);
 
           assertElementNode(node, nodeId, "Attributes");
           delete node.attributes[name];
+          mutations.push({ type: "attribute-removed", nodeId, name });
         },
         setProperty({ nodeId, name, value }) {
           const node = getDraftNode(nodeId);
 
           assertElementNode(node, nodeId, "Properties");
           node.properties[name] = value;
+          mutations.push({ type: "property-set", nodeId, name, value });
         },
       };
 
@@ -384,10 +421,11 @@ export function createBubble(): BubbleRuntime {
 
         nodes = draftNodes;
         transactionDepth = 0;
+        nextTransactionSequence += 1;
 
         const event: BubbleRuntimeEvent = {
           type: "transaction-committed",
-          record: { mutations: [] },
+          record: { sequence: nextTransactionSequence, mutations },
         };
 
         for (const listener of listeners) {

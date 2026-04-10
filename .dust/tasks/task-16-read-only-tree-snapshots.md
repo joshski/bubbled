@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 15: Mutation records](./task-15-mutation-records.md)
+(none)
 
 ## Definition of Done
 

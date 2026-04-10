@@ -608,6 +608,83 @@ describe("createBubble", () => {
     ]);
   });
 
+  test("records a single committed mutation", () => {
+    const bubble = createBubble();
+    let transactionRecord: { sequence: number; mutations: readonly unknown[] } | null = null;
+
+    bubble.subscribe((event) => {
+      transactionRecord = event.record;
+    });
+
+    const nodeId = bubble.transact((tx) => tx.createElement({ tag: "button" }));
+
+    expect(nodeId).toMatch(/^node:\d+:\d+$/);
+    expect(transactionRecord).toEqual({
+      sequence: 1,
+      mutations: [{ type: "node-created", nodeId, kind: "element" }],
+    });
+  });
+
+  test("records committed mutations in transaction order", () => {
+    const bubble = createBubble();
+    const observedRecords: Array<{ sequence: number; mutations: readonly unknown[] }> = [];
+
+    bubble.subscribe((event) => {
+      observedRecords.push(event.record);
+    });
+
+    const ids = bubble.transact((tx) => {
+      const parentId = tx.createElement({ tag: "button" });
+      const childId = tx.createText({ value: "Save" });
+
+      tx.setAttribute({ nodeId: parentId, name: "type", value: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: parentId });
+      tx.insertChild({ parentId, childId });
+      tx.setText({ nodeId: childId, value: "Saved" });
+      tx.setProperty({ nodeId: parentId, name: "disabled", value: true });
+
+      return { parentId, childId };
+    });
+
+    expect(observedRecords).toEqual([
+      {
+        sequence: 1,
+        mutations: [
+          { type: "node-created", nodeId: ids.parentId, kind: "element" },
+          { type: "node-created", nodeId: ids.childId, kind: "text" },
+          { type: "attribute-set", nodeId: ids.parentId, name: "type", value: "button" },
+          {
+            type: "child-inserted",
+            parentId: bubble.rootId,
+            childId: ids.parentId,
+            index: 0,
+          },
+          {
+            type: "child-inserted",
+            parentId: ids.parentId,
+            childId: ids.childId,
+            index: 0,
+          },
+          { type: "text-set", nodeId: ids.childId, value: "Saved" },
+          { type: "property-set", nodeId: ids.parentId, name: "disabled", value: true },
+        ],
+      },
+    ]);
+  });
+
+  test("emits an explicit empty mutation record for empty transactions", () => {
+    const bubble = createBubble();
+    const observedRecords: Array<{ sequence: number; mutations: readonly unknown[] }> = [];
+
+    bubble.subscribe((event) => {
+      observedRecords.push(event.record);
+    });
+
+    bubble.transact(() => undefined);
+
+    expect(observedRecords).toEqual([{ sequence: 1, mutations: [] }]);
+  });
+
   test("rejects nested transactions explicitly", () => {
     const bubble = createBubble();
 
