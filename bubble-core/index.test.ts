@@ -2019,6 +2019,35 @@ describe("createBubble", () => {
     expect(snapshot.query.getByTag("text")).toEqual([]);
   });
 
+  test("query locates element nodes by role and accessible name", () => {
+    const bubble = createBubble();
+
+    const nodeIds = bubble.transact((tx) => {
+      const cancelButtonId = tx.createElement({ tag: "button" });
+      const cancelTextId = tx.createText({ value: "Cancel" });
+      const saveButtonId = tx.createElement({ tag: "button" });
+      const saveTextId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: cancelButtonId });
+      tx.insertChild({ parentId: cancelButtonId, childId: cancelTextId });
+      tx.insertChild({ parentId: bubble.rootId, childId: saveButtonId });
+      tx.insertChild({ parentId: saveButtonId, childId: saveTextId });
+
+      return { cancelButtonId, saveButtonId };
+    });
+
+    const snapshot = bubble.snapshot();
+
+    expect(snapshot.query.getByRole("button")).toEqual([
+      snapshot.nodes.get(nodeIds.cancelButtonId),
+      snapshot.nodes.get(nodeIds.saveButtonId),
+    ]);
+    expect(snapshot.query.getByRole("button", { name: "Save" })).toEqual([
+      snapshot.nodes.get(nodeIds.saveButtonId),
+    ]);
+    expect(snapshot.query.getByRole("button", { name: "Missing" })).toEqual([]);
+  });
+
   test("derives the button role for button elements", () => {
     const bubble = createBubble();
 

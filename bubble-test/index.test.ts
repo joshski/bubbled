@@ -4,6 +4,75 @@ import { createBubble } from "../bubble-core";
 import { createHarness } from "./index";
 
 describe("createHarness", () => {
+  test("finds nodes by role only", () => {
+    const bubble = createBubble();
+    const harness = createHarness(bubble);
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      return createdButtonId;
+    });
+
+    expect(harness.getByRole("button")).toBe(buttonId);
+  });
+
+  test("finds nodes by role and accessible name", () => {
+    const bubble = createBubble();
+    const harness = createHarness(bubble);
+
+    const saveButtonId = bubble.transact((tx) => {
+      const createdCancelButtonId = tx.createElement({ tag: "button" });
+      const cancelTextId = tx.createText({ value: "Cancel" });
+      const createdSaveButtonId = tx.createElement({ tag: "button" });
+      const saveTextId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdCancelButtonId });
+      tx.insertChild({ parentId: createdCancelButtonId, childId: cancelTextId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSaveButtonId });
+      tx.insertChild({ parentId: createdSaveButtonId, childId: saveTextId });
+
+      return createdSaveButtonId;
+    });
+
+    expect(harness.getByRole("button", { name: "Save" })).toBe(saveButtonId);
+  });
+
+  test("finds nodes by role and accessible name pattern", () => {
+    const bubble = createBubble();
+    const harness = createHarness(bubble);
+
+    const saveButtonId = bubble.transact((tx) => {
+      const createdSaveButtonId = tx.createElement({ tag: "button" });
+      const saveTextId = tx.createText({ value: "Save draft" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSaveButtonId });
+      tx.insertChild({ parentId: createdSaveButtonId, childId: saveTextId });
+
+      return createdSaveButtonId;
+    });
+
+    expect(harness.getByRole("button", { name: /^Save/ })).toBe(saveButtonId);
+  });
+
+  test("reports clear output when a semantic query misses", () => {
+    const bubble = createBubble();
+    const harness = createHarness(bubble);
+
+    bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Cancel" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.insertChild({ parentId: createdButtonId, childId: textId });
+    });
+
+    expect(() => harness.getByRole("button", { name: "Save" })).toThrow(
+      'Unable to find a node with role "button" and name "Save". Nodes with role "button": node:',
+    );
+    expect(() => harness.getByRole("button", { name: "Save" })).toThrow('("Cancel")');
+  });
+
   test("advances focus forward in tab order", () => {
     const bubble = createBubble();
     const harness = createHarness(bubble);

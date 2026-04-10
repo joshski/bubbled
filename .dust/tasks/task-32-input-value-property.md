@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 31: Query by role and name](./task-31-query-by-role-and-name.md)
+- None
 
 ## Definition of Done
 

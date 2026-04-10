@@ -146,6 +146,7 @@ export interface BubbleSnapshot {
 export interface BubbleQueryApi {
   getById(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getByTag(tag: string): ReadonlyArray<Readonly<BubbleElementNode>>;
+  getByRole(role: string, options?: { name?: string }): ReadonlyArray<Readonly<BubbleElementNode>>;
 }
 
 export interface BubbleRuntime {
@@ -174,6 +175,23 @@ export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): Bubb
         if (node.kind === "element" && node.tag === tag) {
           matchingNodes.push(node);
         }
+      }
+
+      return Object.freeze(matchingNodes);
+    },
+    getByRole(role, options) {
+      const matchingNodes: Readonly<BubbleElementNode>[] = [];
+
+      for (const node of snapshot.nodes.values()) {
+        if (node.kind !== "element" || node.role !== role) {
+          continue;
+        }
+
+        if (options?.name !== undefined && node.name !== options.name) {
+          continue;
+        }
+
+        matchingNodes.push(node);
       }
 
       return Object.freeze(matchingNodes);
