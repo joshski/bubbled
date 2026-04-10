@@ -1,8 +1,8 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
-import { chromium } from "playwright";
+import { chromium, type Browser, type Page } from "playwright";
 
 async function launchBrowser() {
   if (process.platform === "darwin") {
@@ -19,11 +19,26 @@ async function launchBrowser() {
   return chromium.launch();
 }
 
+let sharedBrowserPromise: Promise<Browser> | null = null;
+
+function getBrowser() {
+  sharedBrowserPromise ??= launchBrowser();
+
+  return sharedBrowserPromise;
+}
+
+afterAll(async () => {
+  const browser = await sharedBrowserPromise;
+
+  await browser?.close();
+});
+
 test("real browser verifies popover placement against actual projected DOM layout", async () => {
   const tempDir = await mkdtemp(join(process.cwd(), ".tmp-browser-verification-"));
   const entryPath = join(tempDir, "entry.ts");
   const bundlePath = join(tempDir, "entry.js");
-  const browser = await launchBrowser();
+  const browser = await getBrowser();
+  let page: Page | null = null;
 
   try {
     await Bun.write(
@@ -113,7 +128,7 @@ test("real browser verifies popover placement against actual projected DOM layou
     }
 
     const moduleSource = await readFile(bundlePath, "utf8");
-    const page = await browser.newPage({
+    page = await browser.newPage({
       viewport: {
         width: 300,
         height: 180,
@@ -139,7 +154,7 @@ test("real browser verifies popover placement against actual projected DOM layou
       5,
     );
   } finally {
-    await browser.close();
+    await page?.close();
     await rm(tempDir, { force: true, recursive: true });
   }
 }, 20_000);
@@ -148,7 +163,8 @@ test("real browser verifies native label clicks move focus to the associated inp
   const tempDir = await mkdtemp(join(process.cwd(), ".tmp-browser-verification-"));
   const entryPath = join(tempDir, "entry.ts");
   const bundlePath = join(tempDir, "entry.js");
-  const browser = await launchBrowser();
+  const browser = await getBrowser();
+  let page: Page | null = null;
 
   try {
     await Bun.write(
@@ -195,7 +211,7 @@ test("real browser verifies native label clicks move focus to the associated inp
     }
 
     const moduleSource = await readFile(bundlePath, "utf8");
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
     const nodeIds = await page.evaluate(async (source) => {
       const moduleUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
@@ -228,7 +244,7 @@ test("real browser verifies native label clicks move focus to the associated inp
       focusedNodeId: nodeIds.inputId,
     });
   } finally {
-    await browser.close();
+    await page?.close();
     await rm(tempDir, { force: true, recursive: true });
   }
 }, 20_000);
@@ -237,7 +253,8 @@ test("real browser verifies default submit buttons trigger bridged bubble form s
   const tempDir = await mkdtemp(join(process.cwd(), ".tmp-browser-verification-"));
   const entryPath = join(tempDir, "entry.ts");
   const bundlePath = join(tempDir, "entry.js");
-  const browser = await launchBrowser();
+  const browser = await getBrowser();
+  let page: Page | null = null;
 
   try {
     await Bun.write(
@@ -246,38 +263,35 @@ test("real browser verifies default submit buttons trigger bridged bubble form s
         'import { createBubble } from "../bubble-core/index.ts";',
         'import { createDomProjector } from "../bubble-browser/index.ts";',
         "",
-        "export function run() {",
-        "  document.body.innerHTML = '';",
-        "  const container = document.createElement('div');",
-        "  document.body.appendChild(container);",
-        "  const bubble = createBubble();",
-        "  const submitPayloads = [];",
-        "  let formId = '';",
-        "  bubble.transact((tx) => {",
-        "    formId = tx.createElement({ tag: 'form' });",
-        "    const inputId = tx.createElement({ tag: 'input' });",
-        "    const buttonId = tx.createElement({ tag: 'button' });",
-        "    const textId = tx.createText({ value: 'Save' });",
-        "    tx.setAttribute({ nodeId: formId, name: 'id', value: 'settings-form' });",
-        "    tx.setAttribute({ nodeId: inputId, name: 'name', value: 'email' });",
-        "    tx.setProperty({ nodeId: inputId, name: 'value', value: 'person@example.com' });",
-        "    tx.setAttribute({ nodeId: buttonId, name: 'id', value: 'submit-button' });",
-        "    tx.insertChild({ parentId: bubble.rootId, childId: formId });",
-        "    tx.insertChild({ parentId: formId, childId: inputId });",
-        "    tx.insertChild({ parentId: formId, childId: buttonId });",
-        "    tx.insertChild({ parentId: buttonId, childId: textId });",
-        "    tx.addEventListener({",
-        "      nodeId: formId,",
-        "      type: 'submit',",
-        "      listener: () => {",
-        "        submitPayloads.push(bubble.serializeForm(formId));",
-        "      },",
-        "    });",
+        "document.body.innerHTML = '';",
+        "const container = document.createElement('div');",
+        "document.body.appendChild(container);",
+        "const bubble = createBubble();",
+        "const submitPayloads = [];",
+        "let formId = '';",
+        "bubble.transact((tx) => {",
+        "  formId = tx.createElement({ tag: 'form' });",
+        "  const inputId = tx.createElement({ tag: 'input' });",
+        "  const buttonId = tx.createElement({ tag: 'button' });",
+        "  const textId = tx.createText({ value: 'Save' });",
+        "  tx.setAttribute({ nodeId: formId, name: 'id', value: 'settings-form' });",
+        "  tx.setAttribute({ nodeId: inputId, name: 'name', value: 'email' });",
+        "  tx.setProperty({ nodeId: inputId, name: 'value', value: 'person@example.com' });",
+        "  tx.setAttribute({ nodeId: buttonId, name: 'id', value: 'submit-button' });",
+        "  tx.insertChild({ parentId: bubble.rootId, childId: formId });",
+        "  tx.insertChild({ parentId: formId, childId: inputId });",
+        "  tx.insertChild({ parentId: formId, childId: buttonId });",
+        "  tx.insertChild({ parentId: buttonId, childId: textId });",
+        "  tx.addEventListener({",
+        "    nodeId: formId,",
+        "    type: 'submit',",
+        "    listener: () => {",
+        "      submitPayloads.push(bubble.serializeForm(formId));",
+        "    },",
         "  });",
-        "  createDomProjector({ bubble, bridgeEvents: true }).mount(container);",
-        "  (window as typeof window & { __getSubmitPayloads?: () => unknown[] }).__getSubmitPayloads = () => submitPayloads.slice();",
-        "  return { formId };",
-        "}",
+        "});",
+        "createDomProjector({ bubble, bridgeEvents: true }).mount(container);",
+        "(window as typeof window & { __getSubmitPayloads?: () => unknown[] }).__getSubmitPayloads = () => submitPayloads.slice();",
       ].join("\n"),
     );
 
@@ -293,46 +307,83 @@ test("real browser verifies default submit buttons trigger bridged bubble form s
     }
 
     const moduleSource = await readFile(bundlePath, "utf8");
-    const page = await browser.newPage();
-
-    await page.evaluate(async (source) => {
-      const moduleUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-
-      try {
-        const module = await import(moduleUrl);
-
-        return module.run();
-      } finally {
-        URL.revokeObjectURL(moduleUrl);
-      }
-    }, moduleSource);
-
-    await page.locator("#submit-button").evaluate((button) => {
-      (button as HTMLButtonElement).click();
-    });
-    await page.waitForFunction(() => {
-      const getSubmitPayloads = (
-        window as typeof window & { __getSubmitPayloads?: () => unknown[] }
-      ).__getSubmitPayloads;
-
-      return (getSubmitPayloads?.().length ?? 0) === 1;
-    });
+    page = await browser.newPage();
+    await page.setContent("<!doctype html><html><body></body></html>");
+    await page.addScriptTag({ content: moduleSource, type: "module" });
+    await page.waitForFunction(
+      () =>
+        document.getElementById("settings-form") !== null &&
+        document.getElementById("submit-button") !== null &&
+        typeof (window as typeof window & { __getSubmitPayloads?: () => unknown[] })
+          .__getSubmitPayloads === "function",
+      undefined,
+      { timeout: 1_000 },
+    );
 
     const result = await page.evaluate(() => {
       const getSubmitPayloads = (
         window as typeof window & { __getSubmitPayloads?: () => unknown[] }
       ).__getSubmitPayloads;
+      const form = document.getElementById("settings-form");
+      const button = document.getElementById("submit-button");
 
-      return {
-        submitPayloads: getSubmitPayloads?.() ?? [],
-      };
+      return new Promise<{
+        outcome: "missing-elements" | "submitted" | "timeout";
+        submitEvents: Array<{ defaultPrevented: boolean }>;
+        submitPayloads: unknown[];
+      }>((resolve) => {
+        if (form === null || button === null) {
+          resolve({
+            outcome: "missing-elements",
+            submitEvents: [],
+            submitPayloads: getSubmitPayloads?.() ?? [],
+          });
+          return;
+        }
+
+        let settled = false;
+        const finish = (outcome: "submitted" | "timeout", submitEvents: Array<{ defaultPrevented: boolean }>) => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          resolve({
+            outcome,
+            submitEvents,
+            submitPayloads: getSubmitPayloads?.() ?? [],
+          });
+        };
+
+        form.addEventListener(
+          "submit",
+          (event) => {
+            const defaultPrevented = event.defaultPrevented;
+
+            // Keep the verification on the current document even if the bridge
+            // fails, so the assertion reports the observed submit state instead
+            // of timing out on a navigation.
+            event.preventDefault();
+            queueMicrotask(() => {
+              finish("submitted", [{ defaultPrevented }]);
+            });
+          },
+          { once: true },
+        );
+        window.setTimeout(() => {
+          finish("timeout", []);
+        }, 250);
+        (button as HTMLButtonElement).click();
+      });
     });
 
     expect(result).toEqual({
+      outcome: "submitted",
+      submitEvents: [{ defaultPrevented: true }],
       submitPayloads: [[{ name: "email", value: "person@example.com" }]],
     });
   } finally {
-    await browser.close();
+    await page?.close();
     await rm(tempDir, { force: true, recursive: true });
   }
 }, 20_000);
