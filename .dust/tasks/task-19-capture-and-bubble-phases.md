@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 18: Dispatch events to a target](./task-18-dispatch-events-to-a-target.md)
+(none)
 
 ## Definition of Done
 

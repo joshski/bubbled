@@ -814,7 +814,36 @@ describe("createBubble", () => {
     }).not.toThrow();
   });
 
-  test("adds a listener and receives a dispatched event", () => {
+  test("target listener receives event data", () => {
+    const bubble = createBubble();
+    const receivedEvents: Array<Record<string, unknown>> = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          receivedEvents.push(event.data);
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    const result = bubble.dispatchEvent({
+      type: "click",
+      targetId: buttonId,
+      data: { source: "test" },
+      cancelable: true,
+    });
+
+    expect(result).toEqual({ defaultPrevented: false, delivered: true });
+    expect(receivedEvents).toEqual([{ source: "test" }]);
+  });
+
+  test("event object exposes type and target", () => {
     const bubble = createBubble();
     const receivedEvents: unknown[] = [];
 
@@ -834,14 +863,14 @@ describe("createBubble", () => {
       return createdButtonId;
     });
 
-    const result = bubble.dispatchEvent({
-      type: "click",
-      targetId: buttonId,
-      data: { source: "test" },
-      cancelable: true,
-    });
-
-    expect(result).toEqual({ defaultPrevented: false, delivered: true });
+    expect(
+      bubble.dispatchEvent({
+        type: "click",
+        targetId: buttonId,
+        data: { source: "test" },
+        cancelable: true,
+      }),
+    ).toEqual({ defaultPrevented: false, delivered: true });
     expect(receivedEvents).toEqual([
       {
         type: "click",
@@ -1007,13 +1036,18 @@ describe("createBubble", () => {
     }).toThrow("Event type must be a non-empty string");
   });
 
-  test("rejects unknown dispatch targets and does not deliver to unsupported nodes", () => {
+  test("dispatch to a missing node fails clearly", () => {
     const bubble = createBubble();
-    const textId = bubble.transact((tx) => tx.createText({ value: "hello" }));
 
     expect(() => {
       bubble.dispatchEvent({ type: "click", targetId: "missing" });
     }).toThrow("Unknown node ID: missing");
+  });
+
+  test("dispatch does not deliver to unsupported node types", () => {
+    const bubble = createBubble();
+    const textId = bubble.transact((tx) => tx.createText({ value: "hello" }));
+
     expect(bubble.dispatchEvent({ type: "click", targetId: textId })).toEqual({
       defaultPrevented: false,
       delivered: false,
