@@ -52,6 +52,14 @@ export interface BubbleRuntime {
 const ROOT_NODE_ID = "root";
 const NODE_ID_PREFIX = "node:";
 
+const ELEMENT_TAG_ERROR = "Element tag must be a non-empty string";
+
+function assertValidElementTag(tag: unknown): asserts tag is string {
+  if (typeof tag !== "string" || tag.trim().length === 0) {
+    throw new Error(ELEMENT_TAG_ERROR);
+  }
+}
+
 export function createBubble(): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -134,6 +142,8 @@ export function createBubble(): BubbleRuntime {
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       const transaction: BubbleTransaction = {
         createElement({ tag, namespace = "html" }) {
+          assertValidElementTag(tag);
+
           const id = allocateNodeId();
 
           nodes.set(id, {

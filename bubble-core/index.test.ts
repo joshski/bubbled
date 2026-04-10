@@ -82,6 +82,76 @@ describe("createBubble", () => {
     expect(new Set([bubble.rootId, ...nodeIds]).size).toBe(4);
   });
 
+  test("creates element nodes with the expected shape", () => {
+    const bubble = createBubble();
+
+    const { htmlElementId, svgElementId } = bubble.transact((tx) => ({
+      htmlElementId: tx.createElement({ tag: "button" }),
+      svgElementId: tx.createElement({ tag: "circle", namespace: "svg" }),
+    }));
+
+    expect(bubble.getNode(htmlElementId)).toEqual({
+      id: htmlElementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(svgElementId)).toEqual({
+      id: svgElementId,
+      kind: "element",
+      tag: "circle",
+      namespace: "svg",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+  });
+
+  test("defaults element namespaces to html explicitly", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => tx.createElement({ tag: "section" }));
+    const element = bubble.getNode(elementId);
+
+    expect(element).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "section",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(element?.kind).toBe("element");
+
+    if (element?.kind === "element") {
+      expect(Object.hasOwn(element, "namespace")).toBe(true);
+      expect(element.namespace).toBe("html");
+    }
+  });
+
+  test("rejects invalid element tags", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      expect(() => {
+        tx.createElement({ tag: "" });
+      }).toThrow("Element tag must be a non-empty string");
+      expect(() => {
+        tx.createElement({ tag: "   " });
+      }).toThrow("Element tag must be a non-empty string");
+      expect(() => {
+        tx.createElement({ tag: 123 as unknown as string });
+      }).toThrow("Element tag must be a non-empty string");
+    });
+  });
+
   test("keeps node IDs stable across read operations", () => {
     const bubble = createBubble();
 

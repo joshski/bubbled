@@ -16,9 +16,10 @@ test("test command fixture", () => {
   expect(bubble.getNode("missing")).toBeNull();
   expect(bubble.getNode(bubble.rootId)).toEqual(bubble.getRoot());
 
-  const { elementId, textId, replacementTextId } = bubble.transact((tx) => {
+  const { elementId, textId, replacementTextId, svgElementId } = bubble.transact((tx) => {
     const createdElementId = tx.createElement({ tag: "button" });
     const createdTextId = tx.createText({ value: "Save" });
+    const createdSvgElementId = tx.createElement({ tag: "circle", namespace: "svg" });
 
     tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
     tx.insertChild({ parentId: createdElementId, childId: createdTextId });
@@ -38,6 +39,9 @@ test("test command fixture", () => {
     expect(() => {
       tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
     }).toThrow("The root node cannot be removed as a child");
+    expect(() => {
+      tx.createElement({ tag: "" });
+    }).toThrow("Element tag must be a non-empty string");
 
     tx.removeChild({ parentId: createdElementId, childId: createdTextId });
     tx.removeChild({ parentId: bubble.rootId, childId: createdElementId });
@@ -50,12 +54,14 @@ test("test command fixture", () => {
       elementId: createdElementId,
       textId: createdTextId,
       replacementTextId: tx.createText({ value: "Later" }),
+      svgElementId: createdSvgElementId,
     };
   });
 
   expect(elementId).toBe("node:1");
   expect(textId).toBe("node:2");
-  expect(replacementTextId).toBe("node:3");
+  expect(svgElementId).toBe("node:3");
+  expect(replacementTextId).toBe("node:4");
   expect(bubble.getNode(elementId)).toEqual({
     id: elementId,
     kind: "element",
@@ -71,6 +77,16 @@ test("test command fixture", () => {
     kind: "text",
     parentId: null,
     value: "Save",
+  });
+  expect(bubble.getNode(svgElementId)).toEqual({
+    id: svgElementId,
+    kind: "element",
+    tag: "circle",
+    namespace: "svg",
+    parentId: null,
+    children: [],
+    attributes: {},
+    properties: {},
   });
   expect(bubble.getNode(replacementTextId)).toEqual({
     id: replacementTextId,
