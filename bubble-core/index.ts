@@ -73,6 +73,12 @@ export interface BubbleTransaction {
     name: string;
     value: unknown;
   }): void;
+  addEventListener(input: {
+    nodeId: BubbleNodeId;
+    type: string;
+    listener: BubbleEventListener;
+  }): BubbleListenerHandle;
+  removeEventListener(handle: BubbleListenerHandle): void;
 }
 
 export interface BubbleTransactionRecord {
@@ -87,6 +93,44 @@ export type BubbleRuntimeEvent = {
 
 export type BubbleRuntimeListener = (event: BubbleRuntimeEvent) => void;
 
+export interface BubbleDispatchInput {
+  type: string;
+  targetId: BubbleNodeId;
+  data?: Record<string, unknown>;
+  cancelable?: boolean;
+}
+
+export interface BubbleEvent {
+  readonly type: string;
+  readonly targetId: BubbleNodeId;
+  readonly currentTargetId: BubbleNodeId;
+  readonly phase: "target";
+  readonly cancelable: boolean;
+  readonly defaultPrevented: boolean;
+  readonly data: Readonly<Record<string, unknown>>;
+  preventDefault(): void;
+  stopPropagation(): void;
+}
+
+export type BubbleEventListener = (event: BubbleEvent) => void;
+
+export interface BubbleDispatchResult {
+  readonly defaultPrevented: boolean;
+  readonly delivered: boolean;
+}
+
+export interface BubbleListenerHandle {
+  readonly nodeId: BubbleNodeId;
+  readonly type: string;
+  readonly capture: false;
+  readonly internalId: string;
+}
+
+interface BubbleRegisteredListener {
+  handle: BubbleListenerHandle;
+  listener: BubbleEventListener;
+}
+
 export interface BubbleSnapshot {
   readonly rootId: BubbleNodeId;
   readonly nodes: ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>;
@@ -98,6 +142,7 @@ export interface BubbleRuntime {
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
   snapshot(): BubbleSnapshot;
+  dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult;
   subscribe(listener: BubbleRuntimeListener): () => void;
 }
 
@@ -106,6 +151,7 @@ const NODE_ID_PREFIX = "node:";
 
 const ELEMENT_TAG_ERROR = "Element tag must be a non-empty string";
 const TEXT_VALUE_ERROR = "Text value must be a string";
+const EVENT_TYPE_ERROR = "Event type must be a non-empty string";
 const CHILD_INDEX_ERROR = "Child index must be an integer within the parent child range";
 const NESTED_TRANSACTION_ERROR = "Nested transactions are not supported";
 
@@ -120,6 +166,12 @@ function assertValidElementTag(tag: unknown): asserts tag is string {
 function assertValidTextValue(value: unknown): asserts value is string {
   if (typeof value !== "string") {
     throw new Error(TEXT_VALUE_ERROR);
+  }
+}
+
+function assertValidEventType(type: unknown): asserts type is string {
+  if (typeof type !== "string" || type.trim().length === 0) {
+    throw new Error(EVENT_TYPE_ERROR);
   }
 }
 
@@ -145,6 +197,15 @@ function assertTextNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is
   }
 }
 
+function assertEventTargetNode(
+  node: BubbleNode,
+  nodeId: BubbleNodeId,
+): asserts node is BubbleElementNode {
+  if (node.kind !== "element") {
+    throw new Error(`Event listeners are only supported on element nodes: ${nodeId}`);
+  }
+}
+
 export function createBubble(): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -157,13 +218,21 @@ export function createBubble(): BubbleRuntime {
   const bubbleInstanceId = nextBubbleInstanceId;
   let nextNodeId = 0;
   let nextTransactionSequence = 0;
+  let nextListenerId = 0;
   let transactionDepth = 0;
   const listeners = new Set<BubbleRuntimeListener>();
+  let eventListeners = new Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>();
 
   const allocateNodeId = (): BubbleNodeId => {
     nextNodeId += 1;
 
     return `${NODE_ID_PREFIX}${bubbleInstanceId}:${nextNodeId}`;
+  };
+
+  const allocateListenerId = (): string => {
+    nextListenerId += 1;
+
+    return `listener:${bubbleInstanceId}:${nextListenerId}`;
   };
 
   const cloneNode = (node: BubbleNode): BubbleNode => {
@@ -239,6 +308,27 @@ export function createBubble(): BubbleRuntime {
     });
   };
 
+  const cloneEventListeners = (
+    source: Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>,
+  ): Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>> => {
+    const clonedListeners = new Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>();
+
+    for (const [nodeId, nodeListeners] of source) {
+      const clonedNodeListeners = new Map<string, BubbleRegisteredListener[]>();
+
+      for (const [eventType, registrations] of nodeListeners) {
+        clonedNodeListeners.set(
+          eventType,
+          registrations.map((registration) => ({ ...registration })),
+        );
+      }
+
+      clonedListeners.set(nodeId, clonedNodeListeners);
+    }
+
+    return clonedListeners;
+  };
+
   const insertIntoParent = (
     parent: BubbleRootNode | BubbleElementNode,
     childId: BubbleNodeId,
@@ -280,6 +370,22 @@ export function createBubble(): BubbleRuntime {
     parent.children.splice(index, 0, childId);
   };
 
+  const getNodeListeners = (
+    listenerMap: Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>,
+    nodeId: BubbleNodeId,
+  ): Map<string, BubbleRegisteredListener[]> => {
+    const nodeListeners = listenerMap.get(nodeId);
+
+    if (nodeListeners !== undefined) {
+      return nodeListeners;
+    }
+
+    const createdNodeListeners = new Map<string, BubbleRegisteredListener[]>();
+    listenerMap.set(nodeId, createdNodeListeners);
+
+    return createdNodeListeners;
+  };
+
   return {
     rootId: root.id,
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
@@ -289,6 +395,7 @@ export function createBubble(): BubbleRuntime {
 
       transactionDepth += 1;
       const draftNodes = new Map<BubbleNodeId, BubbleNode>();
+      const draftEventListeners = cloneEventListeners(eventListeners);
 
       for (const [nodeId, node] of nodes) {
         draftNodes.set(nodeId, cloneNode(node));
@@ -433,12 +540,61 @@ export function createBubble(): BubbleRuntime {
           node.properties[name] = value;
           mutations.push({ type: "property-set", nodeId, name, value });
         },
+        addEventListener({ nodeId, type, listener }) {
+          const node = getDraftNode(nodeId);
+
+          assertEventTargetNode(node, nodeId);
+          assertValidEventType(type);
+
+          const handle: BubbleListenerHandle = {
+            nodeId,
+            type,
+            capture: false,
+            internalId: allocateListenerId(),
+          };
+          const nodeListeners = getNodeListeners(draftEventListeners, nodeId);
+          const registrations = nodeListeners.get(type) ?? [];
+
+          registrations.push({ handle, listener });
+          nodeListeners.set(type, registrations);
+
+          return handle;
+        },
+        removeEventListener(handle) {
+          const nodeListeners = draftEventListeners.get(handle.nodeId);
+          const registrations = nodeListeners?.get(handle.type);
+
+          if (registrations === undefined) {
+            return;
+          }
+
+          const nextRegistrations = registrations.filter(
+            (registration) => registration.handle.internalId !== handle.internalId,
+          );
+
+          if (nextRegistrations.length === registrations.length) {
+            return;
+          }
+
+          if (nextRegistrations.length === 0) {
+            nodeListeners?.delete(handle.type);
+
+            if (nodeListeners?.size === 0) {
+              draftEventListeners.delete(handle.nodeId);
+            }
+
+            return;
+          }
+
+          nodeListeners?.set(handle.type, nextRegistrations);
+        },
       };
 
       try {
         const result = fn(transaction);
 
         nodes = draftNodes;
+        eventListeners = draftEventListeners;
         transactionDepth = 0;
         nextTransactionSequence += 1;
 
@@ -467,6 +623,46 @@ export function createBubble(): BubbleRuntime {
     },
     snapshot() {
       return createSnapshot();
+    },
+    dispatchEvent({ type, targetId, data = {}, cancelable = false }) {
+      assertValidEventType(type);
+      const target = nodes.get(targetId);
+
+      if (target === undefined) {
+        throw new Error(`Unknown node ID: ${targetId}`);
+      }
+
+      if (target.kind !== "element") {
+        return { defaultPrevented: false, delivered: false };
+      }
+
+      const targetListeners = eventListeners.get(targetId)?.get(type) ?? [];
+
+      if (targetListeners.length === 0) {
+        return { defaultPrevented: false, delivered: false };
+      }
+
+      const eventData = Object.freeze({ ...data });
+
+      const event: BubbleEvent = {
+        type,
+        targetId,
+        get currentTargetId() {
+          return targetId;
+        },
+        phase: "target",
+        cancelable,
+        defaultPrevented: false,
+        data: eventData,
+        preventDefault() {},
+        stopPropagation() {},
+      };
+
+      for (const registration of targetListeners) {
+        registration.listener(event);
+      }
+
+      return { defaultPrevented: false, delivered: true };
     },
     subscribe(listener) {
       listeners.add(listener);

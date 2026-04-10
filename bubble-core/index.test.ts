@@ -814,6 +814,212 @@ describe("createBubble", () => {
     }).not.toThrow();
   });
 
+  test("adds a listener and receives a dispatched event", () => {
+    const bubble = createBubble();
+    const receivedEvents: unknown[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          receivedEvents.push(event);
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    const result = bubble.dispatchEvent({
+      type: "click",
+      targetId: buttonId,
+      data: { source: "test" },
+      cancelable: true,
+    });
+
+    expect(result).toEqual({ defaultPrevented: false, delivered: true });
+    expect(receivedEvents).toEqual([
+      {
+        type: "click",
+        targetId: buttonId,
+        currentTargetId: buttonId,
+        phase: "target",
+        cancelable: true,
+        defaultPrevented: false,
+        data: { source: "test" },
+        preventDefault: expect.any(Function),
+        stopPropagation: expect.any(Function),
+      },
+    ]);
+  });
+
+  test("removes a listener so it no longer fires", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const { buttonId, firstHandle, secondHandle } = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const createdFirstHandle = tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("first");
+        },
+      });
+      const createdSecondHandle = tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("second");
+        },
+      });
+
+      return {
+        buttonId: createdButtonId,
+        firstHandle: createdFirstHandle,
+        secondHandle: createdSecondHandle,
+      };
+    });
+
+    bubble.transact((tx) => {
+      tx.removeEventListener(firstHandle);
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual(["second"]);
+
+    bubble.transact((tx) => {
+      tx.removeEventListener(secondHandle);
+      tx.removeEventListener(secondHandle);
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: false,
+    });
+    expect(calls).toEqual(["second"]);
+  });
+
+  test("ignores removing a listener handle that does not match a registered listener", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const { buttonId, registeredHandle } = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const createdHandle = tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("registered");
+        },
+      });
+
+      return {
+        buttonId: createdButtonId,
+        registeredHandle: createdHandle,
+      };
+    });
+
+    bubble.transact((tx) => {
+      tx.removeEventListener({
+        ...registeredHandle,
+        internalId: `${registeredHandle.internalId}:missing`,
+      });
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual(["registered"]);
+  });
+
+  test("fires multiple listeners on the same node in registration order", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("first");
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("second");
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "focus",
+        listener: () => {
+          calls.push("wrong-type");
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual(["first", "second"]);
+  });
+
+  test("rejects listener registration with invalid targets and event names", () => {
+    const bubble = createBubble();
+    const textId = bubble.transact((tx) => tx.createText({ value: "hello" }));
+
+    expect(() => {
+      bubble.transact((tx) => {
+        tx.addEventListener({
+          nodeId: textId,
+          type: "click",
+          listener: () => undefined,
+        });
+      });
+    }).toThrow(`Event listeners are only supported on element nodes: ${textId}`);
+
+    expect(() => {
+      bubble.transact((tx) => {
+        const buttonId = tx.createElement({ tag: "button" });
+
+        tx.addEventListener({
+          nodeId: buttonId,
+          type: "   ",
+          listener: () => undefined,
+        });
+      });
+    }).toThrow("Event type must be a non-empty string");
+  });
+
+  test("rejects unknown dispatch targets and does not deliver to unsupported nodes", () => {
+    const bubble = createBubble();
+    const textId = bubble.transact((tx) => tx.createText({ value: "hello" }));
+
+    expect(() => {
+      bubble.dispatchEvent({ type: "click", targetId: "missing" });
+    }).toThrow("Unknown node ID: missing");
+    expect(bubble.dispatchEvent({ type: "click", targetId: textId })).toEqual({
+      defaultPrevented: false,
+      delivered: false,
+    });
+  });
+
   test("sets a new attribute on an element", () => {
     const bubble = createBubble();
 

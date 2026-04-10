@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 17: Register and remove event listeners](./task-17-register-and-remove-event-listeners.md)
+(none)
 
 ## Definition of Done
 
