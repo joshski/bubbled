@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 50: Real DOM projector mount](./task-50-real-dom-projector-mount.md)
+- None
 
 ## Definition of Done
 

@@ -34,8 +34,19 @@ describe("public entrypoints", () => {
     expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
+  test("./bubble-browser exposes the DOM projector entrypoint", async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+
+    const entrypoint = await import("./bubble-browser");
+
+    expect(entrypoint).toEqual({
+      createDomProjector: expect.any(Function),
+    });
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
+  });
+
   for (const entrypointPath of emptyEntrypoints) {
-    if (entrypointPath === "./bubble-capabilities") {
+    if (entrypointPath === "./bubble-capabilities" || entrypointPath === "./bubble-browser") {
       continue;
     }
 
