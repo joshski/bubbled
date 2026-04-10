@@ -149,6 +149,7 @@ export interface BubbleQueryApi {
   getById(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getByTag(tag: string): ReadonlyArray<Readonly<BubbleElementNode>>;
   getByRole(role: string, options?: { name?: string }): ReadonlyArray<Readonly<BubbleElementNode>>;
+  getControlForLabel(labelId: BubbleNodeId): Readonly<BubbleElementNode> | null;
 }
 
 export interface BubbleRuntime {
@@ -197,6 +198,9 @@ export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): Bubb
       }
 
       return Object.freeze(matchingNodes);
+    },
+    getControlForLabel(labelId) {
+      return resolveLabelControl(labelId, snapshot.nodes);
     },
   });
 }
@@ -412,6 +416,68 @@ function deriveElementName(
   }
 
   return normalizeAccessibleText(deriveTextContent(node.id, nodeLookup));
+}
+
+function isLabelElement(node: BubbleNode | undefined): node is BubbleElementNode {
+  return node?.kind === "element" && node.namespace === "html" && node.tag === "label";
+}
+
+function isLabelableElement(node: BubbleNode | undefined): node is BubbleElementNode {
+  return (
+    node?.kind === "element" &&
+    node.namespace === "html" &&
+    ["button", "input", "meter", "output", "progress", "select", "textarea"].includes(node.tag)
+  );
+}
+
+function findFirstLabelableDescendant(
+  nodeId: BubbleNodeId,
+  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>,
+): BubbleElementNode | null {
+  const node = nodeLookup.get(nodeId);
+
+  if (node === undefined || node.kind === "text") {
+    return null;
+  }
+
+  for (const childId of node.children) {
+    const childNode = nodeLookup.get(childId);
+
+    if (isLabelableElement(childNode)) {
+      return childNode;
+    }
+
+    const nestedControl = findFirstLabelableDescendant(childId, nodeLookup);
+
+    if (nestedControl !== null) {
+      return nestedControl;
+    }
+  }
+
+  return null;
+}
+
+function resolveLabelControl(
+  labelId: BubbleNodeId,
+  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>,
+): BubbleElementNode | null {
+  const labelNode = nodeLookup.get(labelId);
+
+  if (!isLabelElement(labelNode)) {
+    return null;
+  }
+
+  const explicitControlId = labelNode.attributes.for;
+
+  if (explicitControlId !== undefined) {
+    const explicitControl = Array.from(nodeLookup.values()).find((node) => {
+      return isLabelableElement(node) && node.attributes.id === explicitControlId;
+    });
+
+    return explicitControl ?? null;
+  }
+
+  return findFirstLabelableDescendant(labelId, nodeLookup);
 }
 
 export function createBubble(): BubbleRuntime {

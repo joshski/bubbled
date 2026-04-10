@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 34: Label to control association](./task-34-label-to-control-association.md)
+- None
 
 ## Definition of Done
 

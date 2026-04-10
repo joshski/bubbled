@@ -2343,6 +2343,81 @@ describe("createBubble", () => {
     }
   });
 
+  test("resolves an explicitly associated label control", () => {
+    const bubble = createBubble();
+
+    const nodeIds = bubble.transact((tx) => {
+      const labelId = tx.createElement({ tag: "label" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: labelId, name: "for", value: "email" });
+      tx.setAttribute({ nodeId: inputId, name: "id", value: "email" });
+      tx.insertChild({ parentId: bubble.rootId, childId: labelId });
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId });
+
+      return { labelId, inputId };
+    });
+    const snapshot = bubble.snapshot();
+
+    expect(snapshot.query.getControlForLabel(nodeIds.labelId)).toEqual(snapshot.nodes.get(nodeIds.inputId));
+  });
+
+  test("resolves a nested label control", () => {
+    const bubble = createBubble();
+
+    const nodeIds = bubble.transact((tx) => {
+      const labelId = tx.createElement({ tag: "label" });
+      const spanId = tx.createElement({ tag: "span" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: labelId });
+      tx.insertChild({ parentId: labelId, childId: spanId });
+      tx.insertChild({ parentId: spanId, childId: inputId });
+
+      return { labelId, inputId };
+    });
+    const snapshot = bubble.snapshot();
+
+    expect(snapshot.query.getControlForLabel(nodeIds.labelId)).toEqual(snapshot.nodes.get(nodeIds.inputId));
+  });
+
+  test("returns null when a label association cannot be resolved", () => {
+    const bubble = createBubble();
+
+    const nodeIds = bubble.transact((tx) => {
+      const labelId = tx.createElement({ tag: "label" });
+      const sectionId = tx.createElement({ tag: "section" });
+
+      tx.setAttribute({ nodeId: labelId, name: "for", value: "missing-control" });
+      tx.insertChild({ parentId: bubble.rootId, childId: labelId });
+      tx.insertChild({ parentId: bubble.rootId, childId: sectionId });
+
+      return { labelId, sectionId };
+    });
+    const snapshot = bubble.snapshot();
+
+    expect(snapshot.query.getControlForLabel(nodeIds.labelId)).toBeNull();
+    expect(snapshot.query.getControlForLabel(nodeIds.sectionId)).toBeNull();
+  });
+
+  test("returns null when a nested label contains no labelable control", () => {
+    const bubble = createBubble();
+
+    const labelId = bubble.transact((tx) => {
+      const createdLabelId = tx.createElement({ tag: "label" });
+      const spanId = tx.createElement({ tag: "span" });
+      const textId = tx.createText({ value: "Email" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdLabelId });
+      tx.insertChild({ parentId: createdLabelId, childId: spanId });
+      tx.insertChild({ parentId: spanId, childId: textId });
+
+      return createdLabelId;
+    });
+
+    expect(bubble.snapshot().query.getControlForLabel(labelId)).toBeNull();
+  });
+
   test("mutating snapshot data does not mutate runtime state", () => {
     const bubble = createBubble();
 
