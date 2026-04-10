@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 55: React prop updates](./task-55-react-prop-updates.md)
+- Task 55: React prop updates
 
 ## Definition of Done
 

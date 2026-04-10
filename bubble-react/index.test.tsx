@@ -102,6 +102,256 @@ describe("createBubbleReactRoot", () => {
     });
   });
 
+  test("updates bubble attributes, properties, and text in place", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    const mutationTypes: string[] = [];
+
+    bubble.subscribe((event) => {
+      if (event.type === "transaction-committed") {
+        mutationTypes.push(...event.record.mutations.map((mutation) => mutation.type));
+      }
+    });
+
+    root.render(
+      <label htmlFor="email" data-state="idle">
+        <input type="text" value="first@example.com" />
+        Email
+      </label>,
+    );
+
+    const labelId = bubble.getRoot().children[0]!;
+    const labelNode = bubble.getNode(labelId);
+
+    if (labelNode === null || labelNode.kind !== "element") {
+      throw new Error("Expected a rendered label element");
+    }
+
+    const inputId = labelNode.children[0]!;
+    const textId = labelNode.children[1]!;
+
+    mutationTypes.length = 0;
+
+    root.render(
+      <label htmlFor="name" data-state="ready">
+        <input type="text" value="second@example.com" />
+        Name
+      </label>,
+    );
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "label",
+          namespace: "html",
+          attributes: {
+            "data-state": "ready",
+            for: "name",
+          },
+          properties: {},
+          children: [
+            {
+              kind: "element",
+              tag: "input",
+              namespace: "html",
+              attributes: {
+                type: "text",
+              },
+              properties: {
+                value: "second@example.com",
+              },
+              children: [],
+            },
+            {
+              kind: "text",
+              value: "Name",
+            },
+          ],
+        },
+      ],
+    });
+    expect(bubble.getRoot().children[0]).toBe(labelId);
+    expect((bubble.getNode(labelId) as { kind: string; children: string[] }).children[0]).toBe(inputId);
+    expect((bubble.getNode(labelId) as { kind: string; children: string[] }).children[1]).toBe(textId);
+    expect(mutationTypes).toEqual(["attribute-set", "attribute-set", "property-set", "text-set"]);
+  });
+
+  test("removes omitted attributes from the bubble tree", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(<button aria-label="Save" className="primary" />);
+    root.render(<button className="primary" />);
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "button",
+          namespace: "html",
+          attributes: {
+            class: "primary",
+          },
+          properties: {},
+          children: [],
+        },
+      ],
+    });
+  });
+
+  test("keeps unchanged nodes stable across prop and text updates", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(
+      <section>
+        <button aria-label="Save">Save</button>
+        <span>Static</span>
+      </section>,
+    );
+
+    const sectionId = bubble.getRoot().children[0]!;
+    const sectionNode = bubble.getNode(sectionId);
+
+    if (sectionNode === null || sectionNode.kind !== "element") {
+      throw new Error("Expected a rendered section element");
+    }
+
+    const buttonId = sectionNode.children[0]!;
+    const spanId = sectionNode.children[1]!;
+    const buttonNode = bubble.getNode(buttonId);
+    const spanNode = bubble.getNode(spanId);
+
+    if (
+      buttonNode === null ||
+      buttonNode.kind !== "element" ||
+      spanNode === null ||
+      spanNode.kind !== "element"
+    ) {
+      throw new Error("Expected rendered element children");
+    }
+
+    const buttonTextId = buttonNode.children[0]!;
+    const spanTextId = spanNode.children[0]!;
+
+    root.render(
+      <section>
+        <button aria-label="Submit">Submit</button>
+        <span>Static</span>
+      </section>,
+    );
+
+    const updatedSectionNode = bubble.getNode(sectionId);
+    const updatedButtonNode = bubble.getNode(buttonId);
+    const updatedSpanNode = bubble.getNode(spanId);
+
+    if (
+      updatedSectionNode === null ||
+      updatedSectionNode.kind !== "element" ||
+      updatedButtonNode === null ||
+      updatedButtonNode.kind !== "element" ||
+      updatedSpanNode === null ||
+      updatedSpanNode.kind !== "element"
+    ) {
+      throw new Error("Expected updated element children");
+    }
+
+    expect(bubble.getRoot().children[0]).toBe(sectionId);
+    expect(updatedSectionNode.children[0]).toBe(buttonId);
+    expect(updatedSectionNode.children[1]).toBe(spanId);
+    expect(updatedButtonNode.children[0]).toBe(buttonTextId);
+    expect(updatedSpanNode.children[0]).toBe(spanTextId);
+  });
+
+  test("resets omitted properties to their default bubble values", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(<input type="text" value="Draft" disabled />);
+    root.render(<input type="text" />);
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "input",
+          namespace: "html",
+          attributes: {
+            type: "text",
+          },
+          properties: {
+            disabled: false,
+            value: "",
+          },
+          children: [],
+        },
+      ],
+    });
+  });
+
+  test("replaces host nodes when their type changes", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(<button>Save</button>);
+
+    const originalId = bubble.getRoot().children[0]!;
+
+    root.render(<a href="/docs">Save</a>);
+
+    expect(bubble.getRoot().children[0]).not.toBe(originalId);
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "a",
+          namespace: "html",
+          attributes: {
+            href: "/docs",
+          },
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "Save",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("ignores event handler props until event bridging is implemented", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(<button onClick={() => {}}>Save</button>);
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "button",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "Save",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   test("throws for unsupported React component types without mutating the bubble", () => {
     const bubble = createBubble();
     const root = createBubbleReactRoot({ bubble });
