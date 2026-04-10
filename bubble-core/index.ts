@@ -717,7 +717,7 @@ export function createBubble(): BubbleRuntime {
     return path;
   };
 
-  const dispatchEventToTarget = ({
+  const dispatchSingleEventToTarget = ({
     type,
     targetId,
     data = {},
@@ -830,6 +830,45 @@ export function createBubble(): BubbleRuntime {
     }
 
     return { defaultPrevented, delivered: true };
+  };
+
+  const dispatchEventToTarget = ({
+    type,
+    targetId,
+    data = {},
+    cancelable = false,
+    mode = "propagating",
+  }: BubbleDispatchInput & { mode?: BubbleEventDispatchMode }): BubbleDispatchResult => {
+    const initialResult = dispatchSingleEventToTarget({
+      type,
+      targetId,
+      data,
+      cancelable,
+      mode,
+    });
+
+    if (mode !== "propagating" || type !== "click") {
+      return initialResult;
+    }
+
+    const associatedControl = resolveLabelControl(targetId, nodes);
+
+    if (associatedControl === null || initialResult.defaultPrevented) {
+      return initialResult;
+    }
+
+    const forwardedResult = dispatchSingleEventToTarget({
+      type,
+      targetId: associatedControl.id,
+      data,
+      cancelable,
+      mode,
+    });
+
+    return {
+      defaultPrevented: initialResult.defaultPrevented || forwardedResult.defaultPrevented,
+      delivered: initialResult.delivered || forwardedResult.delivered,
+    };
   };
 
   const getTabOrder = (): readonly BubbleNodeId[] => {

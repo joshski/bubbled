@@ -1547,6 +1547,127 @@ describe("createBubble", () => {
     });
   });
 
+  test("clicking a label forwards activation to an explicitly associated control", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const nodeIds = bubble.transact((tx) => {
+      const createdLabelId = tx.createElement({ tag: "label" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdLabelId, name: "for", value: "email" });
+      tx.setAttribute({ nodeId: inputId, name: "id", value: "email" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdLabelId });
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId });
+      tx.addEventListener({
+        nodeId: createdLabelId,
+        type: "click",
+        listener: (event) => {
+          calls.push(`label:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+      tx.addEventListener({
+        nodeId: inputId,
+        type: "click",
+        listener: (event) => {
+          calls.push(`input:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+
+      return { labelId: createdLabelId, inputId };
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: nodeIds.labelId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual([
+      `label:${nodeIds.labelId}:${nodeIds.labelId}:target`,
+      `input:${nodeIds.inputId}:${nodeIds.inputId}:target`,
+    ]);
+  });
+
+  test("clicking a label forwards activation to a nested control after label listeners", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const nodeIds = bubble.transact((tx) => {
+      const labelId = tx.createElement({ tag: "label" });
+      const spanId = tx.createElement({ tag: "span" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: labelId });
+      tx.insertChild({ parentId: labelId, childId: spanId });
+      tx.insertChild({ parentId: spanId, childId: inputId });
+      tx.addEventListener({
+        nodeId: labelId,
+        type: "click",
+        listener: (event) => {
+          calls.push(`label:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+      tx.addEventListener({
+        nodeId: inputId,
+        type: "click",
+        listener: (event) => {
+          calls.push(`input:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+
+      return { labelId, inputId };
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: nodeIds.labelId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual([
+      `label:${nodeIds.labelId}:${nodeIds.labelId}:target`,
+      `input:${nodeIds.inputId}:${nodeIds.inputId}:target`,
+      `label:${nodeIds.inputId}:${nodeIds.labelId}:bubble`,
+    ]);
+  });
+
+  test("preventing default on a label click suppresses forwarded activation", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const labelId = bubble.transact((tx) => {
+      const createdLabelId = tx.createElement({ tag: "label" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdLabelId, name: "for", value: "email" });
+      tx.setAttribute({ nodeId: inputId, name: "id", value: "email" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdLabelId });
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId });
+      tx.addEventListener({
+        nodeId: createdLabelId,
+        type: "click",
+        listener: (event) => {
+          calls.push("label");
+          event.preventDefault();
+        },
+      });
+      tx.addEventListener({
+        nodeId: inputId,
+        type: "click",
+        listener: () => {
+          calls.push("input");
+        },
+      });
+
+      return createdLabelId;
+    });
+
+    expect(
+      bubble.dispatchEvent({ type: "click", targetId: labelId, cancelable: true }),
+    ).toEqual({
+      defaultPrevented: true,
+      delivered: true,
+    });
+    expect(calls).toEqual(["label"]);
+  });
+
   test("sets a new attribute on an element", () => {
     const bubble = createBubble();
 
