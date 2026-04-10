@@ -1642,6 +1642,48 @@ describe("createBubble", () => {
     });
   });
 
+  test("defaults text input values to an empty string", () => {
+    const bubble = createBubble();
+
+    const inputId = bubble.transact((tx) => tx.createElement({ tag: "input" }));
+    const input = bubble.getNode(inputId) as { kind: "element"; value: string | null };
+
+    expect(input.kind).toBe("element");
+    expect(input.value).toBe("");
+    expect(bubble.getNode(inputId)).toEqual({
+      id: inputId,
+      kind: "element",
+      tag: "input",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+  });
+
+  test("exposes the current text input value property", () => {
+    const bubble = createBubble();
+
+    const inputId = bubble.transact((tx) => {
+      const createdInputId = tx.createElement({ tag: "input" });
+
+      tx.setProperty({ nodeId: createdInputId, name: "value", value: "draft@example.com" });
+
+      return createdInputId;
+    });
+
+    const input = bubble.getNode(inputId) as {
+      kind: "element";
+      value: string | null;
+      properties: Record<string, unknown>;
+    };
+
+    expect(input.kind).toBe("element");
+    expect(input.value).toBe("draft@example.com");
+    expect(input.properties).toEqual({ value: "draft@example.com" });
+  });
+
   test("stores attributes and properties independently", () => {
     const bubble = createBubble();
 
@@ -1855,6 +1897,7 @@ describe("createBubble", () => {
       parentId: string | null;
       tag: string;
       namespace: "html" | "svg";
+      value: string | null;
     };
     const text = bubble.getNode(textId) as {
       id: string;
@@ -1871,6 +1914,9 @@ describe("createBubble", () => {
     }).toThrow(TypeError);
     expect(() => {
       element.properties.disabled = true;
+    }).toThrow(TypeError);
+    expect(() => {
+      element.value = "Changed";
     }).toThrow(TypeError);
     expect(() => {
       text.value = "Changed";
@@ -2737,6 +2783,7 @@ describe("createBubble", () => {
 
     bubble.transact((tx) => {
       const textId = tx.createText({ value: "Save" });
+      const buttonId = tx.createElement({ tag: "button" });
 
       expect(() => {
         tx.setProperty({ nodeId: bubble.rootId, name: "value", value: "app" });
@@ -2744,6 +2791,9 @@ describe("createBubble", () => {
       expect(() => {
         tx.setProperty({ nodeId: textId, name: "value", value: "label" });
       }).toThrow(`Properties are only supported on element nodes: ${textId}`);
+      expect(() => {
+        tx.setProperty({ nodeId: buttonId, name: "value", value: "label" });
+      }).toThrow(`The value property is only supported on text input elements: ${buttonId}`);
     });
   });
 

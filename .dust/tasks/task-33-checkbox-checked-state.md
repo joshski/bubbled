@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 32: Input value property](./task-32-input-value-property.md)
+- None
 
 ## Definition of Done
 

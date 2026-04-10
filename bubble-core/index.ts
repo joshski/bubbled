@@ -17,6 +17,7 @@ export interface BubbleElementNode {
   children: BubbleNodeId[];
   attributes: Record<string, string>;
   properties: Record<string, unknown>;
+  value: string | null;
   role: string | null;
   name: string | null;
 }
@@ -245,6 +246,25 @@ function assertElementNode(
   }
 }
 
+function isTextInputElement(node: BubbleElementNode): boolean {
+  if (node.namespace !== "html" || node.tag !== "input") {
+    return false;
+  }
+
+  const inputType = (node.attributes.type ?? getStringProperty(node, "type") ?? "text").toLowerCase();
+
+  return inputType === "text";
+}
+
+function assertValuePropertyTarget(
+  node: BubbleElementNode,
+  nodeId: BubbleNodeId,
+): asserts node is BubbleElementNode & { value: string } {
+  if (!isTextInputElement(node)) {
+    throw new Error(`The value property is only supported on text input elements: ${nodeId}`);
+  }
+}
+
 function assertTextNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleTextNode {
   if (node.kind !== "text") {
     throw new Error(`Text content can only be updated on text nodes: ${nodeId}`);
@@ -329,9 +349,7 @@ function deriveImplicitRole(node: BubbleElementNode): string | null {
     case "textarea":
       return "textbox";
     case "input": {
-      const inputType = (node.attributes.type ?? getStringProperty(node, "type") ?? "text").toLowerCase();
-
-      return inputType === "text" ? "textbox" : null;
+      return isTextInputElement(node) ? "textbox" : null;
     }
     default:
       return null;
@@ -423,6 +441,7 @@ export function createBubble(): BubbleRuntime {
         children: [...node.children],
         attributes: { ...node.attributes },
         properties: { ...node.properties },
+        value: node.value,
         role: node.role,
         name: node.name,
       };
@@ -466,6 +485,13 @@ export function createBubble(): BubbleRuntime {
 
       Object.defineProperty(elementSnapshot, "name", {
         value: node.name,
+        enumerable: false,
+        writable: false,
+        configurable: false,
+      });
+
+      Object.defineProperty(elementSnapshot, "value", {
+        value: node.value,
         enumerable: false,
         writable: false,
         configurable: false,
@@ -812,6 +838,7 @@ export function createBubble(): BubbleRuntime {
             children: [],
             attributes: {},
             properties: {},
+            value: tag === "input" && namespace === "html" ? "" : null,
             role: null,
             name: null,
           };
@@ -925,6 +952,11 @@ export function createBubble(): BubbleRuntime {
           const node = getDraftNode(nodeId);
 
           assertElementNode(node, nodeId, "Properties");
+          if (name === "value") {
+            assertValuePropertyTarget(node, nodeId);
+            assertValidTextValue(value);
+            node.value = value;
+          }
           node.properties[name] = value;
           mutations.push({ type: "property-set", nodeId, name, value });
         },
