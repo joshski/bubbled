@@ -135,13 +135,20 @@ function createSemanticContext(target: BubbleHarnessContext) {
     const node = getNodeOrThrow(targetId);
 
     if (node.kind !== "element") {
-      throw new Error(`Expected an element node for ${targetId}. Received ${describeNode(targetId)}.`);
+      throw new Error(
+        `Expected an element node for ${targetId}. Received ${describeNode(targetId)}.`,
+      );
     }
 
     return node;
   };
 
-  const assertEqual = (label: string, targetId: BubbleNodeId, expected: string, actual: string): void => {
+  const assertEqual = (
+    label: string,
+    targetId: BubbleNodeId,
+    expected: string,
+    actual: string,
+  ): void => {
     if (actual !== expected) {
       throw new Error(
         `Expected ${label} for ${targetId} to be ${JSON.stringify(expected)}. Received ${JSON.stringify(actual)}. ${describeNode(
@@ -291,7 +298,11 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
         });
       }
 
-      for (let childIndex = sharedLength; childIndex < nextChildrenContent.length; childIndex += 1) {
+      for (
+        let childIndex = sharedLength;
+        childIndex < nextChildrenContent.length;
+        childIndex += 1
+      ) {
         nextChildren.push(
           createRenderedNode(tx, previousNode.nodeId, nextChildrenContent[childIndex]!, childIndex),
         );
@@ -314,7 +325,9 @@ export function createRenderHarness(bubble: BubbleRuntime = createBubble()): Bub
 
   const dispatchEvent = (targetId: BubbleNodeId, type: string): BubbleDispatchResult => {
     if (currentBubble.getNode(targetId) === null) {
-      throw new Error(`Unable to dispatch ${JSON.stringify(type)} event. Unknown node ID: ${targetId}`);
+      throw new Error(
+        `Unable to dispatch ${JSON.stringify(type)} event. Unknown node ID: ${targetId}`,
+      );
     }
 
     return currentBubble.dispatchEvent({ type, targetId });
@@ -483,7 +496,8 @@ export function createSemanticQueries(target: BubbleHarnessContext): BubbleSeman
 }
 
 export function createSemanticAssertions(target: BubbleHarnessContext): BubbleSemanticAssertions {
-  const { assertEqual, describeNode, expectElementNode, getTextContent } = createSemanticContext(target);
+  const { assertEqual, describeNode, expectElementNode, getTextContent } =
+    createSemanticContext(target);
 
   return {
     expectRole(targetId, role) {

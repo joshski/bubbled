@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createTodoApiResponse,
-  createTodoRoutes,
-  handleTodoFallbackRequest,
-} from "./server.ts";
+import { createTodoApiResponse, createTodoRoutes, handleTodoFallbackRequest } from "./server.ts";
 import { INITIAL_TODOS } from "./todo-store.ts";
 
 async function withTodoServer<T>(

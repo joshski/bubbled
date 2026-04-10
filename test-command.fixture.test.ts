@@ -16,18 +16,20 @@ function expectedElementNode(input: {
   name?: string | null;
 }): Readonly<BubbleElementNode> {
   const inputType =
-    input.tag === "input" && typeof input.attributes.type === "string" ? input.attributes.type : null;
+    input.tag === "input" && typeof input.attributes.type === "string"
+      ? input.attributes.type
+      : null;
   const derivedRole =
     input.role ??
     (input.tag === "button"
       ? "button"
       : input.tag === "textarea"
         ? "textbox"
-      : input.tag === "input" && inputType === "checkbox"
-        ? "checkbox"
-        : input.tag === "input" && (inputType === null || inputType === "text")
-          ? "textbox"
-          : null);
+        : input.tag === "input" && inputType === "checkbox"
+          ? "checkbox"
+          : input.tag === "input" && (inputType === null || inputType === "text")
+            ? "textbox"
+            : null);
   const derivedValue =
     input.value ??
     ((input.tag === "input" && (inputType === null || inputType === "text")) ||
@@ -97,55 +99,57 @@ test("test command fixture", () => {
   expect(bubble.getNode("missing")).toBeNull();
   expect(bubble.getNode(bubble.rootId)).toEqual(bubble.getRoot());
 
-  const { elementId, textId, replacementTextId, svgElementId, movedElementId } = bubble.transact((tx) => {
-    const createdElementId = tx.createElement({ tag: "button" });
-    const createdTextId = tx.createText({ value: "Save" });
-    const createdSvgElementId = tx.createElement({ tag: "circle", namespace: "svg" });
-    const createdMovedElementId = tx.createElement({ tag: "aside" });
+  const { elementId, textId, replacementTextId, svgElementId, movedElementId } = bubble.transact(
+    (tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+      const createdTextId = tx.createText({ value: "Save" });
+      const createdSvgElementId = tx.createElement({ tag: "circle", namespace: "svg" });
+      const createdMovedElementId = tx.createElement({ tag: "aside" });
 
-    tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
-    tx.insertChild({ parentId: createdElementId, childId: createdTextId });
-    tx.insertChild({ parentId: bubble.rootId, childId: createdSvgElementId });
-    tx.insertChild({ parentId: bubble.rootId, childId: createdMovedElementId });
-    tx.moveChild({ parentId: bubble.rootId, childId: createdMovedElementId, index: 1 });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
+      tx.insertChild({ parentId: createdElementId, childId: createdTextId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSvgElementId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdMovedElementId });
+      tx.moveChild({ parentId: bubble.rootId, childId: createdMovedElementId, index: 1 });
 
-    expect(() => {
-      tx.insertChild({ parentId: createdTextId, childId: createdElementId });
-    }).toThrow(`Text nodes cannot have children: ${createdTextId}`);
-    expect(() => {
-      tx.removeChild({ parentId: createdTextId, childId: createdElementId });
-    }).toThrow(`Text nodes cannot have children: ${createdTextId}`);
-    expect(() => {
-      tx.insertChild({ parentId: bubble.rootId, childId: "missing" });
-    }).toThrow("Unknown node ID: missing");
-    expect(() => {
-      tx.insertChild({ parentId: bubble.rootId, childId: bubble.rootId });
-    }).toThrow("The root node cannot be inserted as a child");
-    expect(() => {
-      tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
-    }).toThrow("The root node cannot be removed as a child");
-    expect(() => {
-      tx.moveChild({ parentId: bubble.rootId, childId: bubble.rootId, index: 0 });
-    }).toThrow("The root node cannot be moved as a child");
-    expect(() => {
-      tx.createElement({ tag: "" });
-    }).toThrow("Element tag must be a non-empty string");
+      expect(() => {
+        tx.insertChild({ parentId: createdTextId, childId: createdElementId });
+      }).toThrow(`Text nodes cannot have children: ${createdTextId}`);
+      expect(() => {
+        tx.removeChild({ parentId: createdTextId, childId: createdElementId });
+      }).toThrow(`Text nodes cannot have children: ${createdTextId}`);
+      expect(() => {
+        tx.insertChild({ parentId: bubble.rootId, childId: "missing" });
+      }).toThrow("Unknown node ID: missing");
+      expect(() => {
+        tx.insertChild({ parentId: bubble.rootId, childId: bubble.rootId });
+      }).toThrow("The root node cannot be inserted as a child");
+      expect(() => {
+        tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
+      }).toThrow("The root node cannot be removed as a child");
+      expect(() => {
+        tx.moveChild({ parentId: bubble.rootId, childId: bubble.rootId, index: 0 });
+      }).toThrow("The root node cannot be moved as a child");
+      expect(() => {
+        tx.createElement({ tag: "" });
+      }).toThrow("Element tag must be a non-empty string");
 
-    tx.removeChild({ parentId: createdElementId, childId: createdTextId });
-    tx.removeChild({ parentId: bubble.rootId, childId: createdElementId });
-
-    expect(() => {
+      tx.removeChild({ parentId: createdElementId, childId: createdTextId });
       tx.removeChild({ parentId: bubble.rootId, childId: createdElementId });
-    }).toThrow(`Node ${createdElementId} is not a child of ${bubble.rootId}`);
 
-    return {
-      elementId: createdElementId,
-      textId: createdTextId,
-      replacementTextId: tx.createText({ value: "Later" }),
-      svgElementId: createdSvgElementId,
-      movedElementId: createdMovedElementId,
-    };
-  });
+      expect(() => {
+        tx.removeChild({ parentId: bubble.rootId, childId: createdElementId });
+      }).toThrow(`Node ${createdElementId} is not a child of ${bubble.rootId}`);
+
+      return {
+        elementId: createdElementId,
+        textId: createdTextId,
+        replacementTextId: tx.createText({ value: "Later" }),
+        svgElementId: createdSvgElementId,
+        movedElementId: createdMovedElementId,
+      };
+    },
+  );
 
   expect(elementId).toMatch(/^node:\d+:1$/);
   expect(textId).toMatch(/^node:\d+:2$/);

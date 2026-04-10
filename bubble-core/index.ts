@@ -57,38 +57,13 @@ export type BubbleMutation =
 export interface BubbleTransaction {
   createElement(input: { tag: string; namespace?: BubbleNamespace }): BubbleNodeId;
   createText(input: { value: string }): BubbleNodeId;
-  setText(input: {
-    nodeId: BubbleNodeId;
-    value: string;
-  }): void;
-  insertChild(input: {
-    parentId: BubbleNodeId;
-    childId: BubbleNodeId;
-    index?: number;
-  }): void;
-  removeChild(input: {
-    parentId: BubbleNodeId;
-    childId: BubbleNodeId;
-  }): void;
-  moveChild(input: {
-    parentId: BubbleNodeId;
-    childId: BubbleNodeId;
-    index: number;
-  }): void;
-  setAttribute(input: {
-    nodeId: BubbleNodeId;
-    name: string;
-    value: string;
-  }): void;
-  removeAttribute(input: {
-    nodeId: BubbleNodeId;
-    name: string;
-  }): void;
-  setProperty(input: {
-    nodeId: BubbleNodeId;
-    name: string;
-    value: unknown;
-  }): void;
+  setText(input: { nodeId: BubbleNodeId; value: string }): void;
+  insertChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId; index?: number }): void;
+  removeChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId }): void;
+  moveChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId; index: number }): void;
+  setAttribute(input: { nodeId: BubbleNodeId; name: string; value: string }): void;
+  removeAttribute(input: { nodeId: BubbleNodeId; name: string }): void;
+  setProperty(input: { nodeId: BubbleNodeId; name: string; value: unknown }): void;
   addEventListener(input: {
     nodeId: BubbleNodeId;
     type: string;
@@ -105,13 +80,13 @@ export interface BubbleTransactionRecord {
 
 export type BubbleRuntimeEvent =
   | {
-    type: "transaction-committed";
-    record: BubbleTransactionRecord;
-  }
+      type: "transaction-committed";
+      record: BubbleTransactionRecord;
+    }
   | {
-    type: "focus-changed";
-    nodeId: BubbleNodeId | null;
-  };
+      type: "focus-changed";
+      nodeId: BubbleNodeId | null;
+    };
 
 export type BubbleRuntimeListener = (event: BubbleRuntimeEvent) => void;
 
@@ -338,7 +313,9 @@ function projectSerializedNode(
   if (node.kind === "root") {
     return Object.freeze({
       kind: "root",
-      children: Object.freeze(node.children.map((childId) => projectSerializedNode(childId, nodes))),
+      children: Object.freeze(
+        node.children.map((childId) => projectSerializedNode(childId, nodes)),
+      ),
     });
   }
 
@@ -476,7 +453,10 @@ function assertEventTargetNode(
   }
 }
 
-function assertFocusableNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
+function assertFocusableNode(
+  node: BubbleNode,
+  nodeId: BubbleNodeId,
+): asserts node is BubbleElementNode {
   if (node.kind !== "element") {
     throw new Error(`Only element nodes can receive focus: ${nodeId}`);
   }
@@ -492,7 +472,10 @@ function assertFormNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is
   }
 }
 
-function assertSubmitTargetNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
+function assertSubmitTargetNode(
+  node: BubbleNode,
+  nodeId: BubbleNodeId,
+): asserts node is BubbleElementNode {
   if (node.kind !== "element" || node.namespace !== "html" || node.tag !== "form") {
     throw new Error(`Only html form elements can receive submit events: ${nodeId}`);
   }
@@ -1090,7 +1073,9 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     data = {},
     cancelable = type === "submit",
     mode = "propagating",
-  }: BubbleDispatchInput & { mode?: BubbleEventDispatchMode }): BubbleDispatchResult | BubbleSubmitDispatchResult => {
+  }: BubbleDispatchInput & { mode?: BubbleEventDispatchMode }):
+    | BubbleDispatchResult
+    | BubbleSubmitDispatchResult => {
     if (type === "submit") {
       const targetNode = nodes.get(targetId);
 
@@ -1192,7 +1177,10 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
           tabIndex: getTabIndexValue(node) ?? 0,
         };
       })
-      .filter((entry): entry is { nodeId: BubbleNodeId; domIndex: number; tabIndex: number } => entry !== null);
+      .filter(
+        (entry): entry is { nodeId: BubbleNodeId; domIndex: number; tabIndex: number } =>
+          entry !== null,
+      );
 
     const positiveTabIndexEntries = tabbableEntries
       .filter((entry) => entry.tabIndex > 0)
@@ -1232,9 +1220,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     return Object.freeze(entries.map((entry) => Object.freeze({ ...entry })));
   };
 
-  const refreshDerivedElementMetadata = (
-    nodeLookup: Map<BubbleNodeId, BubbleNode>,
-  ): void => {
+  const refreshDerivedElementMetadata = (nodeLookup: Map<BubbleNodeId, BubbleNode>): void => {
     for (const node of nodeLookup.values()) {
       if (node.kind !== "element") {
         continue;
@@ -1569,7 +1555,11 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
 
       const previouslyFocusedNodeId = focusedNodeId;
       focusedNodeId = null;
-      dispatchEventToTarget({ type: "blur", targetId: previouslyFocusedNodeId, mode: "target-only" });
+      dispatchEventToTarget({
+        type: "blur",
+        targetId: previouslyFocusedNodeId,
+        mode: "target-only",
+      });
       emitRuntimeEvent({ type: "focus-changed", nodeId: null });
     },
     getFocusedNodeId() {

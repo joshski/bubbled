@@ -175,8 +175,12 @@ describe("createBubbleReactRoot", () => {
       ],
     });
     expect(bubble.getRoot().children[0]).toBe(labelId);
-    expect((bubble.getNode(labelId) as { kind: string; children: string[] }).children[0]).toBe(inputId);
-    expect((bubble.getNode(labelId) as { kind: string; children: string[] }).children[1]).toBe(textId);
+    expect((bubble.getNode(labelId) as { kind: string; children: string[] }).children[0]).toBe(
+      inputId,
+    );
+    expect((bubble.getNode(labelId) as { kind: string; children: string[] }).children[1]).toBe(
+      textId,
+    );
     expect(mutationTypes).toEqual(["attribute-set", "attribute-set", "property-set", "text-set"]);
   });
 
@@ -346,7 +350,9 @@ describe("createBubbleReactRoot", () => {
       </ul>,
     );
 
-    expect((bubble.getNode(listId) as { kind: string; children: string[] }).children).toEqual([alphaId]);
+    expect((bubble.getNode(listId) as { kind: string; children: string[] }).children).toEqual([
+      alphaId,
+    ]);
     expect(bubble.getNode(betaId)).toMatchObject({
       id: betaId,
       kind: "element",
@@ -1039,7 +1045,8 @@ describe("createBubbleReactRoot", () => {
         <>
           <button />
         </>,
-      )).toThrow("bubble-react only supports host elements and text nodes in this slice");
+      ),
+    ).toThrow("bubble-react only supports host elements and text nodes in this slice");
     expect(readSnapshot(bubble)).toEqual({
       kind: "root",
       children: [],
@@ -1082,8 +1089,7 @@ describe("createBubbleReactRoot", () => {
   });
 
   test("throws when React client hook internals are unavailable", () => {
-    expect(() =>
-      readReactClientInternals({} as typeof import("react"))).toThrow(
+    expect(() => readReactClientInternals({} as typeof import("react"))).toThrow(
       "bubble-react could not access the React client hook dispatcher internals",
     );
   });

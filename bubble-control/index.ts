@@ -134,16 +134,15 @@ export function createController(options: CreateControllerOptions = {}): Promise
               return {
                 ok: true,
               };
-            default:
-              {
-                const invalidCommand = input as { type: string };
+            default: {
+              const invalidCommand = input as { type: string };
 
-                return fail({
-                  code: "unknown_command",
-                  message: `Unknown command: ${invalidCommand.type}`,
-                  details: { type: invalidCommand.type },
-                });
-              }
+              return fail({
+                code: "unknown_command",
+                message: `Unknown command: ${invalidCommand.type}`,
+                details: { type: invalidCommand.type },
+              });
+            }
           }
         },
         async query(input) {
@@ -159,16 +158,15 @@ export function createController(options: CreateControllerOptions = {}): Promise
                 ok: true,
                 value: bubble.snapshot(),
               };
-            default:
-              {
-                const invalidQuery = input as { type: string };
+            default: {
+              const invalidQuery = input as { type: string };
 
-                return fail({
-                  code: "unknown_query",
-                  message: `Unknown query: ${invalidQuery.type}`,
-                  details: { type: invalidQuery.type },
-                });
-              }
+              return fail({
+                code: "unknown_query",
+                message: `Unknown query: ${invalidQuery.type}`,
+                details: { type: invalidQuery.type },
+              });
+            }
           }
         },
         async reset() {

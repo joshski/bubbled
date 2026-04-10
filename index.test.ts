@@ -19,9 +19,7 @@ describe("public entrypoints", () => {
       createBubbleQuery: expect.any(Function),
       serializeBubbleSnapshot: expect.any(Function),
     });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-      globalsBeforeImport,
-    );
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
   test("./bubble-test exposes the test harness helper entrypoints", async () => {
@@ -35,9 +33,7 @@ describe("public entrypoints", () => {
       createSemanticAssertions: expect.any(Function),
       createSemanticQueries: expect.any(Function),
     });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-      globalsBeforeImport,
-    );
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
   test("./bubble-browser exposes the DOM projector entrypoint", async () => {
@@ -51,9 +47,7 @@ describe("public entrypoints", () => {
       measureAndPlacePopover: expect.any(Function),
       placePopover: expect.any(Function),
     });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-      globalsBeforeImport,
-    );
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
   test("./bubble-react exposes the React adapter entrypoint", async () => {
@@ -64,9 +58,7 @@ describe("public entrypoints", () => {
     expect(entrypoint).toEqual({
       createBubbleReactRoot: expect.any(Function),
     });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-      globalsBeforeImport,
-    );
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
   test("./bubble-control exposes the control entrypoint", async () => {
@@ -77,9 +69,7 @@ describe("public entrypoints", () => {
     expect(entrypoint).toEqual({
       createController: expect.any(Function),
     });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-      globalsBeforeImport,
-    );
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
   test("./bubble-cli exposes the CLI entrypoint", async () => {
@@ -90,9 +80,7 @@ describe("public entrypoints", () => {
     expect(entrypoint).toEqual({
       main: expect.any(Function),
     });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-      globalsBeforeImport,
-    );
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
   for (const entrypointPath of emptyEntrypoints) {
@@ -111,9 +99,7 @@ describe("public entrypoints", () => {
       const entrypoint = await import(entrypointPath);
 
       expect(entrypoint).toEqual({});
-      expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-        globalsBeforeImport,
-      );
+      expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
     });
   }
 
@@ -126,8 +112,6 @@ describe("public entrypoints", () => {
       BubbleUnsupportedCapabilityError: expect.any(Function),
       createCapabilityRegistry: expect.any(Function),
     });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
-      globalsBeforeImport,
-    );
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 });

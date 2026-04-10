@@ -136,11 +136,7 @@ class FakeDomElement extends FakeDomNode {
     this.listeners.set(type, listeners);
   }
 
-  removeEventListener(
-    type: string,
-    listener: (event: FakeDomEvent) => void,
-    _options?: boolean,
-  ) {
+  removeEventListener(type: string, listener: (event: FakeDomEvent) => void, _options?: boolean) {
     const listeners = this.listeners.get(type);
 
     if (listeners === undefined) {
@@ -207,9 +203,7 @@ function createContainer() {
   };
 }
 
-function createProjectorTestBubble(
-  overrides: Partial<BubbleRuntime>,
-): BubbleRuntime {
+function createProjectorTestBubble(overrides: Partial<BubbleRuntime>): BubbleRuntime {
   return {
     rootId: "root",
     resolveCapability() {
@@ -1081,7 +1075,9 @@ describe("createDomProjector", () => {
     const projector = createDomProjector({ bubble });
     const { container } = createContainer();
 
-    expect(() => projector.mount(container as unknown as HTMLElement)).toThrow("Unknown node ID: missing");
+    expect(() => projector.mount(container as unknown as HTMLElement)).toThrow(
+      "Unknown node ID: missing",
+    );
   });
 
   test("mount fails clearly when the bubble snapshot is missing the root node", () => {
@@ -1153,7 +1149,12 @@ describe("createDomProjector", () => {
   test("incremental updates fail clearly when a text node is treated as a parent", () => {
     let runtimeListener: BubbleRuntimeListener | null = null;
     const rootNode: BubbleRootNode = { id: "root", kind: "root", children: [] };
-    const textNode: BubbleTextNode = { id: "text:1", kind: "text", parentId: "root", value: "Hello" };
+    const textNode: BubbleTextNode = {
+      id: "text:1",
+      kind: "text",
+      parentId: "root",
+      value: "Hello",
+    };
     const childNode: BubbleElementNode = {
       id: "node:child",
       kind: "element",
@@ -1217,7 +1218,9 @@ describe("createDomProjector", () => {
         type: "transaction-committed",
         record: {
           sequence: 1,
-          mutations: [{ type: "child-inserted", parentId: "text:1", childId: "node:child", index: 0 }],
+          mutations: [
+            { type: "child-inserted", parentId: "text:1", childId: "node:child", index: 0 },
+          ],
         },
       }),
     ).toThrow("Text nodes cannot have children: text:1");

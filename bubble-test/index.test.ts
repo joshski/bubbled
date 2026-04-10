@@ -96,9 +96,7 @@ describe("createRenderHarness", () => {
     harness.render({
       tag: "section",
       attributes: { "data-state": "draft" },
-      children: [
-        { tag: "button", attributes: { type: "button" }, children: ["Save"] },
-      ],
+      children: [{ tag: "button", attributes: { type: "button" }, children: ["Save"] }],
     });
 
     const sectionId = requireId(
@@ -112,7 +110,11 @@ describe("createRenderHarness", () => {
       attributes: { "aria-label": "Editor" },
       children: [
         { tag: "button", attributes: { type: "button" }, children: ["Publish"] },
-        { tag: "input", attributes: { type: "text", "aria-label": "Title" }, properties: { value: "Draft" } },
+        {
+          tag: "input",
+          attributes: { type: "text", "aria-label": "Title" },
+          properties: { value: "Draft" },
+        },
       ],
     });
 
@@ -158,7 +160,11 @@ describe("createRenderHarness", () => {
       attributes: { "aria-label": "Editor" },
       children: [
         { tag: "button", attributes: { type: "button" }, children: ["Publish"] },
-        { tag: "input", attributes: { type: "text", "aria-label": "Title" }, properties: { value: "Published" } },
+        {
+          tag: "input",
+          attributes: { type: "text", "aria-label": "Title" },
+          properties: { value: "Published" },
+        },
       ],
     });
 

@@ -19,8 +19,7 @@ export function readReactClientInternals(
     __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE?: BubbleReactClientInternals;
   } = ReactNamespace,
 ): BubbleReactClientInternals {
-  const internals =
-    reactNamespace.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+  const internals = reactNamespace.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
 
   if (internals === undefined) {
     throw new Error(UNSUPPORTED_REACT_INTERNALS_ERROR);

@@ -110,8 +110,8 @@ describe("mountTodoApp", () => {
 
     expect(attachedLis()).toHaveLength(SAMPLE_TODO_LABELS.length + 1);
 
-    const renderedLabels = collectAttachedElementsByTag(attachedTree(), "span").map(
-      (span) => textContentOf(span),
+    const renderedLabels = collectAttachedElementsByTag(attachedTree(), "span").map((span) =>
+      textContentOf(span),
     );
 
     expect(renderedLabels).toEqual([

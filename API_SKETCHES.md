@@ -202,44 +202,19 @@ export interface BubbleTransaction {
   createElement(input: { tag: string; namespace?: BubbleNamespace }): BubbleNodeId;
   createText(input: { value: string }): BubbleNodeId;
 
-  insertChild(input: {
-    parentId: BubbleNodeId;
-    childId: BubbleNodeId;
-    index?: number;
-  }): void;
+  insertChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId; index?: number }): void;
 
-  removeChild(input: {
-    parentId: BubbleNodeId;
-    childId: BubbleNodeId;
-  }): void;
+  removeChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId }): void;
 
-  moveChild(input: {
-    parentId: BubbleNodeId;
-    childId: BubbleNodeId;
-    index: number;
-  }): void;
+  moveChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId; index: number }): void;
 
-  setAttribute(input: {
-    nodeId: BubbleNodeId;
-    name: string;
-    value: string;
-  }): void;
+  setAttribute(input: { nodeId: BubbleNodeId; name: string; value: string }): void;
 
-  removeAttribute(input: {
-    nodeId: BubbleNodeId;
-    name: string;
-  }): void;
+  removeAttribute(input: { nodeId: BubbleNodeId; name: string }): void;
 
-  setProperty(input: {
-    nodeId: BubbleNodeId;
-    name: string;
-    value: unknown;
-  }): void;
+  setProperty(input: { nodeId: BubbleNodeId; name: string; value: unknown }): void;
 
-  setText(input: {
-    nodeId: BubbleNodeId;
-    value: string;
-  }): void;
+  setText(input: { nodeId: BubbleNodeId; value: string }): void;
 
   addEventListener(input: {
     nodeId: BubbleNodeId;
@@ -565,9 +540,7 @@ export interface CreateDomProjectorOptions {
   syncFocus?: boolean;
 }
 
-export function createDomProjector(
-  options: CreateDomProjectorOptions,
-): BubbleDomProjector;
+export function createDomProjector(options: CreateDomProjectorOptions): BubbleDomProjector;
 ```
 
 ### Example: Mount Bubble into the Browser DOM
@@ -614,9 +587,7 @@ export interface CreateBubbleReactRootOptions {
   bubble: BubbleRuntime;
 }
 
-export function createBubbleReactRoot(
-  options: CreateBubbleReactRootOptions,
-): BubbleReactRoot;
+export function createBubbleReactRoot(options: CreateBubbleReactRootOptions): BubbleReactRoot;
 ```
 
 ### Example: React Rendering into the Bubble
@@ -929,10 +900,7 @@ function ComposerView({ app }: { app: ComposerApp }) {
     <form>
       <label>
         Message
-        <textarea
-          value={state.body}
-          onChange={(event) => app.setBody(event.currentTarget.value)}
-        />
+        <textarea value={state.body} onChange={(event) => app.setBody(event.currentTarget.value)} />
       </label>
 
       <button type="button" onClick={() => void app.save()}>
@@ -1130,10 +1098,7 @@ function ComposerReactView({ app }: { app: ComposerApp }) {
     <section>
       <label>
         Message
-        <textarea
-          value={state.body}
-          onChange={(event) => app.setBody(event.currentTarget.value)}
-        />
+        <textarea value={state.body} onChange={(event) => app.setBody(event.currentTarget.value)} />
       </label>
 
       <button type="button" disabled={!state.canSave} onClick={() => void app.save()}>
@@ -1224,9 +1189,7 @@ export interface ComposerEnvironment {
   attachments: "supported" | "unsupported";
 }
 
-export function createComposerAppForEnvironment(
-  env: ComposerEnvironment,
-): ComposerApp {
+export function createComposerAppForEnvironment(env: ComposerEnvironment): ComposerApp {
   if (env.attachments === "supported") {
     return createComposerAppWithAttachments();
   }
@@ -1274,19 +1237,19 @@ If we keep the first implementation disciplined, the earliest public surface mig
 
 ```ts
 // bubble-core
-createBubble()
+createBubble();
 
 // bubble-test
-createHarness()
+createHarness();
 
 // bubble-browser
-createDomProjector()
+createDomProjector();
 
 // bubble-react
-createBubbleReactRoot()
+createBubbleReactRoot();
 
 // bubble-control
-createController()
+createController();
 ```
 
 Everything else can stay internal until the behavior is proven by tests.

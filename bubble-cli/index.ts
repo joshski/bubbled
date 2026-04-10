@@ -76,9 +76,7 @@ function formatCommandSuccess(): string {
   return "OK";
 }
 
-function formatTreeQuerySuccess(
-  result: Extract<BubbleQueryResult, { ok: true }>,
-): string {
+function formatTreeQuerySuccess(result: Extract<BubbleQueryResult, { ok: true }>): string {
   return serializeBubbleSnapshot(result.value);
 }
 

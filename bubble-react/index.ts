@@ -30,8 +30,7 @@ export interface CreateBubbleReactRootOptions {
 
 const UNSUPPORTED_REACT_NODE_TYPE_ERROR =
   "bubble-react only supports host elements and text nodes in this slice";
-const UNSUPPORTED_REACT_HOOK_ERROR =
-  "bubble-react only supports useState in this slice";
+const UNSUPPORTED_REACT_HOOK_ERROR = "bubble-react only supports useState in this slice";
 
 const PROPERTY_DEFAULTS = {
   checked: false,
@@ -171,7 +170,9 @@ function planFunctionComponent(
     useState<TValue>(
       initialState: TValue | (() => TValue),
     ): [TValue, Dispatch<SetStateAction<TValue>>] {
-      const existingState = componentState.hooks[hookIndex] as BubbleReactHookState<TValue> | undefined;
+      const existingState = componentState.hooks[hookIndex] as
+        | BubbleReactHookState<TValue>
+        | undefined;
 
       if (existingState !== undefined) {
         hookIndex += 1;
@@ -328,7 +329,10 @@ function reconcileProperties(
   plan: BubbleReactElementPlan,
   tx: BubbleTransaction,
 ): void {
-  for (const [name, value] of Object.entries(plan.properties) as [BubbleReactPropertyName, unknown][]) {
+  for (const [name, value] of Object.entries(plan.properties) as [
+    BubbleReactPropertyName,
+    unknown,
+  ][]) {
     if (!Object.is(currentNode.properties[name], value)) {
       tx.setProperty({ nodeId: currentNode.nodeId, name, value });
     }
@@ -417,7 +421,10 @@ function createNode(plan: BubbleReactPlan, tx: BubbleTransaction): BubbleReactNo
     tx.setAttribute({ nodeId, name, value });
   }
 
-  for (const [name, value] of Object.entries(plan.properties) as [BubbleReactPropertyName, unknown][]) {
+  for (const [name, value] of Object.entries(plan.properties) as [
+    BubbleReactPropertyName,
+    unknown,
+  ][]) {
     tx.setProperty({ nodeId, name, value });
   }
 
@@ -531,7 +538,11 @@ function reconcileChildren(input: {
       nextChildren.push(createdNode);
     }
 
-    for (let index = input.currentChildren.length - 1; index >= input.nextPlans.length; index -= 1) {
+    for (
+      let index = input.currentChildren.length - 1;
+      index >= input.nextPlans.length;
+      index -= 1
+    ) {
       removeEventHandlersFromSubtree(input.currentChildren[index] as BubbleReactNode, input.tx);
       input.tx.removeChild({
         parentId: input.parentId,
@@ -565,7 +576,9 @@ function reconcileChildren(input: {
 
     if (currentNode !== undefined && canReuseNode(currentNode, plan)) {
       const nextNode = reconcileNode(currentNode, plan, input.tx);
-      const currentIndex = workingChildren.findIndex((child) => child.nodeId === currentNode.nodeId);
+      const currentIndex = workingChildren.findIndex(
+        (child) => child.nodeId === currentNode.nodeId,
+      );
 
       if (currentIndex !== index) {
         input.tx.moveChild({
@@ -682,4 +695,5 @@ export function createBubbleReactRoot(options: CreateBubbleReactRootOptions): Bu
     renderCurrentNode();
   };
 
-  return { render, unmount: () => render(null) }; }
+  return { render, unmount: () => render(null) };
+}

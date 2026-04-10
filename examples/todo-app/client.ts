@@ -43,16 +43,17 @@ async function start(): Promise<void> {
   );
 }
 
-void start().catch((error: unknown) => {
+try {
+  await start();
+} catch (error: unknown) {
   const container = document.getElementById("app");
 
   if (container instanceof HTMLElement) {
     container.replaceChildren();
     const message = document.createElement("p");
-    message.textContent =
-      error instanceof Error ? error.message : "Failed to start the todo app.";
+    message.textContent = error instanceof Error ? error.message : "Failed to start the todo app.";
     container.appendChild(message);
   }
 
   console.error(error);
-});
+}

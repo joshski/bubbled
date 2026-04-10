@@ -49,11 +49,7 @@ interface DomTextNode extends DomChildNode {
 
 interface DomElementNode extends DomChildNode, DomParentNode {
   addEventListener(type: string, listener: (event: DomEvent) => void, options?: boolean): void;
-  removeEventListener(
-    type: string,
-    listener: (event: DomEvent) => void,
-    options?: boolean,
-  ): void;
+  removeEventListener(type: string, listener: (event: DomEvent) => void, options?: boolean): void;
   focus(): void;
   blur(): void;
   getBoundingClientRect(): BubbleRect;
@@ -75,15 +71,14 @@ interface DomDocument {
 
 interface DomContainer extends DomParentNode {
   addEventListener(type: string, listener: (event: DomEvent) => void, options?: boolean): void;
-  removeEventListener(
-    type: string,
-    listener: (event: DomEvent) => void,
-    options?: boolean,
-  ): void;
+  removeEventListener(type: string, listener: (event: DomEvent) => void, options?: boolean): void;
   ownerDocument: DomDocument;
 }
 
-const projectedElementLookupByProjector = new WeakMap<BubbleDomProjector, Map<BubbleNodeId, DomElementNode>>();
+const projectedElementLookupByProjector = new WeakMap<
+  BubbleDomProjector,
+  Map<BubbleNodeId, DomElementNode>
+>();
 
 function isDomElementNode(node: DomChildNode): node is DomElementNode {
   return "focus" in node;
@@ -212,10 +207,7 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
     isSyncingFocusFromBubble = false;
   };
 
-  const ensureProjectedNode = (
-    nodeId: BubbleNodeId,
-    document: DomDocument,
-  ): DomChildNode => {
+  const ensureProjectedNode = (nodeId: BubbleNodeId, document: DomDocument): DomChildNode => {
     const existingNode = nodeLookup.get(nodeId);
 
     if (existingNode !== undefined) {
@@ -324,27 +316,28 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
         nodeLookup.get(mutation.childId)?.remove();
         return;
       case "text-set":
-        (ensureProjectedNode(
-          mutation.nodeId,
-          (mountedContainer as DomContainer).ownerDocument,
-        ) as DomTextNode).data = mutation.value;
+        (
+          ensureProjectedNode(
+            mutation.nodeId,
+            (mountedContainer as DomContainer).ownerDocument,
+          ) as DomTextNode
+        ).data = mutation.value;
         return;
       case "attribute-set":
-        (ensureProjectedNode(
-          mutation.nodeId,
-          (mountedContainer as DomContainer).ownerDocument,
-        ) as DomElementNode).setAttribute(
-          mutation.name,
-          mutation.value,
-        );
+        (
+          ensureProjectedNode(
+            mutation.nodeId,
+            (mountedContainer as DomContainer).ownerDocument,
+          ) as DomElementNode
+        ).setAttribute(mutation.name, mutation.value);
         return;
       case "attribute-removed":
-        (ensureProjectedNode(
-          mutation.nodeId,
-          (mountedContainer as DomContainer).ownerDocument,
-        ) as DomElementNode).removeAttribute(
-          mutation.name,
-        );
+        (
+          ensureProjectedNode(
+            mutation.nodeId,
+            (mountedContainer as DomContainer).ownerDocument,
+          ) as DomElementNode
+        ).removeAttribute(mutation.name);
         return;
     }
   };

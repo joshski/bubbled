@@ -149,10 +149,7 @@ test("real browser verifies popover placement against actual projected DOM layou
 
     expect(result.placement.placement).toBe("top");
     expect(result.placement.x).toBeCloseTo(result.anchorRect.x, 5);
-    expect(result.placement.y).toBeCloseTo(
-      result.anchorRect.y - result.overlayRect.height,
-      5,
-    );
+    expect(result.placement.y).toBeCloseTo(result.anchorRect.y - result.overlayRect.height, 5);
   } finally {
     await page?.close();
     await rm(tempDir, { force: true, recursive: true });
@@ -342,7 +339,10 @@ test("real browser verifies default submit buttons trigger bridged bubble form s
         }
 
         let settled = false;
-        const finish = (outcome: "submitted" | "timeout", submitEvents: Array<{ defaultPrevented: boolean }>) => {
+        const finish = (
+          outcome: "submitted" | "timeout",
+          submitEvents: Array<{ defaultPrevented: boolean }>,
+        ) => {
           if (settled) {
             return;
           }

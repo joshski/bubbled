@@ -223,18 +223,20 @@ function expectedElementNode(input: {
   name?: string | null;
 }): Readonly<BubbleElementNode> {
   const inputType =
-    input.tag === "input" && typeof input.attributes.type === "string" ? input.attributes.type : null;
+    input.tag === "input" && typeof input.attributes.type === "string"
+      ? input.attributes.type
+      : null;
   const derivedRole =
     input.role ??
     (input.tag === "button"
       ? "button"
       : input.tag === "textarea"
         ? "textbox"
-      : input.tag === "input" && inputType === "checkbox"
-        ? "checkbox"
-        : input.tag === "input" && (inputType === null || inputType === "text")
-          ? "textbox"
-          : null);
+        : input.tag === "input" && inputType === "checkbox"
+          ? "checkbox"
+          : input.tag === "input" && (inputType === null || inputType === "text")
+            ? "textbox"
+            : null);
   const derivedValue =
     input.value ??
     ((input.tag === "input" && (inputType === null || inputType === "text")) ||
@@ -1533,7 +1535,7 @@ describe("createBubble", () => {
       }
     });
 
-    bubble.transact(() => undefined);
+    bubble.transact(() => {});
 
     expect(observedRecords).toEqual([{ sequence: 1, mutations: [] }]);
   });
@@ -2249,11 +2251,7 @@ describe("createBubble", () => {
       defaultPrevented: false,
       delivered: true,
     });
-    expect(calls).toEqual([
-      "grandparent-capture",
-      "parent-capture-first",
-      "parent-capture-second",
-    ]);
+    expect(calls).toEqual(["grandparent-capture", "parent-capture-first", "parent-capture-second"]);
   });
 
   test("rethrows listener errors from dispatch", () => {
@@ -2368,7 +2366,7 @@ describe("createBubble", () => {
         tx.addEventListener({
           nodeId: textId,
           type: "click",
-          listener: () => undefined,
+          listener: () => {},
         });
       });
     }).toThrow(`Event listeners are only supported on element nodes: ${textId}`);
@@ -2380,7 +2378,7 @@ describe("createBubble", () => {
         tx.addEventListener({
           nodeId: buttonId,
           type: "   ",
-          listener: () => undefined,
+          listener: () => {},
         });
       });
     }).toThrow("Event type must be a non-empty string");
@@ -2516,9 +2514,7 @@ describe("createBubble", () => {
       return createdLabelId;
     });
 
-    expect(
-      bubble.dispatchEvent({ type: "click", targetId: labelId, cancelable: true }),
-    ).toEqual({
+    expect(bubble.dispatchEvent({ type: "click", targetId: labelId, cancelable: true })).toEqual({
       defaultPrevented: true,
       delivered: true,
     });
@@ -3317,7 +3313,9 @@ describe("createBubble", () => {
       getSnapshotElementOrThrow(snapshot, nodeIds.firstButtonId),
       getSnapshotElementOrThrow(snapshot, nodeIds.secondButtonId),
     ]);
-    expect(snapshot.query.getByTag("p")).toEqual([getSnapshotElementOrThrow(snapshot, nodeIds.paragraphId)]);
+    expect(snapshot.query.getByTag("p")).toEqual([
+      getSnapshotElementOrThrow(snapshot, nodeIds.paragraphId),
+    ]);
     expect(snapshot.query.getByTag("text")).toEqual([]);
   });
 
@@ -3856,7 +3854,9 @@ describe("createBubble", () => {
         role: "button",
       }),
     );
-    expect(snapshot.query.getByTag("button")).toEqual([getSnapshotElementOrThrow(snapshot, buttonId)]);
+    expect(snapshot.query.getByTag("button")).toEqual([
+      getSnapshotElementOrThrow(snapshot, buttonId),
+    ]);
     expect(bubble.getNode(buttonId)).toEqual(
       expectedElementNode({
         id: buttonId,
@@ -4011,7 +4011,9 @@ describe("createBubble", () => {
         nodeId: createdButtonId,
         type: "blur",
         listener: (event) => {
-          observedEvents.push(`${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+          observedEvents.push(
+            `${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`,
+          );
         },
       });
 
@@ -4040,14 +4042,18 @@ describe("createBubble", () => {
         nodeId: createdFirstButtonId,
         type: "blur",
         listener: (event) => {
-          observedEvents.push(`${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+          observedEvents.push(
+            `${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`,
+          );
         },
       });
       tx.addEventListener({
         nodeId: createdSecondButtonId,
         type: "focus",
         listener: (event) => {
-          observedEvents.push(`${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+          observedEvents.push(
+            `${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`,
+          );
         },
       });
       tx.addEventListener({
@@ -4176,8 +4182,8 @@ describe("createBubble", () => {
   test("applies supported tabIndex overrides before natural DOM order", () => {
     const bubble = createBubble();
 
-    const { defaultButtonId, attributeButtonId, propertyInputId, naturalButtonId } = bubble.transact(
-      (tx) => {
+    const { defaultButtonId, attributeButtonId, propertyInputId, naturalButtonId } =
+      bubble.transact((tx) => {
         const createdDefaultButtonId = tx.createElement({ tag: "button" });
         const createdAttributeButtonId = tx.createElement({ tag: "button" });
         const createdPropertyInputId = tx.createElement({ tag: "input" });
@@ -4197,8 +4203,7 @@ describe("createBubble", () => {
           propertyInputId: createdPropertyInputId,
           naturalButtonId: createdNaturalButtonId,
         };
-      },
-    );
+      });
 
     expect(bubble.getTabOrder()).toEqual([
       propertyInputId,

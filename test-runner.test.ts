@@ -11,13 +11,7 @@ test("test command runs a targeted smoke fixture", () => {
   try {
     const configPath = join(configDir, "bunfig.toml");
 
-    writeFileSync(
-      configPath,
-      [
-        "[test]",
-        "coverage = false",
-      ].join("\n"),
-    );
+    writeFileSync(configPath, ["[test]", "coverage = false"].join("\n"));
 
     const command = Bun.spawnSync({
       cmd: [
@@ -50,12 +44,9 @@ test("coverage gate fails when a repository drops below 100%", () => {
   try {
     writeFileSync(
       join(fixtureDir, "bunfig.toml"),
-      [
-        "[test]",
-        "coverage = true",
-        "coverageThreshold = 1.0",
-        "coverageSkipTestFiles = true",
-      ].join("\n"),
+      ["[test]", "coverage = true", "coverageThreshold = 1.0", "coverageSkipTestFiles = true"].join(
+        "\n",
+      ),
     );
     writeFileSync(
       join(fixtureDir, "source.ts"),

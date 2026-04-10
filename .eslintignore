@@ -1,0 +1,7 @@
+.dust/
+coverage/
+log/
+node_modules/
+dist/
+out/
+*.lcov

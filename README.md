@@ -68,11 +68,7 @@ import { createBubbleReactRoot } from "./bubble-react";
 const bubble = createBubble();
 const root = createBubbleReactRoot({ bubble });
 
-root.render(
-  <button onClick={() => console.log("saved")}>
-    Save
-  </button>,
-);
+root.render(<button onClick={() => console.log("saved")}>Save</button>);
 ```
 
 This is useful when you want a familiar authoring model but still want a runtime you can inspect, serialize, and control directly.
@@ -143,4 +139,16 @@ Run tests:
 
 ```bash
 bun test
+```
+
+Lint the code:
+
+```bash
+bun run lint
+```
+
+Apply the same formatting workflow used in `dustbucket`:
+
+```bash
+bun run format
 ```

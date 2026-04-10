@@ -2,6 +2,21 @@
   "dustCommand": "bunx dust",
   "checks": [
     {
+      "name": "lint (oxlint)",
+      "command": "bun run lint",
+      "hints": [
+        "Run `bun install` if this is a fresh checkout",
+        "Use `bun run lint` locally before pushing changes"
+      ]
+    },
+    {
+      "name": "format (oxfmt)",
+      "command": "bun run format:check",
+      "hints": [
+        "Run `bun run format` to apply the same formatter output used in dustbucket"
+      ]
+    },
+    {
       "name": "test",
       "command": "bun test"
     },

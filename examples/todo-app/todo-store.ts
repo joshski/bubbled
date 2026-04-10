@@ -21,9 +21,7 @@ export const SAMPLE_TODO_LABELS: readonly string[] = Object.freeze([
 export const DEFAULT_STORAGE_KEY = "bubbled-todos";
 
 export function toggleTodo(todos: readonly TodoItem[], id: string): readonly TodoItem[] {
-  return todos.map((todo) =>
-    todo.id === id ? { ...todo, done: !todo.done } : todo,
-  );
+  return todos.map((todo) => (todo.id === id ? { ...todo, done: !todo.done } : todo));
 }
 
 export function removeTodo(todos: readonly TodoItem[], id: string): readonly TodoItem[] {

@@ -1,22 +1,27 @@
 {
   "name": "bubbled",
-  "module": "index.ts",
-  "type": "module",
   "private": true,
+  "type": "module",
+  "module": "index.ts",
   "scripts": {
+    "lint": "oxlint .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
     "test": "bun test",
     "test:ci": "bun test --coverage-reporter=lcov"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^19.2.14",
-    "playwright": "1.41.2"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   },
   "dependencies": {
     "@joshski/dust": "^0.1.111",
     "react": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14",
+    "oxfmt": "^0.41.0",
+    "oxlint": "^1.56.0",
+    "playwright": "1.41.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }
