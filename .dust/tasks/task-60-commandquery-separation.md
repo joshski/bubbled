@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 59: In-process control API](./task-59-in-process-control-api.md)
+- Task 59: In-process control API
 
 ## Definition of Done
 
