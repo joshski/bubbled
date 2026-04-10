@@ -6,6 +6,8 @@ import {
   BubbleUnsupportedCapabilityError,
   type BubbleScheduler,
   type BubbleTimerHandle,
+  type BubbleViewport,
+  type BubbleViewportState,
 } from "../bubble-capabilities";
 import { createBubble } from "./index";
 
@@ -124,6 +126,33 @@ function createFakeLayout(measurements: Record<string, BubbleRect>) {
       },
     } satisfies BubbleLayout,
     calls,
+  };
+}
+
+function createFakeViewport(initialState: BubbleViewportState) {
+  let state = { ...initialState };
+  const listeners = new Set<(nextState: BubbleViewportState) => void>();
+
+  return {
+    viewport: {
+      getState() {
+        return { ...state };
+      },
+      subscribe(listener) {
+        listeners.add(listener);
+
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    } satisfies BubbleViewport,
+    setState(nextState: BubbleViewportState) {
+      state = { ...nextState };
+
+      for (const listener of listeners) {
+        listener({ ...state });
+      }
+    },
   };
 }
 
@@ -330,6 +359,88 @@ describe("createBubble", () => {
     bubble.measureElement("second");
 
     expect(fakeLayout.calls).toEqual(["first", "second"]);
+  });
+
+  test("returns the default viewport state", () => {
+    const bubble = createBubble();
+
+    expect(bubble.getViewportState()).toEqual({
+      width: 1024,
+      height: 768,
+      scrollX: 0,
+      scrollY: 0,
+    });
+  });
+
+  test("returns an overridden viewport state", () => {
+    const fakeViewport = createFakeViewport({
+      width: 1440,
+      height: 900,
+      scrollX: 24,
+      scrollY: 48,
+    });
+    const bubble = createBubble({
+      capabilities: {
+        viewport: fakeViewport.viewport,
+      },
+    });
+
+    expect(bubble.getViewportState()).toEqual({
+      width: 1440,
+      height: 900,
+      scrollX: 24,
+      scrollY: 48,
+    });
+  });
+
+  test("forwards viewport updates to subscribers when the capability supports subscriptions", () => {
+    const fakeViewport = createFakeViewport({
+      width: 800,
+      height: 600,
+      scrollX: 0,
+      scrollY: 0,
+    });
+    const bubble = createBubble({
+      capabilities: {
+        viewport: fakeViewport.viewport,
+      },
+    });
+    const observedStates: BubbleViewportState[] = [];
+    const unsubscribe = bubble.subscribeToViewport((state) => {
+      observedStates.push(state);
+    });
+
+    fakeViewport.setState({
+      width: 1280,
+      height: 720,
+      scrollX: 10,
+      scrollY: 20,
+    });
+    unsubscribe();
+    fakeViewport.setState({
+      width: 1920,
+      height: 1080,
+      scrollX: 30,
+      scrollY: 40,
+    });
+
+    expect(observedStates).toEqual([
+      {
+        width: 1280,
+        height: 720,
+        scrollX: 10,
+        scrollY: 20,
+      },
+    ]);
+  });
+
+  test("viewport subscriptions are a no-op when the capability does not support them", () => {
+    const bubble = createBubble();
+    const unsubscribe = bubble.subscribeToViewport(() => {
+      throw new Error("Expected no viewport events without a subscription-capable viewport");
+    });
+
+    unsubscribe();
   });
 
   test("fires a timer only after time advances to its due time", () => {

@@ -4,6 +4,8 @@ import {
   type BubbleCapabilityName,
   type BubbleRect,
   type BubbleTimerHandle,
+  type BubbleViewportListener,
+  type BubbleViewportState,
 } from "../bubble-capabilities";
 
 export type BubbleNodeId = string;
@@ -183,6 +185,8 @@ export interface BubbleRuntime {
   clearTimeout(handle: BubbleTimerHandle): void;
   queueMicrotask(task: () => void): void;
   measureElement(nodeId: BubbleNodeId): BubbleRect;
+  getViewportState(): BubbleViewportState;
+  subscribeToViewport(listener: BubbleViewportListener): () => void;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
@@ -242,6 +246,12 @@ export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): Bubb
 
 const ROOT_NODE_ID = "root";
 const NODE_ID_PREFIX = "node:";
+const DEFAULT_VIEWPORT_STATE: BubbleViewportState = Object.freeze({
+  width: 1024,
+  height: 768,
+  scrollX: 0,
+  scrollY: 0,
+});
 
 const ELEMENT_TAG_ERROR = "Element tag must be a non-empty string";
 const TEXT_VALUE_ERROR = "Text value must be a string";
@@ -557,6 +567,10 @@ function resolveLabelControl(
   return findFirstLabelableDescendant(labelId, nodeLookup);
 }
 
+function snapshotViewportState(state: BubbleViewportState): BubbleViewportState {
+  return Object.freeze({ ...state });
+}
+
 export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -572,7 +586,14 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   let nextListenerId = 0;
   let transactionDepth = 0;
   let focusedNodeId: BubbleNodeId | null = null;
-  const capabilityRegistry = createCapabilityRegistry(options.capabilities);
+  const capabilityRegistry = createCapabilityRegistry({
+    viewport: {
+      getState() {
+        return DEFAULT_VIEWPORT_STATE;
+      },
+    },
+    ...options.capabilities,
+  });
   const listeners = new Set<BubbleRuntimeListener>();
   let eventListeners = new Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>();
 
@@ -1085,6 +1106,20 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     },
     measureElement(nodeId) {
       return capabilityRegistry.resolveCapability("layout").measureElement(nodeId);
+    },
+    getViewportState() {
+      return snapshotViewportState(capabilityRegistry.resolveCapability("viewport").getState());
+    },
+    subscribeToViewport(listener) {
+      const viewport = capabilityRegistry.resolveCapability("viewport");
+
+      if (viewport.subscribe === undefined) {
+        return () => {};
+      }
+
+      return viewport.subscribe((state) => {
+        listener(snapshotViewportState(state));
+      });
     },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       if (transactionDepth > 0) {

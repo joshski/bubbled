@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 43: Viewport capability](./task-43-viewport-capability.md)
+- None
 
 ## Definition of Done
 

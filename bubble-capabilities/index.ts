@@ -39,8 +39,11 @@ export interface BubbleViewportState {
   scrollY: number;
 }
 
+export type BubbleViewportListener = (state: BubbleViewportState) => void;
+
 export interface BubbleViewport {
   getState(): BubbleViewportState;
+  subscribe?(listener: BubbleViewportListener): () => void;
 }
 
 export interface BubbleStorage {
