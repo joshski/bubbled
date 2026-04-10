@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { createBubble } from "../bubble-core";
 import { createController } from "./index";
 
 describe("createController", () => {
@@ -126,5 +127,101 @@ describe("createController", () => {
       code: "session_destroyed",
       message: `Session ${session.id} has been destroyed.`,
     });
+  });
+
+  test("subscriber receives records in order", async () => {
+    const bubble = createBubble();
+    const controller = await createController({
+      createBubble: () => bubble,
+    });
+    const session = await controller.createSession();
+    const buttonId = bubble.transact((tx) => {
+      const nextButtonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: nextButtonId });
+      return nextButtonId;
+    });
+    const observedRecords: string[] = [];
+
+    session.subscribe((event) => {
+      switch (event.type) {
+        case "runtime":
+          switch (event.event.type) {
+            case "transaction-committed":
+              observedRecords.push(
+                `runtime:${event.event.type}:${event.event.record.mutations.map((mutation) => mutation.type).join(",")}`,
+              );
+              break;
+            case "focus-changed":
+              observedRecords.push(`runtime:${event.event.type}:${event.event.nodeId}`);
+              break;
+          }
+          break;
+        case "session-error":
+          observedRecords.push(`error:${event.error.code}`);
+          break;
+      }
+    });
+
+    bubble.transact((tx) => {
+      tx.setAttribute({ nodeId: buttonId, name: "type", value: "button" });
+    });
+    bubble.focus(buttonId);
+    await session.command({ type: "explode" } as never);
+
+    expect(observedRecords).toEqual([
+      "runtime:transaction-committed:attribute-set",
+      `runtime:focus-changed:${buttonId}`,
+      "error:unknown_command",
+    ]);
+  });
+
+  test("unsubscribe stops delivery", async () => {
+    const bubble = createBubble();
+    const controller = await createController({
+      createBubble: () => bubble,
+    });
+    const session = await controller.createSession();
+    const buttonId = bubble.transact((tx) => {
+      const nextButtonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: nextButtonId });
+      return nextButtonId;
+    });
+    const observedRecords: string[] = [];
+    const unsubscribe = session.subscribe((event) => {
+      observedRecords.push(event.type);
+    });
+
+    bubble.focus(buttonId);
+    unsubscribe();
+    bubble.blur();
+    await session.query({ type: "explode" } as never);
+
+    expect(observedRecords).toEqual(["runtime"]);
+  });
+
+  test("multiple subscribers are isolated", async () => {
+    const bubble = createBubble();
+    const controller = await createController({
+      createBubble: () => bubble,
+    });
+    const session = await controller.createSession();
+    const buttonId = bubble.transact((tx) => {
+      const nextButtonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: nextButtonId });
+      return nextButtonId;
+    });
+    const observedRecords: string[] = [];
+
+    session.subscribe(() => {
+      throw new Error("subscriber failed");
+    });
+    session.subscribe((event) => {
+      observedRecords.push(event.type);
+    });
+
+    bubble.focus(buttonId);
+    await session.query({ type: "explode" } as never);
+
+    expect(observedRecords).toEqual(["runtime", "session-error"]);
   });
 });

@@ -1,10 +1,19 @@
-import { createBubble, type BubbleSnapshot } from "../bubble-core";
+import {
+  createBubble,
+  type BubbleRuntime,
+  type BubbleRuntimeEvent,
+  type BubbleSnapshot,
+} from "../bubble-core";
 
 export interface BubbleControlError {
   readonly code: string;
   readonly message: string;
   readonly details?: Readonly<Record<string, unknown>>;
 }
+
+export type BubbleSessionEvent =
+  | { readonly type: "runtime"; readonly event: BubbleRuntimeEvent }
+  | { readonly type: "session-error"; readonly error: BubbleControlError };
 
 export type BubbleCommand = { readonly type: "reset" } | { readonly type: "destroy" };
 
@@ -24,6 +33,7 @@ export interface BubbleSession {
   query(input: BubbleQuery): Promise<BubbleQueryResult>;
   reset(): Promise<void>;
   destroy(): Promise<void>;
+  subscribe(listener: (event: BubbleSessionEvent) => void): () => void;
 }
 
 export interface BubbleController {
@@ -31,7 +41,12 @@ export interface BubbleController {
   getSession(id: string): Promise<BubbleSession | null>;
 }
 
-export function createController(): Promise<BubbleController> {
+export interface CreateControllerOptions {
+  readonly createBubble?: () => BubbleRuntime;
+}
+
+export function createController(options: CreateControllerOptions = {}): Promise<BubbleController> {
+  const createRuntime = options.createBubble ?? createBubble;
   let nextSessionId = 0;
   const sessions = new Map<string, BubbleSession>();
 
@@ -40,13 +55,52 @@ export function createController(): Promise<BubbleController> {
       nextSessionId += 1;
 
       let destroyed = false;
-      let bubble = createBubble();
+      const subscribers = new Set<(event: BubbleSessionEvent) => void>();
+      let bubble = createRuntime();
       const id = `session-${nextSessionId}`;
 
       const createSessionDestroyedError = (): BubbleControlError => ({
         code: "session_destroyed",
         message: `Session ${id} has been destroyed.`,
       });
+
+      const emit = (event: BubbleSessionEvent): void => {
+        for (const listener of subscribers) {
+          try {
+            listener(event);
+          } catch {
+            // Keep subscriber failures isolated so other subscribers still receive records.
+          }
+        }
+      };
+
+      const subscribeToRuntime = (runtime: BubbleRuntime): (() => void) =>
+        runtime.subscribe((event) => {
+          emit({
+            type: "runtime",
+            event,
+          });
+        });
+
+      let unsubscribeFromRuntime = subscribeToRuntime(bubble);
+
+      const replaceBubble = (nextBubble: BubbleRuntime): void => {
+        unsubscribeFromRuntime();
+        bubble = nextBubble;
+        unsubscribeFromRuntime = subscribeToRuntime(nextBubble);
+      };
+
+      const fail = (error: BubbleControlError) => {
+        emit({
+          type: "session-error",
+          error,
+        });
+
+        return {
+          ok: false as const,
+          error,
+        };
+      };
 
       const requireActiveSession = (): BubbleControlError | null => {
         if (destroyed) {
@@ -62,21 +116,19 @@ export function createController(): Promise<BubbleController> {
           const sessionError = requireActiveSession();
 
           if (sessionError !== null) {
-            return {
-              ok: false,
-              error: sessionError,
-            };
+            return fail(sessionError);
           }
 
           switch (input.type) {
             case "reset":
-              bubble = createBubble();
+              replaceBubble(createRuntime());
 
               return {
                 ok: true,
               };
             case "destroy":
               destroyed = true;
+              unsubscribeFromRuntime();
 
               return {
                 ok: true,
@@ -85,14 +137,11 @@ export function createController(): Promise<BubbleController> {
               {
                 const invalidCommand = input as { type: string };
 
-                return {
-                  ok: false,
-                  error: {
-                    code: "unknown_command",
-                    message: `Unknown command: ${invalidCommand.type}`,
-                    details: { type: invalidCommand.type },
-                  },
-                };
+                return fail({
+                  code: "unknown_command",
+                  message: `Unknown command: ${invalidCommand.type}`,
+                  details: { type: invalidCommand.type },
+                });
               }
           }
         },
@@ -100,10 +149,7 @@ export function createController(): Promise<BubbleController> {
           const sessionError = requireActiveSession();
 
           if (sessionError !== null) {
-            return {
-              ok: false,
-              error: sessionError,
-            };
+            return fail(sessionError);
           }
 
           switch (input.type) {
@@ -116,14 +162,11 @@ export function createController(): Promise<BubbleController> {
               {
                 const invalidQuery = input as { type: string };
 
-                return {
-                  ok: false,
-                  error: {
-                    code: "unknown_query",
-                    message: `Unknown query: ${invalidQuery.type}`,
-                    details: { type: invalidQuery.type },
-                  },
-                };
+                return fail({
+                  code: "unknown_query",
+                  message: `Unknown query: ${invalidQuery.type}`,
+                  details: { type: invalidQuery.type },
+                });
               }
           }
         },
@@ -140,6 +183,13 @@ export function createController(): Promise<BubbleController> {
           if (!result.ok) {
             throw result.error;
           }
+        },
+        subscribe(listener) {
+          subscribers.add(listener);
+
+          return () => {
+            subscribers.delete(listener);
+          };
         },
       };
 
