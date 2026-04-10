@@ -176,6 +176,7 @@ export interface BubbleQueryApi {
 export interface BubbleRuntime {
   readonly rootId: BubbleNodeId;
   resolveCapability<Name extends BubbleCapabilityName>(name: Name): BubbleCapabilities[Name];
+  now(): number;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
@@ -1063,6 +1064,9 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     rootId: root.id,
     resolveCapability(name) {
       return capabilityRegistry.resolveCapability(name);
+    },
+    now() {
+      return capabilityRegistry.resolveCapability("clock").now();
     },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       if (transactionDepth > 0) {

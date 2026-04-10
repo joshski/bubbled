@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 39: Deterministic clock](./task-39-deterministic-clock.md)
+- None
 
 ## Definition of Done
 

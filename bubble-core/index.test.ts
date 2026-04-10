@@ -3,6 +3,19 @@ import { describe, expect, test } from "bun:test";
 import { BubbleUnsupportedCapabilityError } from "../bubble-capabilities";
 import { createBubble } from "./index";
 
+function createFakeClock(initialTime: number) {
+  let currentTime = initialTime;
+
+  return {
+    clock: {
+      now: () => currentTime,
+    },
+    advanceBy: (deltaMs: number) => {
+      currentTime += deltaMs;
+    },
+  };
+}
+
 describe("createBubble", () => {
   test("returns a root node with the expected shape", () => {
     const bubble = createBubble();
@@ -109,6 +122,60 @@ describe("createBubble", () => {
     expect(firstBubble.resolveCapability("clock").now()).toBe(2);
     expect(secondBubble.resolveCapability("clock").now()).toBe(100);
     expect(secondBubble.resolveCapability("clock").now()).toBe(110);
+  });
+
+  test("returns fake time from now()", () => {
+    const { clock } = createFakeClock(123);
+    const bubble = createBubble({
+      capabilities: {
+        clock,
+      },
+    });
+
+    expect(bubble.now()).toBe(123);
+  });
+
+  test("updates now() reads deterministically when fake time advances", () => {
+    const fakeClock = createFakeClock(50);
+    const bubble = createBubble({
+      capabilities: {
+        clock: fakeClock.clock,
+      },
+    });
+
+    expect(bubble.now()).toBe(50);
+
+    fakeClock.advanceBy(25);
+
+    expect(bubble.now()).toBe(75);
+
+    fakeClock.advanceBy(125);
+
+    expect(bubble.now()).toBe(200);
+  });
+
+  test("does not leak implicit Date.now() usage into now()", () => {
+    const originalDateNow = Date.now;
+    const fakeClock = createFakeClock(9001);
+    const bubble = createBubble({
+      capabilities: {
+        clock: fakeClock.clock,
+      },
+    });
+
+    Date.now = () => {
+      throw new Error("Unexpected ambient Date.now() call");
+    };
+
+    try {
+      expect(bubble.now()).toBe(9001);
+
+      fakeClock.advanceBy(1);
+
+      expect(bubble.now()).toBe(9002);
+    } finally {
+      Date.now = originalDateNow;
+    }
   });
 
   test("returns read-only root snapshots", () => {
