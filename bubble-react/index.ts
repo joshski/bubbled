@@ -52,12 +52,14 @@ interface BubbleReactRegisteredEventHandler {
 
 interface BubbleReactTextNode {
   kind: "text";
+  key: string | null;
   nodeId: BubbleNodeId;
   value: string;
 }
 
 interface BubbleReactElementNode {
   kind: "element";
+  key: string | null;
   nodeId: BubbleNodeId;
   tag: string;
   attributes: Record<string, string>;
@@ -70,11 +72,13 @@ type BubbleReactNode = BubbleReactTextNode | BubbleReactElementNode;
 
 interface BubbleReactTextPlan {
   kind: "text";
+  key: string | null;
   value: string;
 }
 
 interface BubbleReactElementPlan {
   kind: "element";
+  key: string | null;
   tag: string;
   attributes: Record<string, string>;
   properties: Partial<Record<BubbleReactPropertyName, unknown>>;
@@ -233,16 +237,19 @@ function planReactNode(
   parentPath = "root",
 ): readonly BubbleReactPlan[] {
   const plans: BubbleReactPlan[] = [];
+  let index = 0;
 
-  for (const [index, child] of Children.toArray(node).entries()) {
+  Children.forEach(node, (child) => {
     const childPath = `${parentPath}.${index}`;
+    index += 1;
 
     if (typeof child === "string" || typeof child === "number") {
       plans.push({
         kind: "text",
+        key: null,
         value: String(child),
       });
-      continue;
+      return;
     }
 
     if (!isValidElement(child)) {
@@ -250,10 +257,11 @@ function planReactNode(
     }
 
     const props = child.props as Record<string, unknown>;
+    const key = child.key === null ? null : String(child.key);
 
     if (typeof child.type === "function") {
       plans.push(...planFunctionComponent(childPath, child.type, props, context));
-      continue;
+      return;
     }
 
     if (typeof child.type !== "string") {
@@ -264,19 +272,24 @@ function planReactNode(
 
     plans.push({
       kind: "element",
+      key,
       tag: child.type,
       attributes,
       properties,
       eventHandlers,
       children: [...planReactNode(props.children as ReactNode, context, childPath)],
     });
-  }
+  });
 
   return plans;
 }
 
 function canReuseNode(currentNode: BubbleReactNode, plan: BubbleReactPlan): boolean {
-  return currentNode.kind === plan.kind && (plan.kind !== "element" || currentNode.tag === plan.tag);
+  return (
+    currentNode.key === plan.key &&
+    currentNode.kind === plan.kind &&
+    (plan.kind !== "element" || currentNode.tag === plan.tag)
+  );
 }
 
 function reconcileAttributes(
@@ -379,6 +392,7 @@ function createNode(plan: BubbleReactPlan, tx: BubbleTransaction): BubbleReactNo
   if (plan.kind === "text") {
     return {
       kind: "text",
+      key: plan.key,
       nodeId: tx.createText({ value: plan.value }),
       value: plan.value,
     };
@@ -417,6 +431,7 @@ function createNode(plan: BubbleReactPlan, tx: BubbleTransaction): BubbleReactNo
 
   return {
     kind: "element",
+    key: plan.key,
     nodeId,
     tag: plan.tag,
     attributes: { ...plan.attributes },
@@ -438,6 +453,7 @@ function reconcileNode(
 
     return {
       kind: "text",
+      key: plan.key,
       nodeId: currentNode.nodeId,
       value: plan.value,
     };
@@ -453,6 +469,7 @@ function reconcileNode(
 
   return {
     kind: "element",
+    key: plan.key,
     nodeId: currentNode.nodeId,
     tag: currentNode.tag,
     attributes: { ...(plan as BubbleReactElementPlan).attributes },
@@ -473,35 +490,101 @@ function reconcileChildren(input: {
   nextPlans: readonly BubbleReactPlan[];
   tx: BubbleTransaction;
 }): BubbleReactNode[] {
-  const nextChildren: BubbleReactNode[] = [];
+  const hasKeyedChildren =
+    input.currentChildren.some((child) => child.key !== null) ||
+    input.nextPlans.some((plan) => plan.key !== null);
 
-  for (const [index, plan] of input.nextPlans.entries()) {
-    const currentNode = input.currentChildren[index];
+  if (!hasKeyedChildren) {
+    const nextChildren: BubbleReactNode[] = [];
 
-    if (currentNode === undefined) {
+    for (const [index, plan] of input.nextPlans.entries()) {
+      const currentNode = input.currentChildren[index];
+
+      if (currentNode === undefined) {
+        const createdNode = createNode(plan, input.tx);
+        input.tx.insertChild({ parentId: input.parentId, childId: createdNode.nodeId, index });
+        nextChildren.push(createdNode);
+        continue;
+      }
+
+      if (canReuseNode(currentNode, plan)) {
+        nextChildren.push(reconcileNode(currentNode, plan, input.tx));
+        continue;
+      }
+
+      removeEventHandlersFromSubtree(currentNode, input.tx);
+      input.tx.removeChild({ parentId: input.parentId, childId: currentNode.nodeId });
       const createdNode = createNode(plan, input.tx);
       input.tx.insertChild({ parentId: input.parentId, childId: createdNode.nodeId, index });
       nextChildren.push(createdNode);
+    }
+
+    for (let index = input.currentChildren.length - 1; index >= input.nextPlans.length; index -= 1) {
+      removeEventHandlersFromSubtree(input.currentChildren[index] as BubbleReactNode, input.tx);
+      input.tx.removeChild({
+        parentId: input.parentId,
+        childId: input.currentChildren[index]!.nodeId,
+      });
+    }
+
+    return nextChildren;
+  }
+
+  const nextChildren: BubbleReactNode[] = [];
+  const workingChildren = [...input.currentChildren];
+  const currentChildrenByKey = new Map<string, BubbleReactNode>();
+  const unmatchedUnkeyedChildren = input.currentChildren.filter((child) => child.key === null);
+  const reusedNodeIds = new Set<BubbleNodeId>();
+
+  for (const child of input.currentChildren) {
+    if (child.key !== null) {
+      currentChildrenByKey.set(child.key, child);
+    }
+  }
+
+  for (const [index, plan] of input.nextPlans.entries()) {
+    let currentNode: BubbleReactNode | undefined;
+
+    if (plan.key !== null) {
+      currentNode = currentChildrenByKey.get(plan.key);
+    } else {
+      currentNode = unmatchedUnkeyedChildren.shift();
+    }
+
+    if (currentNode !== undefined && canReuseNode(currentNode, plan)) {
+      const nextNode = reconcileNode(currentNode, plan, input.tx);
+      const currentIndex = workingChildren.findIndex((child) => child.nodeId === currentNode.nodeId);
+
+      if (currentIndex !== index) {
+        input.tx.moveChild({
+          parentId: input.parentId,
+          childId: currentNode.nodeId,
+          index,
+        });
+        const [movedNode] = workingChildren.splice(currentIndex, 1);
+        workingChildren.splice(index, 0, movedNode as BubbleReactNode);
+      }
+
+      reusedNodeIds.add(currentNode.nodeId);
+      nextChildren.push(nextNode);
       continue;
     }
 
-    if (canReuseNode(currentNode, plan)) {
-      nextChildren.push(reconcileNode(currentNode, plan, input.tx));
-      continue;
-    }
-
-    removeEventHandlersFromSubtree(currentNode, input.tx);
-    input.tx.removeChild({ parentId: input.parentId, childId: currentNode.nodeId });
     const createdNode = createNode(plan, input.tx);
     input.tx.insertChild({ parentId: input.parentId, childId: createdNode.nodeId, index });
+    workingChildren.splice(index, 0, createdNode);
     nextChildren.push(createdNode);
   }
 
-  for (let index = input.currentChildren.length - 1; index >= input.nextPlans.length; index -= 1) {
-    removeEventHandlersFromSubtree(input.currentChildren[index] as BubbleReactNode, input.tx);
+  for (const child of input.currentChildren) {
+    if (reusedNodeIds.has(child.nodeId)) {
+      continue;
+    }
+
+    removeEventHandlersFromSubtree(child, input.tx);
     input.tx.removeChild({
       parentId: input.parentId,
-      childId: input.currentChildren[index]!.nodeId,
+      childId: child.nodeId,
     });
   }
 
@@ -586,10 +669,4 @@ export function createBubbleReactRoot(options: CreateBubbleReactRootOptions): Bu
     renderCurrentNode();
   };
 
-  return {
-    render,
-    unmount() {
-      render(null);
-    },
-  };
-}
+  return { render, unmount: () => render(null) }; }

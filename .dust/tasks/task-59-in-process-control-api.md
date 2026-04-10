@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 58: React keyed reordering](./task-58-react-keyed-reordering.md)
+- None.
 
 ## Definition of Done
 

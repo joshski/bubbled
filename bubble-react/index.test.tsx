@@ -267,6 +267,236 @@ describe("createBubbleReactRoot", () => {
     expect(updatedSpanNode.children[0]).toBe(spanTextId);
   });
 
+  test("keyed reorder preserves node identity through child moves", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    const mutationTypes: string[] = [];
+
+    bubble.subscribe((event) => {
+      if (event.type === "transaction-committed") {
+        mutationTypes.push(...event.record.mutations.map((mutation) => mutation.type));
+      }
+    });
+
+    root.render(
+      <ul>
+        <li key="alpha">Alpha</li>
+        <li key="beta">Beta</li>
+        <li key="gamma">Gamma</li>
+      </ul>,
+    );
+
+    const listId = bubble.getRoot().children[0]!;
+    const listNode = bubble.getNode(listId);
+
+    if (listNode === null || listNode.kind !== "element") {
+      throw new Error("Expected a rendered list element");
+    }
+
+    const alphaId = listNode.children[0]!;
+    const betaId = listNode.children[1]!;
+    const gammaId = listNode.children[2]!;
+
+    mutationTypes.length = 0;
+
+    root.render(
+      <ul>
+        <li key="gamma">Gamma</li>
+        <li key="alpha">Alpha</li>
+        <li key="beta">Beta</li>
+      </ul>,
+    );
+
+    const updatedListNode = bubble.getNode(listId);
+
+    if (updatedListNode === null || updatedListNode.kind !== "element") {
+      throw new Error("Expected an updated list element");
+    }
+
+    expect(bubble.getRoot().children[0]).toBe(listId);
+    expect(updatedListNode.children).toEqual([gammaId, alphaId, betaId]);
+    expect(mutationTypes).toEqual(["child-moved"]);
+  });
+
+  test("removed key detaches node cleanly", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(
+      <ul>
+        <li key="alpha">Alpha</li>
+        <li key="beta">Beta</li>
+      </ul>,
+    );
+
+    const listId = bubble.getRoot().children[0]!;
+    const listNode = bubble.getNode(listId);
+
+    if (listNode === null || listNode.kind !== "element") {
+      throw new Error("Expected a rendered list element");
+    }
+
+    const alphaId = listNode.children[0]!;
+    const betaId = listNode.children[1]!;
+
+    root.render(
+      <ul>
+        <li key="alpha">Alpha</li>
+      </ul>,
+    );
+
+    expect((bubble.getNode(listId) as { kind: string; children: string[] }).children).toEqual([alphaId]);
+    expect(bubble.getNode(betaId)).toMatchObject({
+      id: betaId,
+      kind: "element",
+      tag: "li",
+      namespace: "html",
+      parentId: null,
+      attributes: {},
+      properties: {},
+      value: null,
+      checked: null,
+      role: null,
+      name: "Beta",
+    });
+  });
+
+  test("mixed keyed and unkeyed children still reconcile", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(
+      <ul>
+        <li key="alpha">Alpha</li>
+        <li>Beta</li>
+      </ul>,
+    );
+
+    root.render(
+      <ul>
+        <li key="alpha">Alpha</li>
+        <li>Beta</li>
+      </ul>,
+    );
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "ul",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "element",
+              tag: "li",
+              namespace: "html",
+              attributes: {},
+              properties: {},
+              children: [
+                {
+                  kind: "text",
+                  value: "Alpha",
+                },
+              ],
+            },
+            {
+              kind: "element",
+              tag: "li",
+              namespace: "html",
+              attributes: {},
+              properties: {},
+              children: [
+                {
+                  kind: "text",
+                  value: "Beta",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("unkeyed child replacement and removal update nested children correctly", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    root.render(
+      <section>
+        <button>Save</button>
+        <span>Extra</span>
+      </section>,
+    );
+
+    const sectionId = bubble.getRoot().children[0]!;
+    const sectionNode = bubble.getNode(sectionId);
+
+    if (sectionNode === null || sectionNode.kind !== "element") {
+      throw new Error("Expected a rendered section element");
+    }
+
+    const originalButtonId = sectionNode.children[0]!;
+    const originalSpanId = sectionNode.children[1]!;
+
+    root.render(
+      <section>
+        <a href="/docs">Docs</a>
+      </section>,
+    );
+
+    const updatedSectionNode = bubble.getNode(sectionId);
+
+    if (updatedSectionNode === null || updatedSectionNode.kind !== "element") {
+      throw new Error("Expected an updated section element");
+    }
+
+    expect(updatedSectionNode.children).toHaveLength(1);
+    expect(updatedSectionNode.children[0]).not.toBe(originalButtonId);
+    expect(bubble.getNode(originalButtonId)).toMatchObject({
+      id: originalButtonId,
+      kind: "element",
+      parentId: null,
+    });
+    expect(bubble.getNode(originalSpanId)).toMatchObject({
+      id: originalSpanId,
+      kind: "element",
+      parentId: null,
+    });
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "section",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "element",
+              tag: "a",
+              namespace: "html",
+              attributes: {
+                href: "/docs",
+              },
+              properties: {},
+              children: [
+                {
+                  kind: "text",
+                  value: "Docs",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   test("resets omitted properties to their default bubble values", () => {
     const bubble = createBubble();
     const root = createBubbleReactRoot({ bubble });
