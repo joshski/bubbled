@@ -571,6 +571,25 @@ function snapshotViewportState(state: BubbleViewportState): BubbleViewportState 
   return Object.freeze({ ...state });
 }
 
+function createStorageCapability() {
+  const storage = new Map<string, string>();
+
+  return Object.freeze({
+    getItem(key: string): string | null {
+      return storage.get(key) ?? null;
+    },
+    setItem(key: string, value: string): void {
+      storage.set(key, value);
+    },
+    removeItem(key: string): void {
+      storage.delete(key);
+    },
+    clear(): void {
+      storage.clear();
+    },
+  });
+}
+
 export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -587,6 +606,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   let transactionDepth = 0;
   let focusedNodeId: BubbleNodeId | null = null;
   const capabilityRegistry = createCapabilityRegistry({
+    storage: createStorageCapability(),
     viewport: {
       getState() {
         return DEFAULT_VIEWPORT_STATE;

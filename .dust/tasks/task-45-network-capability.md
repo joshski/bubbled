@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 44: Storage capability](./task-44-storage-capability.md)
+- None
 
 ## Definition of Done
 

@@ -443,6 +443,40 @@ describe("createBubble", () => {
     unsubscribe();
   });
 
+  test("reads a missing storage key as null", () => {
+    const bubble = createBubble();
+
+    expect(bubble.resolveCapability("storage").getItem("missing")).toBeNull();
+  });
+
+  test("writes to storage and reads the value back", () => {
+    const bubble = createBubble();
+    const storage = bubble.resolveCapability("storage");
+
+    storage.setItem("greeting", "hello");
+    storage.setItem("other", "value");
+
+    expect(storage.getItem("greeting")).toBe("hello");
+
+    storage.removeItem("greeting");
+
+    expect(storage.getItem("greeting")).toBeNull();
+
+    storage.clear();
+
+    expect(storage.getItem("other")).toBeNull();
+  });
+
+  test("keeps storage isolated between bubble sessions", () => {
+    const firstBubble = createBubble();
+    const secondBubble = createBubble();
+
+    firstBubble.resolveCapability("storage").setItem("token", "first");
+
+    expect(firstBubble.resolveCapability("storage").getItem("token")).toBe("first");
+    expect(secondBubble.resolveCapability("storage").getItem("token")).toBeNull();
+  });
+
   test("fires a timer only after time advances to its due time", () => {
     const fakeTime = createFakeClockAndTimers(100);
     const bubble = createBubble({
