@@ -43,7 +43,10 @@ describe("public entrypoints", () => {
     const entrypoint = await import("./bubble-browser");
 
     expect(entrypoint).toEqual({
+      createDomLayout: expect.any(Function),
       createDomProjector: expect.any(Function),
+      measureAndPlacePopover: expect.any(Function),
+      placePopover: expect.any(Function),
     });
     expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
       globalsBeforeImport,

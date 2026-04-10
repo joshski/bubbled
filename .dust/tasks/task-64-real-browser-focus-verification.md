@@ -20,7 +20,7 @@ implement
 
 ## Blocked By
 
-- [Task 63: Layout-sensitive browser verification tests](./task-63-layout-sensitive-browser-verification-tests.md)
+- None
 
 ## Definition of Done
 

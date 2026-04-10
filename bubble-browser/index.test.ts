@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createBubble } from "../bubble-core";
-import { createDomProjector } from "./index";
+import { createDomLayout, createDomProjector, measureAndPlacePopover, placePopover } from "./index";
 
 abstract class FakeDomNode {
   parentNode: FakeDomElement | null = null;
@@ -35,6 +35,12 @@ class FakeDomElement extends FakeDomNode {
   readonly childNodes: FakeDomNode[] = [];
   readonly attributes = new Map<string, string>();
   readonly listeners = new Map<string, Array<(event: FakeDomEvent) => void>>();
+  rect = {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  };
 
   constructor(
     readonly ownerDocument: FakeDomDocument,
@@ -148,6 +154,10 @@ class FakeDomElement extends FakeDomNode {
     return this.attributes.get(name) ?? null;
   }
 
+  getBoundingClientRect() {
+    return { ...this.rect };
+  }
+
   toMarkup(): string {
     const serializedAttributes = Array.from(this.attributes.entries())
       .map(([name, value]) => ` ${name}="${value}"`)
@@ -183,6 +193,147 @@ function createContainer() {
 }
 
 describe("createDomProjector", () => {
+  test("placePopover returns a bottom placement when the overlay fits below the anchor", () => {
+    expect(
+      placePopover({
+        anchor: { x: 24, y: 40, width: 80, height: 20 },
+        overlay: { x: 0, y: 0, width: 120, height: 60 },
+        viewport: { width: 320, height: 200, scrollX: 0, scrollY: 0 },
+      }),
+    ).toEqual({
+      x: 24,
+      y: 60,
+      placement: "bottom",
+    });
+  });
+
+  test("placePopover returns a top placement when the overlay would overflow below the viewport", () => {
+    expect(
+      placePopover({
+        anchor: { x: 24, y: 140, width: 80, height: 20 },
+        overlay: { x: 0, y: 0, width: 120, height: 60 },
+        viewport: { width: 320, height: 180, scrollX: 0, scrollY: 0 },
+      }),
+    ).toEqual({
+      x: 24,
+      y: 80,
+      placement: "top",
+    });
+  });
+
+  test("measureAndPlacePopover reads bubble layout and viewport capabilities", () => {
+    const calls: string[] = [];
+    const placement = measureAndPlacePopover(
+      {
+        measureElement(nodeId) {
+          calls.push(nodeId);
+
+          if (nodeId === "anchor") {
+            return { x: 12, y: 16, width: 40, height: 24 };
+          }
+
+          return { x: 0, y: 0, width: 80, height: 30 };
+        },
+        getViewportState() {
+          calls.push("viewport");
+          return { width: 200, height: 120, scrollX: 0, scrollY: 0 };
+        },
+      },
+      "anchor",
+      "overlay",
+    );
+
+    expect(placement).toEqual({
+      x: 12,
+      y: 40,
+      placement: "bottom",
+    });
+    expect(calls).toEqual(["anchor", "overlay", "viewport"]);
+  });
+
+  test("createDomLayout measures projected elements", () => {
+    const bubble = createBubble();
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    const projector = createDomProjector({ bubble });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+    (container.childNodes[0] as FakeDomElement).rect = {
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+    };
+
+    expect(createDomLayout({ projector }).measureElement(buttonId)).toEqual({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+    });
+  });
+
+  test("createDomLayout rejects projectors without measurement support", () => {
+    const layout = createDomLayout({
+      projector: {
+        mount() {},
+        unmount() {},
+      } as unknown as ReturnType<typeof createDomProjector>,
+    });
+
+    expect(() => {
+      layout.measureElement("missing");
+    }).toThrow("Bubble DOM projector does not support DOM-backed layout measurement.");
+  });
+
+  test("createDomLayout rejects unprojected bubble nodes", () => {
+    const bubble = createBubble();
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+    });
+
+    const projector = createDomProjector({ bubble });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    expect(() => {
+      createDomLayout({ projector }).measureElement(buttonId);
+    }).toThrow(`Bubble DOM projector has no projected element for node ${buttonId}.`);
+  });
+
+  test("createDomLayout rejects detached projected nodes", () => {
+    const bubble = createBubble();
+    let buttonId = "";
+
+    bubble.transact((tx) => {
+      buttonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    const projector = createDomProjector({ bubble });
+    const { container } = createContainer();
+    const layout = createDomLayout({ projector });
+
+    projector.mount(container as unknown as HTMLElement);
+
+    bubble.transact((tx) => {
+      tx.removeChild({ parentId: bubble.rootId, childId: buttonId });
+    });
+
+    expect(() => {
+      layout.measureElement(buttonId);
+    }).toThrow(`Bubble DOM projector cannot measure detached node ${buttonId}.`);
+  });
+
   test("initial mount creates the expected DOM", () => {
     const bubble = createBubble();
 

@@ -1,3 +1,4 @@
+import type { BubbleLayout, BubbleRect, BubbleViewportState } from "../bubble-capabilities";
 import type {
   BubbleMutation,
   BubbleNode,
@@ -9,6 +10,18 @@ import type {
 export interface BubbleDomProjector {
   mount(container: HTMLElement): void;
   unmount(): void;
+}
+
+export interface PlacementInput {
+  anchor: BubbleRect;
+  overlay: BubbleRect;
+  viewport: BubbleViewportState;
+}
+
+export interface PlacementOutput {
+  x: number;
+  y: number;
+  placement: "top" | "bottom";
 }
 
 export interface CreateDomProjectorOptions {
@@ -37,6 +50,7 @@ interface DomElementNode extends DomChildNode, DomParentNode {
   removeEventListener(type: string, listener: (event: DomEvent) => void): void;
   focus(): void;
   blur(): void;
+  getBoundingClientRect(): BubbleRect;
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
 }
@@ -56,6 +70,70 @@ interface DomContainer extends DomParentNode {
   ownerDocument: DomDocument;
 }
 
+const projectedElementLookupByProjector = new WeakMap<BubbleDomProjector, Map<BubbleNodeId, DomElementNode>>();
+
+export function placePopover(input: PlacementInput): PlacementOutput {
+  const fitsBelow =
+    input.anchor.y + input.anchor.height + input.overlay.height <= input.viewport.height;
+
+  if (fitsBelow) {
+    return {
+      x: input.anchor.x,
+      y: input.anchor.y + input.anchor.height,
+      placement: "bottom",
+    };
+  }
+
+  return {
+    x: input.anchor.x,
+    y: input.anchor.y - input.overlay.height,
+    placement: "top",
+  };
+}
+
+export function measureAndPlacePopover(
+  bubble: Pick<BubbleRuntime, "measureElement" | "getViewportState">,
+  anchorId: BubbleNodeId,
+  overlayId: BubbleNodeId,
+): PlacementOutput {
+  return placePopover({
+    anchor: bubble.measureElement(anchorId),
+    overlay: bubble.measureElement(overlayId),
+    viewport: bubble.getViewportState(),
+  });
+}
+
+export function createDomLayout(options: { projector: BubbleDomProjector }): BubbleLayout {
+  return Object.freeze({
+    measureElement(nodeId) {
+      const projectedElements = projectedElementLookupByProjector.get(options.projector);
+
+      if (projectedElements === undefined) {
+        throw new Error("Bubble DOM projector does not support DOM-backed layout measurement.");
+      }
+
+      const element = projectedElements.get(nodeId);
+
+      if (element === undefined) {
+        throw new Error(`Bubble DOM projector has no projected element for node ${nodeId}.`);
+      }
+
+      if (element.parentNode === null) {
+        throw new Error(`Bubble DOM projector cannot measure detached node ${nodeId}.`);
+      }
+
+      const rect = element.getBoundingClientRect();
+
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      };
+    },
+  });
+}
+
 function getBubbleNode(bubble: BubbleRuntime, nodeId: BubbleNodeId): Readonly<BubbleNode> {
   return bubble.getNode(nodeId) as Readonly<BubbleNode>;
 }
@@ -66,6 +144,7 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
   let removeDomEventBridges: (() => void) | null = null;
   const nodeLookup = new Map<BubbleNodeId, DomChildNode>();
   const bubbleIdByDomNode = new Map<DomChildNode, BubbleNodeId>();
+  const projectedElements = new Map<BubbleNodeId, DomElementNode>();
   let isSyncingFocusFromBubble = false;
   let isSyncingFocusFromDom = false;
 
@@ -121,6 +200,7 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
 
     nodeLookup.set(nodeId, element);
     bubbleIdByDomNode.set(element, nodeId);
+    projectedElements.set(nodeId, element);
 
     if (options.syncFocus === true) {
       element.addEventListener("focus", (event) => {
@@ -259,7 +339,7 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
     options.bubble.dispatchEvent({ type: "click", targetId });
   };
 
-  return Object.freeze({
+  const projector = Object.freeze({
     mount(container) {
       if (mountedContainer !== null) {
         throw new Error("Bubble DOM projector is already mounted.");
@@ -311,7 +391,12 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
 
       nodeLookup.clear();
       bubbleIdByDomNode.clear();
+      projectedElements.clear();
       mountedContainer = null;
     },
   });
+
+  projectedElementLookupByProjector.set(projector, projectedElements);
+
+  return projector;
 }
