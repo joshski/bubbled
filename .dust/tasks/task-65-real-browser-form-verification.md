@@ -20,7 +20,7 @@ implement
 
 ## Blocked By
 
-- [Task 64: Real browser focus verification](./task-64-real-browser-focus-verification.md)
+- None
 
 ## Definition of Done
 

@@ -143,3 +143,92 @@ test("real browser verifies popover placement against actual projected DOM layou
     await rm(tempDir, { force: true, recursive: true });
   }
 }, 20_000);
+
+test("real browser verifies native label clicks move focus to the associated input", async () => {
+  const tempDir = await mkdtemp(join(process.cwd(), ".tmp-browser-verification-"));
+  const entryPath = join(tempDir, "entry.ts");
+  const bundlePath = join(tempDir, "entry.js");
+  const browser = await launchBrowser();
+
+  try {
+    await Bun.write(
+      entryPath,
+      [
+        'import { createBubble } from "../bubble-core/index.ts";',
+        'import { createDomProjector } from "../bubble-browser/index.ts";',
+        "",
+        "export function run() {",
+        "  document.body.innerHTML = '';",
+        "  const container = document.createElement('div');",
+        "  document.body.appendChild(container);",
+        "  const bubble = createBubble();",
+        "  let labelId = '';",
+        "  let inputId = '';",
+        "  bubble.transact((tx) => {",
+        "    labelId = tx.createElement({ tag: 'label' });",
+        "    inputId = tx.createElement({ tag: 'input' });",
+        "    const textId = tx.createText({ value: 'Email' });",
+        "    tx.setAttribute({ nodeId: labelId, name: 'id', value: 'email-label' });",
+        "    tx.setAttribute({ nodeId: labelId, name: 'for', value: 'email-input' });",
+        "    tx.setAttribute({ nodeId: inputId, name: 'id', value: 'email-input' });",
+        "    tx.setAttribute({ nodeId: inputId, name: 'type', value: 'text' });",
+        "    tx.insertChild({ parentId: bubble.rootId, childId: labelId });",
+        "    tx.insertChild({ parentId: labelId, childId: textId });",
+        "    tx.insertChild({ parentId: bubble.rootId, childId: inputId });",
+        "  });",
+        "  createDomProjector({ bubble, syncFocus: true }).mount(container);",
+        "  (window as typeof window & { __getFocusedNodeId?: () => string | null }).__getFocusedNodeId = () => bubble.getFocusedNodeId();",
+        "  return { labelId, inputId };",
+        "}",
+      ].join("\n"),
+    );
+
+    const buildResult = await Bun.build({
+      entrypoints: [entryPath],
+      format: "esm",
+      outdir: tempDir,
+      target: "browser",
+    });
+
+    if (!buildResult.success) {
+      throw new Error(buildResult.logs.map((log) => log.message).join("\n"));
+    }
+
+    const moduleSource = await readFile(bundlePath, "utf8");
+    const page = await browser.newPage();
+
+    const nodeIds = await page.evaluate(async (source) => {
+      const moduleUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+
+      try {
+        const module = await import(moduleUrl);
+
+        return module.run();
+      } finally {
+        URL.revokeObjectURL(moduleUrl);
+      }
+    }, moduleSource);
+
+    await page.locator("#email-label").click();
+
+    const result = await page.evaluate(() => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      const getFocusedNodeId = (
+        window as typeof window & { __getFocusedNodeId?: () => string | null }
+      ).__getFocusedNodeId;
+
+      return {
+        activeElementId: activeElement?.id ?? null,
+        focusedNodeId: getFocusedNodeId?.() ?? null,
+      };
+    });
+
+    expect(result).toEqual({
+      activeElementId: "email-input",
+      focusedNodeId: nodeIds.inputId,
+    });
+  } finally {
+    await browser.close();
+    await rm(tempDir, { force: true, recursive: true });
+  }
+}, 20_000);
