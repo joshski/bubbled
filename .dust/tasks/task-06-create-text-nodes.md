@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 05: Create element nodes](./task-05-create-element-nodes.md)
+(none)
 
 ## Definition of Done
 
