@@ -6,11 +6,6 @@ export interface TodoItem {
   readonly done: boolean
 }
 
-export const INITIAL_TODOS: readonly TodoItem[] = Object.freeze([
-  Object.freeze({ id: 't1', label: 'Write the README', done: true }),
-  Object.freeze({ id: 't2', label: 'Sketch the todo example', done: false }),
-])
-
 export const SAMPLE_TODO_LABELS: readonly string[] = Object.freeze([
   'Taste the bubble tea',
   'Bridge a DOM event',
@@ -77,7 +72,7 @@ export function createTodoStore(options: CreateTodoStoreOptions): TodoStore {
 
   let todos: readonly TodoItem[]
   if (rawStored === null) {
-    todos = options.initialTodos ?? INITIAL_TODOS
+    todos = options.initialTodos ?? []
   } else {
     todos = JSON.parse(rawStored) as readonly TodoItem[]
   }

@@ -157,7 +157,7 @@ describe('mountTodoApp', () => {
   test('mounts with zero options and boots an empty-but-running todo app', () => {
     const app = mountTodoApp()
     try {
-      expect(app.store.get().length).toBeGreaterThanOrEqual(0)
+      expect(app.store.get()).toEqual([])
     } finally {
       app.unmount()
     }

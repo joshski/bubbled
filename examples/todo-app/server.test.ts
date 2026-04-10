@@ -5,7 +5,6 @@ import {
   createTodoRoutes,
   handleTodoFallbackRequest,
 } from './server.ts'
-import { INITIAL_TODOS } from './todo-store.ts'
 
 async function withTodoServer<T>(
   callback: (baseUrl: string) => Promise<T>,
@@ -28,13 +27,13 @@ async function withTodoServer<T>(
 }
 
 describe('createTodoApiResponse', () => {
-  test('serves the default initial todos as JSON', async () => {
+  test('serves an empty todo list as JSON by default', async () => {
     const response = createTodoApiResponse()
 
     expect(response.headers.get('content-type')).toBe(
       'application/json;charset=utf-8'
     )
-    expect(await response.json()).toEqual([...INITIAL_TODOS])
+    expect(await response.json()).toEqual([])
   })
 
   test('serves custom initial todos when provided', async () => {
@@ -101,7 +100,7 @@ describe('todo app Bun routes', () => {
     })
   })
 
-  test('serves the default initial todos as JSON from /api/todos', async () => {
+  test('serves an empty todo list as JSON from /api/todos by default', async () => {
     await withTodoServer(async baseUrl => {
       const response = await fetch(new URL('/api/todos', baseUrl))
 
@@ -109,7 +108,7 @@ describe('todo app Bun routes', () => {
       expect(response.headers.get('content-type')).toBe(
         'application/json;charset=utf-8'
       )
-      expect(await response.json()).toEqual([...INITIAL_TODOS])
+      expect(await response.json()).toEqual([])
     })
   })
 

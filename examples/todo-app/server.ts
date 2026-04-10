@@ -1,5 +1,6 @@
+import type { TodoItem } from './todo-store.ts'
+
 import todoAppPage from './index.html'
-import { INITIAL_TODOS, type TodoItem } from './todo-store.ts'
 
 export interface TodoServerOptions {
   readonly initialTodos?: readonly TodoItem[]
@@ -8,7 +9,7 @@ export interface TodoServerOptions {
 export function createTodoApiResponse(
   options: TodoServerOptions = {}
 ): Response {
-  return Response.json(options.initialTodos ?? INITIAL_TODOS)
+  return Response.json(options.initialTodos ?? [])
 }
 
 export function handleTodoFallbackRequest(request: Request): Response {

@@ -6,7 +6,6 @@ import {
   appendSampleTodo,
   createTodoStore,
   DEFAULT_STORAGE_KEY,
-  INITIAL_TODOS,
   removeTodo,
   SAMPLE_TODO_LABELS,
   summarizeTodos,
@@ -84,11 +83,11 @@ describe('pure todo helpers', () => {
 })
 
 describe('createTodoStore', () => {
-  test('starts with INITIAL_TODOS when the storage is empty and no override is given', () => {
+  test('starts empty when the storage is empty and no override is given', () => {
     const storage = createInMemoryStorage()
     const store = createTodoStore({ storage })
 
-    expect(store.get()).toEqual([...INITIAL_TODOS])
+    expect(store.get()).toEqual([])
   })
 
   test('starts with the provided initialTodos when the storage is empty', () => {
