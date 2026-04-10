@@ -1,6 +1,12 @@
 import { Children, isValidElement, type ReactNode } from "react";
 
-import type { BubbleNodeId, BubbleRuntime, BubbleTransaction } from "../bubble-core";
+import type {
+  BubbleEvent,
+  BubbleListenerHandle,
+  BubbleNodeId,
+  BubbleRuntime,
+  BubbleTransaction,
+} from "../bubble-core";
 
 export interface BubbleReactRoot {
   render(node: ReactNode): void;
@@ -22,6 +28,18 @@ const PROPERTY_DEFAULTS = {
 } satisfies Record<string, unknown>;
 
 type BubbleReactPropertyName = keyof typeof PROPERTY_DEFAULTS;
+type BubbleReactEventHandler = (event: BubbleEvent) => void;
+
+const EVENT_TYPE_BY_HANDLER_NAME = {
+  onClick: "click",
+} as const;
+
+type BubbleReactEventHandlerName = keyof typeof EVENT_TYPE_BY_HANDLER_NAME;
+
+interface BubbleReactRegisteredEventHandler {
+  handle: BubbleListenerHandle;
+  listener: BubbleReactEventHandler;
+}
 
 interface BubbleReactTextNode {
   kind: "text";
@@ -35,6 +53,7 @@ interface BubbleReactElementNode {
   tag: string;
   attributes: Record<string, string>;
   properties: Partial<Record<BubbleReactPropertyName, unknown>>;
+  eventHandlers: Partial<Record<BubbleReactEventHandlerName, BubbleReactRegisteredEventHandler>>;
   children: BubbleReactNode[];
 }
 
@@ -50,6 +69,7 @@ interface BubbleReactElementPlan {
   tag: string;
   attributes: Record<string, string>;
   properties: Partial<Record<BubbleReactPropertyName, unknown>>;
+  eventHandlers: Partial<Record<BubbleReactEventHandlerName, BubbleReactEventHandler>>;
   children: BubbleReactPlan[];
 }
 
@@ -71,19 +91,24 @@ function isBubbleReactPropertyName(name: string): name is BubbleReactPropertyNam
   return name in PROPERTY_DEFAULTS;
 }
 
+function isBubbleReactEventHandlerName(name: string): name is BubbleReactEventHandlerName {
+  return name in EVENT_TYPE_BY_HANDLER_NAME;
+}
+
 function planReactProps(
   props: Record<string, unknown>,
-): Pick<BubbleReactElementPlan, "attributes" | "properties"> {
+): Pick<BubbleReactElementPlan, "attributes" | "properties" | "eventHandlers"> {
   const attributes: Record<string, string> = {};
   const properties: Partial<Record<BubbleReactPropertyName, unknown>> = {};
+  const eventHandlers: Partial<Record<BubbleReactEventHandlerName, BubbleReactEventHandler>> = {};
 
   for (const [name, value] of Object.entries(props)) {
     if (name === "children" || value === undefined || value === null || value === false) {
       continue;
     }
 
-    if (typeof value === "function" && name.startsWith("on")) {
-      // Event props are deferred to the dedicated event-handler slice.
+    if (typeof value === "function" && isBubbleReactEventHandlerName(name)) {
+      eventHandlers[name] = value as BubbleReactEventHandler;
     } else if (isBubbleReactPropertyName(name)) {
       properties[name] = name === "value" ? String(value) : value;
     } else {
@@ -91,7 +116,7 @@ function planReactProps(
     }
   }
 
-  return { attributes, properties };
+  return { attributes, properties, eventHandlers };
 }
 
 function planReactNode(node: ReactNode): readonly BubbleReactPlan[] {
@@ -111,13 +136,14 @@ function planReactNode(node: ReactNode): readonly BubbleReactPlan[] {
     }
 
     const props = child.props as Record<string, unknown>;
-    const { attributes, properties } = planReactProps(props);
+    const { attributes, properties, eventHandlers } = planReactProps(props);
 
     plans.push({
       kind: "element",
       tag: child.type,
       attributes,
       properties,
+      eventHandlers,
       children: [...planReactNode(props.children as ReactNode)],
     });
   }
@@ -169,6 +195,62 @@ function reconcileProperties(
   }
 }
 
+function reconcileEventHandlers(
+  currentNode: BubbleReactElementNode,
+  plan: BubbleReactElementPlan,
+  tx: BubbleTransaction,
+): Partial<Record<BubbleReactEventHandlerName, BubbleReactRegisteredEventHandler>> {
+  const nextEventHandlers: Partial<
+    Record<BubbleReactEventHandlerName, BubbleReactRegisteredEventHandler>
+  > = {};
+
+  for (const name of Object.keys(currentNode.eventHandlers) as BubbleReactEventHandlerName[]) {
+    const currentHandler = currentNode.eventHandlers[name] as BubbleReactRegisteredEventHandler;
+    const nextListener = plan.eventHandlers[name];
+
+    if (nextListener !== currentHandler.listener) {
+      tx.removeEventListener(currentHandler.handle);
+    }
+  }
+
+  for (const name of Object.keys(plan.eventHandlers) as BubbleReactEventHandlerName[]) {
+    const nextListener = plan.eventHandlers[name] as BubbleReactEventHandler;
+    const currentHandler = currentNode.eventHandlers[name];
+
+    if (currentHandler !== undefined && currentHandler.listener === nextListener) {
+      nextEventHandlers[name] = currentHandler;
+      continue;
+    }
+
+    nextEventHandlers[name] = {
+      handle: tx.addEventListener({
+        nodeId: currentNode.nodeId,
+        type: EVENT_TYPE_BY_HANDLER_NAME[name],
+        listener: nextListener,
+      }),
+      listener: nextListener,
+    };
+  }
+
+  return nextEventHandlers;
+}
+
+function removeEventHandlersFromSubtree(node: BubbleReactNode, tx: BubbleTransaction): void {
+  if (node.kind === "text") {
+    return;
+  }
+
+  for (const registration of Object.values(node.eventHandlers)) {
+    if (registration !== undefined) {
+      tx.removeEventListener(registration.handle);
+    }
+  }
+
+  for (const child of node.children) {
+    removeEventHandlersFromSubtree(child, tx);
+  }
+}
+
 function createNode(plan: BubbleReactPlan, tx: BubbleTransaction): BubbleReactNode {
   if (plan.kind === "text") {
     return {
@@ -188,6 +270,20 @@ function createNode(plan: BubbleReactPlan, tx: BubbleTransaction): BubbleReactNo
     tx.setProperty({ nodeId, name, value });
   }
 
+  const eventHandlers = Object.fromEntries(
+    (Object.keys(plan.eventHandlers) as BubbleReactEventHandlerName[]).map((name) => [
+      name,
+      {
+        handle: tx.addEventListener({
+          nodeId,
+          type: EVENT_TYPE_BY_HANDLER_NAME[name],
+          listener: plan.eventHandlers[name] as BubbleReactEventHandler,
+        }),
+        listener: plan.eventHandlers[name] as BubbleReactEventHandler,
+      },
+    ]),
+  ) as Partial<Record<BubbleReactEventHandlerName, BubbleReactRegisteredEventHandler>>;
+
   const children = reconcileChildren({
     parentId: nodeId,
     currentChildren: [],
@@ -201,6 +297,7 @@ function createNode(plan: BubbleReactPlan, tx: BubbleTransaction): BubbleReactNo
     tag: plan.tag,
     attributes: { ...plan.attributes },
     properties: { ...plan.properties },
+    eventHandlers,
     children,
   };
 }
@@ -224,6 +321,11 @@ function reconcileNode(
 
   reconcileAttributes(currentNode as BubbleReactElementNode, plan as BubbleReactElementPlan, tx);
   reconcileProperties(currentNode as BubbleReactElementNode, plan as BubbleReactElementPlan, tx);
+  const eventHandlers = reconcileEventHandlers(
+    currentNode as BubbleReactElementNode,
+    plan as BubbleReactElementPlan,
+    tx,
+  );
 
   return {
     kind: "element",
@@ -231,6 +333,7 @@ function reconcileNode(
     tag: currentNode.tag,
     attributes: { ...(plan as BubbleReactElementPlan).attributes },
     properties: { ...(plan as BubbleReactElementPlan).properties },
+    eventHandlers,
     children: reconcileChildren({
       parentId: currentNode.nodeId,
       currentChildren: (currentNode as BubbleReactElementNode).children,
@@ -263,6 +366,7 @@ function reconcileChildren(input: {
       continue;
     }
 
+    removeEventHandlersFromSubtree(currentNode, input.tx);
     input.tx.removeChild({ parentId: input.parentId, childId: currentNode.nodeId });
     const createdNode = createNode(plan, input.tx);
     input.tx.insertChild({ parentId: input.parentId, childId: createdNode.nodeId, index });
@@ -270,6 +374,7 @@ function reconcileChildren(input: {
   }
 
   for (let index = input.currentChildren.length - 1; index >= input.nextPlans.length; index -= 1) {
+    removeEventHandlersFromSubtree(input.currentChildren[index] as BubbleReactNode, input.tx);
     input.tx.removeChild({
       parentId: input.parentId,
       childId: input.currentChildren[index]!.nodeId,

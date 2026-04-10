@@ -326,30 +326,173 @@ describe("createBubbleReactRoot", () => {
     });
   });
 
-  test("ignores event handler props until event bridging is implemented", () => {
+  test("fires click handlers from bubble events", () => {
     const bubble = createBubble();
     const root = createBubbleReactRoot({ bubble });
+    const calls: string[] = [];
 
-    root.render(<button onClick={() => {}}>Save</button>);
+    root.render(
+      <button
+        onClick={() => {
+          calls.push("clicked");
+        }}
+      >
+        Save
+      </button>,
+    );
 
-    expect(readSnapshot(bubble)).toEqual({
-      kind: "root",
-      children: [
-        {
-          kind: "element",
-          tag: "button",
-          namespace: "html",
-          attributes: {},
-          properties: {},
-          children: [
-            {
-              kind: "text",
-              value: "Save",
-            },
-          ],
-        },
-      ],
+    const buttonId = bubble.getRoot().children[0]!;
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
     });
+    expect(calls).toEqual(["clicked"]);
+  });
+
+  test("passes the bubble event shape to click handlers", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    let receivedEvent: Parameters<NonNullable<JSX.IntrinsicElements["button"]["onClick"]>>[0] | null =
+      null;
+
+    root.render(
+      <button
+        onClick={(event) => {
+          receivedEvent = event;
+        }}
+      >
+        Save
+      </button>,
+    );
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    bubble.dispatchEvent({ type: "click", targetId: buttonId });
+
+    expect(receivedEvent).toEqual({
+      type: "click",
+      targetId: buttonId,
+      currentTargetId: buttonId,
+      phase: "target",
+      cancelable: false,
+      defaultPrevented: false,
+      data: {},
+      preventDefault: expect.any(Function),
+      stopPropagation: expect.any(Function),
+    });
+  });
+
+  test("keeps an unchanged click handler attached across re-renders", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    const calls: string[] = [];
+    const handleClick = () => {
+      calls.push("clicked");
+    };
+
+    root.render(<button onClick={handleClick}>Save</button>);
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    root.render(<button onClick={handleClick}>Submit</button>);
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual(["clicked"]);
+  });
+
+  test("replaces click handlers when the prop changes", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    const calls: string[] = [];
+
+    root.render(
+      <button
+        onClick={() => {
+          calls.push("first");
+        }}
+      >
+        Save
+      </button>,
+    );
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    root.render(
+      <button
+        onClick={() => {
+          calls.push("second");
+        }}
+      >
+        Save
+      </button>,
+    );
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual(["second"]);
+  });
+
+  test("removes click handlers when the prop is omitted", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    let callCount = 0;
+
+    root.render(
+      <button
+        onClick={() => {
+          callCount += 1;
+        }}
+      >
+        Save
+      </button>,
+    );
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+
+    root.render(<button>Save</button>);
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: false,
+    });
+    expect(callCount).toBe(1);
+  });
+
+  test("cleans up click handlers when a handled node is replaced", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    let callCount = 0;
+
+    root.render(
+      <button
+        onClick={() => {
+          callCount += 1;
+        }}
+      >
+        Save
+      </button>,
+    );
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    root.render(<a href="/docs">Save</a>);
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: false,
+    });
+    expect(callCount).toBe(0);
   });
 
   test("throws for unsupported React component types without mutating the bubble", () => {
