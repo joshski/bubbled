@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 56: React event handlers](./task-56-react-event-handlers.md)
+- None.
 
 ## Definition of Done
 
