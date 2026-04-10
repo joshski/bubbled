@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 37: Submit event](./task-37-submit-event.md)
+- None
 
 ## Definition of Done
 

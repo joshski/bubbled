@@ -105,6 +105,10 @@ export interface BubbleDispatchInput {
   cancelable?: boolean;
 }
 
+export interface BubbleSubmitDispatchInput extends BubbleDispatchInput {
+  type: "submit";
+}
+
 export interface BubbleEvent {
   readonly type: string;
   readonly targetId: BubbleNodeId;
@@ -122,6 +126,10 @@ export type BubbleEventListener = (event: BubbleEvent) => void;
 export interface BubbleDispatchResult {
   readonly defaultPrevented: boolean;
   readonly delivered: boolean;
+}
+
+export interface BubbleSubmitDispatchResult extends BubbleDispatchResult {
+  readonly payload: BubbleFormPayload | null;
 }
 
 export interface BubbleFormEntry {
@@ -166,6 +174,7 @@ export interface BubbleRuntime {
   getRoot(): Readonly<BubbleRootNode>;
   snapshot(): BubbleSnapshot;
   serializeForm(formId: BubbleNodeId): BubbleFormPayload;
+  dispatchEvent(input: BubbleSubmitDispatchInput): BubbleSubmitDispatchResult;
   dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult;
   focus(id: BubbleNodeId): void;
   blur(): void;
@@ -327,6 +336,12 @@ function assertFocusableNode(node: BubbleNode, nodeId: BubbleNodeId): asserts no
 function assertFormNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
   if (node.kind !== "element" || node.namespace !== "html" || node.tag !== "form") {
     throw new Error(`Only html form elements can be serialized: ${nodeId}`);
+  }
+}
+
+function assertSubmitTargetNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
+  if (node.kind !== "element" || node.namespace !== "html" || node.tag !== "form") {
+    throw new Error(`Only html form elements can receive submit events: ${nodeId}`);
   }
 }
 
@@ -880,9 +895,32 @@ export function createBubble(): BubbleRuntime {
     type,
     targetId,
     data = {},
-    cancelable = false,
+    cancelable = type === "submit",
     mode = "propagating",
-  }: BubbleDispatchInput & { mode?: BubbleEventDispatchMode }): BubbleDispatchResult => {
+  }: BubbleDispatchInput & { mode?: BubbleEventDispatchMode }): BubbleDispatchResult | BubbleSubmitDispatchResult => {
+    if (type === "submit") {
+      const targetNode = nodes.get(targetId);
+
+      if (targetNode === undefined) {
+        throw new Error(`Unknown node ID: ${targetId}`);
+      }
+
+      assertSubmitTargetNode(targetNode, targetId);
+
+      const submitResult = dispatchSingleEventToTarget({
+        type,
+        targetId,
+        data,
+        cancelable,
+        mode,
+      });
+
+      return {
+        ...submitResult,
+        payload: submitResult.defaultPrevented ? null : serializeForm(targetId),
+      };
+    }
+
     const initialResult = dispatchSingleEventToTarget({
       type,
       targetId,
@@ -1266,7 +1304,7 @@ export function createBubble(): BubbleRuntime {
     serializeForm(formId) {
       return serializeForm(formId);
     },
-    dispatchEvent({ type, targetId, data = {}, cancelable = false }) {
+    dispatchEvent({ type, targetId, data = {}, cancelable = type === "submit" }) {
       return dispatchEventToTarget({ type, targetId, data, cancelable });
     },
     focus(id) {

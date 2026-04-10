@@ -1993,6 +1993,66 @@ describe("createBubble", () => {
     expect(bubble.serializeForm(formId)).toEqual([{ name: "enabled", value: "included" }]);
   });
 
+  test("dispatching submit on a form returns the serialized payload", () => {
+    const bubble = createBubble();
+    const receivedTargets: string[] = [];
+
+    const formId = bubble.transact((tx) => {
+      const createdFormId = tx.createElement({ tag: "form" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: inputId, name: "name", value: "email" });
+      tx.setProperty({ nodeId: inputId, name: "value", value: "person@example.com" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFormId });
+      tx.insertChild({ parentId: createdFormId, childId: inputId });
+      tx.addEventListener({
+        nodeId: createdFormId,
+        type: "submit",
+        listener: (event) => {
+          receivedTargets.push(event.currentTargetId);
+        },
+      });
+
+      return createdFormId;
+    });
+
+    expect(bubble.dispatchEvent({ type: "submit", targetId: formId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+      payload: [{ name: "email", value: "person@example.com" }],
+    });
+    expect(receivedTargets).toEqual([formId]);
+  });
+
+  test("preventDefault cancels the submit result payload", () => {
+    const bubble = createBubble();
+
+    const formId = bubble.transact((tx) => {
+      const createdFormId = tx.createElement({ tag: "form" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: inputId, name: "name", value: "email" });
+      tx.setProperty({ nodeId: inputId, name: "value", value: "person@example.com" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFormId });
+      tx.insertChild({ parentId: createdFormId, childId: inputId });
+      tx.addEventListener({
+        nodeId: createdFormId,
+        type: "submit",
+        listener: (event) => {
+          event.preventDefault();
+        },
+      });
+
+      return createdFormId;
+    });
+
+    expect(bubble.dispatchEvent({ type: "submit", targetId: formId })).toEqual({
+      defaultPrevented: true,
+      delivered: true,
+      payload: null,
+    });
+  });
+
   test("stores attributes and properties independently", () => {
     const bubble = createBubble();
 
@@ -3206,6 +3266,24 @@ describe("createBubble", () => {
 
     expect(() => {
       bubble.serializeForm("missing");
+    }).toThrow("Unknown node ID: missing");
+  });
+
+  test("rejects submit dispatch on invalid form targets", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => tx.createElement({ tag: "button" }));
+
+    expect(() => {
+      bubble.dispatchEvent({ type: "submit", targetId: buttonId });
+    }).toThrow(`Only html form elements can receive submit events: ${buttonId}`);
+  });
+
+  test("rejects submit dispatch on unknown form targets", () => {
+    const bubble = createBubble();
+
+    expect(() => {
+      bubble.dispatchEvent({ type: "submit", targetId: "missing" });
     }).toThrow("Unknown node ID: missing");
   });
 
