@@ -40,8 +40,15 @@ export interface BubbleHarness {
   render(content: BubbleRenderContent | readonly BubbleRenderContent[]): void;
   cleanup(): void;
   getByRole(role: string, options?: { name?: string | RegExp }): string;
+  getByText(text: string | RegExp): string;
   click(target: BubbleNodeId): BubbleDispatchResult;
   tab(options?: { shift?: boolean }): void;
+  expectRole(target: BubbleNodeId, role: string): void;
+  expectName(target: BubbleNodeId, name: string | null): void;
+  expectText(target: BubbleNodeId, value: string): void;
+  expectFocused(target: BubbleNodeId): void;
+  expectValue(target: BubbleNodeId, value: string): void;
+  expectChecked(target: BubbleNodeId, checked: boolean): void;
 }
 
 function formatNameMatcher(name: string | RegExp): string {
@@ -50,6 +57,10 @@ function formatNameMatcher(name: string | RegExp): string {
 
 function formatNodeName(name: string | null): string {
   return name === null ? "<unnamed>" : JSON.stringify(name);
+}
+
+function formatTextMatcher(text: string | RegExp): string {
+  return typeof text === "string" ? JSON.stringify(text) : text.toString();
 }
 
 export function createHarness(bubble: BubbleRuntime = createBubble()): BubbleHarness {
@@ -213,6 +224,80 @@ export function createHarness(bubble: BubbleRuntime = createBubble()): BubbleHar
     return currentBubble.dispatchEvent({ type, targetId });
   };
 
+  const getNodeOrThrow = (targetId: BubbleNodeId) => {
+    const node = currentBubble.getNode(targetId);
+
+    if (node === null) {
+      throw new Error(`Unknown node ID: ${targetId}`);
+    }
+
+    return node;
+  };
+
+  const getTextContent = (targetId: BubbleNodeId): string => {
+    const node = getNodeOrThrow(targetId);
+
+    if (node.kind === "text") {
+      return node.value;
+    }
+
+    if (node.kind === "root") {
+      return node.children.map((childId) => getTextContent(childId)).join("");
+    }
+
+    return node.children.map((childId) => getTextContent(childId)).join("");
+  };
+
+  const describeNode = (targetId: BubbleNodeId): string => {
+    const node = getNodeOrThrow(targetId);
+
+    if (node.kind === "root") {
+      return `${node.id} <root>`;
+    }
+
+    if (node.kind === "text") {
+      return `${node.id} <text ${JSON.stringify(node.value)}>`;
+    }
+
+    const details = [
+      `tag=${JSON.stringify(node.tag)}`,
+      `role=${node.role === null ? "null" : JSON.stringify(node.role)}`,
+      `name=${node.name === null ? "null" : JSON.stringify(node.name)}`,
+      `text=${JSON.stringify(getTextContent(node.id))}`,
+      `focused=${currentBubble.getFocusedNodeId() === node.id}`,
+    ];
+
+    if (node.value !== null) {
+      details.push(`value=${JSON.stringify(node.value)}`);
+    }
+
+    if (node.checked !== null) {
+      details.push(`checked=${node.checked}`);
+    }
+
+    return `${node.id} <${node.tag} ${details.join(" ")}>`;
+  };
+
+  const expectElementNode = (targetId: BubbleNodeId) => {
+    const node = getNodeOrThrow(targetId);
+
+    if (node.kind !== "element") {
+      throw new Error(`Expected an element node for ${targetId}. Received ${describeNode(targetId)}.`);
+    }
+
+    return node;
+  };
+
+  const assertEqual = (label: string, targetId: BubbleNodeId, expected: string, actual: string): void => {
+    if (actual !== expected) {
+      throw new Error(
+        `Expected ${label} for ${targetId} to be ${JSON.stringify(expected)}. Received ${JSON.stringify(actual)}. ${describeNode(
+          targetId,
+        )}`,
+      );
+    }
+  };
+
   return {
     get bubble() {
       return currentBubble;
@@ -280,6 +365,29 @@ export function createHarness(bubble: BubbleRuntime = createBubble()): BubbleHar
 
       throw new Error(`Unable to find a node with ${queryDescription}. ${nodesByRoleDescription}`);
     },
+    getByText(text) {
+      const snapshot = currentBubble.snapshot();
+      const matchingNodes = Array.from(snapshot.nodes.values()).filter((node) => {
+        const textContent = getTextContent(node.id);
+
+        if (typeof text === "string") {
+          return textContent === text;
+        }
+
+        return text.test(textContent);
+      });
+      const elementOrTextNode = matchingNodes.find((node) => node.kind !== "root");
+
+      if (elementOrTextNode !== undefined) {
+        return elementOrTextNode.id;
+      }
+
+      throw new Error(
+        `Unable to find a node with text ${formatTextMatcher(text)}. Current root text content is ${JSON.stringify(
+          getTextContent(snapshot.rootId),
+        )}.`,
+      );
+    },
     click(target) {
       return dispatchEvent(target, "click");
     },
@@ -317,6 +425,66 @@ export function createHarness(bubble: BubbleRuntime = createBubble()): BubbleHar
       }
 
       currentBubble.focus(tabOrder[currentIndex + 1]);
+    },
+    expectRole(target, role) {
+      const node = expectElementNode(target);
+      const actualRole = node.role;
+
+      if (actualRole !== role) {
+        throw new Error(
+          `Expected role for ${target} to be ${JSON.stringify(role)}. Received ${
+            actualRole === null ? "null" : JSON.stringify(actualRole)
+          }. ${describeNode(target)}`,
+        );
+      }
+    },
+    expectName(target, name) {
+      const node = expectElementNode(target);
+      const actualName = node.name;
+
+      if (actualName !== name) {
+        throw new Error(
+          `Expected accessible name for ${target} to be ${
+            name === null ? "null" : JSON.stringify(name)
+          }. Received ${actualName === null ? "null" : JSON.stringify(actualName)}. ${describeNode(target)}`,
+        );
+      }
+    },
+    expectText(target, value) {
+      assertEqual("text content", target, value, getTextContent(target));
+    },
+    expectFocused(target) {
+      const actualFocusedId = currentBubble.getFocusedNodeId();
+
+      if (actualFocusedId !== target) {
+        throw new Error(
+          `Expected focused node to be ${target}. Received ${actualFocusedId ?? "null"}. ${describeNode(target)}`,
+        );
+      }
+    },
+    expectValue(target, value) {
+      const node = expectElementNode(target);
+      const actualValue = node.value;
+
+      if (actualValue !== value) {
+        throw new Error(
+          `Expected value for ${target} to be ${JSON.stringify(value)}. Received ${
+            actualValue === null ? "null" : JSON.stringify(actualValue)
+          }. ${describeNode(target)}`,
+        );
+      }
+    },
+    expectChecked(target, checked) {
+      const node = expectElementNode(target);
+      const actualChecked = node.checked;
+
+      if (actualChecked !== checked) {
+        throw new Error(
+          `Expected checked state for ${target} to be ${checked}. Received ${
+            actualChecked === null ? "null" : actualChecked
+          }. ${describeNode(target)}`,
+        );
+      }
     },
   };
 }

@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 48: Harness semantic assertions](./task-48-harness-semantic-assertions.md)
+- None
 
 ## Definition of Done
 

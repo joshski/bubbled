@@ -300,6 +300,118 @@ describe("createHarness", () => {
     expect(() => harness.getByRole("button", { name: "Save" })).toThrow('("Cancel")');
   });
 
+  test("supports semantic assertion helpers for role, name, text, focus, and form state", () => {
+    const harness = createHarness();
+
+    harness.render({
+      tag: "form",
+      children: [
+        {
+          tag: "input",
+          attributes: { type: "text", name: "email", "aria-label": "Email" },
+          properties: { value: "josh@example.com" },
+        },
+        {
+          tag: "input",
+          attributes: { type: "checkbox", name: "subscribe", "aria-label": "Subscribe" },
+          properties: { checked: true },
+        },
+        { tag: "button", children: ["Save"] },
+      ],
+    });
+
+    const textboxId = harness.getByRole("textbox", { name: "Email" });
+    const form = harness.bubble.getNode(harness.bubble.getRoot().children[0]);
+    const checkboxId = form?.kind === "element" ? form.children[1] : null;
+    const buttonId = harness.getByRole("button", { name: "Save" });
+    const buttonTextId = harness.getByText("Save");
+
+    harness.tab();
+
+    harness.expectRole(textboxId, "textbox");
+    harness.expectName(textboxId, "Email");
+    harness.expectValue(textboxId, "josh@example.com");
+    expect(checkboxId).not.toBeNull();
+    harness.expectChecked(checkboxId as string, true);
+    harness.expectText(buttonId, "Save");
+    harness.expectFocused(textboxId);
+    harness.expectText(buttonTextId, "Save");
+  });
+
+  test("semantic assertion failures include useful details", () => {
+    const harness = createHarness();
+
+    harness.render({
+      tag: "input",
+      attributes: { type: "text", "aria-label": "Email" },
+      properties: { value: "draft@example.com" },
+    });
+
+    const textboxId = harness.getByRole("textbox", { name: "Email" });
+
+    expect(() => harness.expectName(textboxId, "Username")).toThrow(
+      `Expected accessible name for ${textboxId} to be "Username". Received "Email".`,
+    );
+    expect(() => harness.expectName(textboxId, "Username")).toThrow('role="textbox"');
+    expect(() => harness.expectRole(textboxId, "button")).toThrow(
+      `Expected role for ${textboxId} to be "button". Received "textbox".`,
+    );
+    expect(() => harness.expectValue(textboxId, "published@example.com")).toThrow(
+      `Expected value for ${textboxId} to be "published@example.com". Received "draft@example.com".`,
+    );
+  });
+
+  test("getByText supports regex matches and reports useful misses", () => {
+    const harness = createHarness();
+
+    harness.render({ tag: "button", children: ["Save draft"] });
+
+    const matchedId = harness.getByText(/^Save/);
+
+    harness.expectText(matchedId, "Save draft");
+    expect(() => harness.getByText(/^Publish/)).toThrow(
+      'Unable to find a node with text /^Publish/. Current root text content is "Save draft".',
+    );
+  });
+
+  test("reports useful assertion failures for focus, checked state, and non-element targets", () => {
+    const harness = createHarness();
+
+    harness.render([
+      {
+        tag: "input",
+        attributes: { type: "checkbox", "aria-label": "Subscribe" },
+        properties: { checked: true },
+      },
+      { tag: "button", children: ["Save"] },
+    ]);
+
+    const [checkboxId, buttonId] = harness.bubble.getRoot().children;
+    const button = harness.bubble.getNode(buttonId);
+    const textId = button?.kind === "element" ? button.children[0] : null;
+
+    expect(() => harness.expectFocused(buttonId)).toThrow(
+      `Expected focused node to be ${buttonId}. Received null.`,
+    );
+    expect(() => harness.expectChecked(checkboxId, false)).toThrow(
+      `Expected checked state for ${checkboxId} to be false. Received true.`,
+    );
+    expect(() => harness.expectRole(textId as string, "button")).toThrow(
+      `Expected an element node for ${textId}. Received ${textId} <text "Save">.`,
+    );
+    expect(() => harness.expectValue("missing", "value")).toThrow("Unknown node ID: missing");
+  });
+
+  test("reports root text mismatches with a root description", () => {
+    const harness = createHarness();
+
+    harness.render("Save");
+
+    expect(() => harness.expectText(harness.bubble.rootId, "Publish")).toThrow(
+      `Expected text content for ${harness.bubble.rootId} to be "Publish". Received "Save". ${harness.bubble.rootId} <root>`,
+    );
+  });
+
   test("click helper dispatches expected event", () => {
     const bubble = createBubble();
     const harness = createHarness(bubble);
