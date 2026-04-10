@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 19: Capture and bubble phases](./task-19-capture-and-bubble-phases.md)
+(none)
 
 ## Definition of Done
 

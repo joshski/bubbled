@@ -77,6 +77,7 @@ export interface BubbleTransaction {
     nodeId: BubbleNodeId;
     type: string;
     listener: BubbleEventListener;
+    capture?: boolean;
   }): BubbleListenerHandle;
   removeEventListener(handle: BubbleListenerHandle): void;
 }
@@ -104,7 +105,7 @@ export interface BubbleEvent {
   readonly type: string;
   readonly targetId: BubbleNodeId;
   readonly currentTargetId: BubbleNodeId;
-  readonly phase: "target";
+  readonly phase: "capture" | "target" | "bubble";
   readonly cancelable: boolean;
   readonly defaultPrevented: boolean;
   readonly data: Readonly<Record<string, unknown>>;
@@ -122,7 +123,7 @@ export interface BubbleDispatchResult {
 export interface BubbleListenerHandle {
   readonly nodeId: BubbleNodeId;
   readonly type: string;
-  readonly capture: false;
+  readonly capture: boolean;
   readonly internalId: string;
 }
 
@@ -130,6 +131,8 @@ interface BubbleRegisteredListener {
   handle: BubbleListenerHandle;
   listener: BubbleEventListener;
 }
+
+type BubbleEventPhase = BubbleEvent["phase"];
 
 export interface BubbleSnapshot {
   readonly rootId: BubbleNodeId;
@@ -386,6 +389,23 @@ export function createBubble(): BubbleRuntime {
     return createdNodeListeners;
   };
 
+  const getEventPath = (targetId: BubbleNodeId): BubbleNodeId[] => {
+    const path: BubbleNodeId[] = [];
+    let currentId: BubbleNodeId | null = targetId;
+
+    while (currentId !== null) {
+      const node = nodes.get(currentId) as BubbleNode;
+
+      if (node.kind === "element") {
+        path.push(node.id);
+      }
+
+      currentId = node.kind === "root" ? null : node.parentId;
+    }
+
+    return path;
+  };
+
   return {
     rootId: root.id,
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
@@ -540,7 +560,7 @@ export function createBubble(): BubbleRuntime {
           node.properties[name] = value;
           mutations.push({ type: "property-set", nodeId, name, value });
         },
-        addEventListener({ nodeId, type, listener }) {
+        addEventListener({ nodeId, type, listener, capture = false }) {
           const node = getDraftNode(nodeId);
 
           assertEventTargetNode(node, nodeId);
@@ -549,7 +569,7 @@ export function createBubble(): BubbleRuntime {
           const handle: BubbleListenerHandle = {
             nodeId,
             type,
-            capture: false,
+            capture,
             internalId: allocateListenerId(),
           };
           const nodeListeners = getNodeListeners(draftEventListeners, nodeId);
@@ -636,21 +656,53 @@ export function createBubble(): BubbleRuntime {
         return { defaultPrevented: false, delivered: false };
       }
 
-      const targetListeners = eventListeners.get(targetId)?.get(type) ?? [];
+      const path = getEventPath(targetId);
+      const ancestorPath = path.slice(1);
+      const captureQueue = ancestorPath
+        .slice()
+        .reverse()
+        .flatMap((nodeId) =>
+          (eventListeners.get(nodeId)?.get(type) ?? []).filter((registration) => registration.handle.capture),
+        );
+      const targetQueue = (eventListeners.get(targetId)?.get(type) ?? []).slice();
+      const bubbleQueue = ancestorPath.flatMap((nodeId) =>
+        (eventListeners.get(nodeId)?.get(type) ?? []).filter((registration) => !registration.handle.capture),
+      );
+      const deliveryQueue = [
+        ...captureQueue.map((registration) => ({
+          nodeId: registration.handle.nodeId,
+          phase: "capture" as BubbleEventPhase,
+          registration,
+        })),
+        ...targetQueue.map((registration) => ({
+          nodeId: registration.handle.nodeId,
+          phase: "target" as BubbleEventPhase,
+          registration,
+        })),
+        ...bubbleQueue.map((registration) => ({
+          nodeId: registration.handle.nodeId,
+          phase: "bubble" as BubbleEventPhase,
+          registration,
+        })),
+      ];
 
-      if (targetListeners.length === 0) {
+      if (deliveryQueue.length === 0) {
         return { defaultPrevented: false, delivered: false };
       }
 
       const eventData = Object.freeze({ ...data });
+      let currentTargetId = targetId;
+      let phase: BubbleEventPhase = "target";
 
       const event: BubbleEvent = {
         type,
         targetId,
         get currentTargetId() {
-          return targetId;
+          return currentTargetId;
         },
-        phase: "target",
+        get phase() {
+          return phase;
+        },
         cancelable,
         defaultPrevented: false,
         data: eventData,
@@ -658,8 +710,10 @@ export function createBubble(): BubbleRuntime {
         stopPropagation() {},
       };
 
-      for (const registration of targetListeners) {
-        registration.listener(event);
+      for (const queuedListener of deliveryQueue) {
+        currentTargetId = queuedListener.nodeId;
+        phase = queuedListener.phase;
+        queuedListener.registration.listener(event);
       }
 
       return { defaultPrevented: false, delivered: true };
