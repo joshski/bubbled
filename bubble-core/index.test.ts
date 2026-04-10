@@ -1975,6 +1975,50 @@ describe("createBubble", () => {
     });
   });
 
+  test("query locates existing and missing nodes by ID", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+
+      return createdButtonId;
+    });
+
+    const snapshot = bubble.snapshot();
+
+    expect(snapshot.query.getById(buttonId)).toEqual(snapshot.nodes.get(buttonId));
+    expect(snapshot.query.getById("missing")).toBeNull();
+  });
+
+  test("query locates element nodes by tag", () => {
+    const bubble = createBubble();
+
+    const nodeIds = bubble.transact((tx) => {
+      const firstButtonId = tx.createElement({ tag: "button" });
+      const paragraphId = tx.createElement({ tag: "p" });
+      const secondButtonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Press" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: firstButtonId });
+      tx.insertChild({ parentId: bubble.rootId, childId: paragraphId });
+      tx.insertChild({ parentId: bubble.rootId, childId: secondButtonId });
+      tx.insertChild({ parentId: secondButtonId, childId: textId });
+
+      return { firstButtonId, paragraphId, secondButtonId, textId };
+    });
+
+    const snapshot = bubble.snapshot();
+
+    expect(snapshot.query.getByTag("button")).toEqual([
+      snapshot.nodes.get(nodeIds.firstButtonId),
+      snapshot.nodes.get(nodeIds.secondButtonId),
+    ]);
+    expect(snapshot.query.getByTag("p")).toEqual([snapshot.nodes.get(nodeIds.paragraphId)]);
+    expect(snapshot.query.getByTag("text")).toEqual([]);
+  });
+
   test("mutating snapshot data does not mutate runtime state", () => {
     const bubble = createBubble();
 
@@ -2032,6 +2076,60 @@ describe("createBubble", () => {
       properties: {},
     });
     expect(bubble.getNode("node:mutated")).toBeNull();
+  });
+
+  test("query returns read-only views", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+
+      return createdButtonId;
+    });
+
+    const snapshot = bubble.snapshot();
+    const queriedButton = snapshot.query.getById(buttonId) as {
+      id: string;
+      kind: "element";
+      children: string[];
+      attributes: Record<string, string>;
+      properties: Record<string, unknown>;
+      parentId: string | null;
+      tag: string;
+      namespace: "html" | "svg";
+    };
+    const queriedButtons = snapshot.query.getByTag("button") as Array<unknown>;
+
+    expect(() => {
+      queriedButton.attributes.role = "mutated";
+    }).toThrow(TypeError);
+    expect(() => {
+      queriedButtons.push("node:mutated");
+    }).toThrow(TypeError);
+
+    expect(snapshot.query.getById(buttonId)).toEqual({
+      id: buttonId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(snapshot.query.getByTag("button")).toEqual([snapshot.nodes.get(buttonId)]);
+    expect(bubble.getNode(buttonId)).toEqual({
+      id: buttonId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
   });
 
   test("focusing a focusable node sets active focus", () => {

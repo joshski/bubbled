@@ -23,7 +23,7 @@ implement
 
 ## Blocked By
 
-- [Task 28: Query by node ID and simple selectors](./task-28-query-by-node-id-and-simple-selectors.md)
+- None
 
 ## Definition of Done
 

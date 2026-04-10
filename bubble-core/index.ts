@@ -138,6 +138,12 @@ type BubbleEventDispatchMode = "propagating" | "target-only";
 export interface BubbleSnapshot {
   readonly rootId: BubbleNodeId;
   readonly nodes: ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>;
+  readonly query: BubbleQueryApi;
+}
+
+export interface BubbleQueryApi {
+  getById(id: BubbleNodeId): Readonly<BubbleNode> | null;
+  getByTag(tag: string): ReadonlyArray<Readonly<BubbleElementNode>>;
 }
 
 export interface BubbleRuntime {
@@ -152,6 +158,25 @@ export interface BubbleRuntime {
   getFocusedNodeId(): BubbleNodeId | null;
   getTabOrder(): readonly BubbleNodeId[];
   subscribe(listener: BubbleRuntimeListener): () => void;
+}
+
+export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): BubbleQueryApi {
+  return Object.freeze({
+    getById(id) {
+      return snapshot.nodes.get(id) ?? null;
+    },
+    getByTag(tag) {
+      const matchingNodes: Readonly<BubbleElementNode>[] = [];
+
+      for (const node of snapshot.nodes.values()) {
+        if (node.kind === "element" && node.tag === tag) {
+          matchingNodes.push(node);
+        }
+      }
+
+      return Object.freeze(matchingNodes);
+    },
+  });
 }
 
 const ROOT_NODE_ID = "root";
@@ -354,9 +379,14 @@ export function createBubble(): BubbleRuntime {
       snapshotNodes.set(nodeId, snapshotNode(node));
     }
 
-    return Object.freeze({
+    const snapshotBase = {
       rootId: root.id,
       nodes: snapshotNodes as ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>,
+    };
+
+    return Object.freeze({
+      ...snapshotBase,
+      query: createBubbleQuery(snapshotBase),
     });
   };
 

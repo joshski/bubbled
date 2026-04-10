@@ -17,6 +17,7 @@ describe("public entrypoints", () => {
 
     expect(entrypoint).toEqual({
       createBubble: expect.any(Function),
+      createBubbleQuery: expect.any(Function),
     });
     expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
