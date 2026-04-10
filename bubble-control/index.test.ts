@@ -21,13 +21,35 @@ describe("createController", () => {
     expect(await controller.getSession("missing")).toBeNull();
   });
 
-  test("command mutates session state", async () => {
+  test("destroy command removes the session from the controller registry", async () => {
     const controller = await createController();
     const session = await controller.createSession();
+
+    expect(await controller.getSession(session.id)).toBe(session);
+
     const destroyResult = await session.command({ type: "destroy" });
 
     expect(destroyResult).toEqual({ ok: true });
+    expect(await controller.getSession(session.id)).toBeNull();
     await expect(session.query({ type: "get-tree" })).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "session_destroyed",
+        message: `Session ${session.id} has been destroyed.`,
+      },
+    });
+  });
+
+  test("destroy wrapper removes the session from the controller registry", async () => {
+    const controller = await createController();
+    const session = await controller.createSession();
+
+    expect(await controller.getSession(session.id)).toBe(session);
+
+    await session.destroy();
+
+    expect(await controller.getSession(session.id)).toBeNull();
+    await expect(session.command({ type: "reset" })).resolves.toEqual({
       ok: false,
       error: {
         code: "session_destroyed",

@@ -129,6 +129,7 @@ export function createController(options: CreateControllerOptions = {}): Promise
             case "destroy":
               destroyed = true;
               unsubscribeFromRuntime();
+              sessions.delete(id);
 
               return {
                 ok: true,
