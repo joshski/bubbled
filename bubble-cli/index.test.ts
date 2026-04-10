@@ -31,6 +31,7 @@ function createControllerStub(
     queryResult?: BubbleQueryResult;
     onCommand?: (input: BubbleCommand) => void;
     onQuery?: (input: BubbleQuery) => void;
+    onDestroy?: () => void;
   } = {},
 ): () => Promise<Pick<BubbleController, "createSession">> {
   return async () => ({
@@ -54,7 +55,7 @@ function createControllerStub(
           throw new Error("not implemented");
         },
         async destroy() {
-          throw new Error("not implemented");
+          options.onDestroy?.();
         },
         subscribe() {
           return () => {};
@@ -88,11 +89,15 @@ describe("bubble-cli main", () => {
     const stdout = createWriter();
     const stderr = createWriter();
     const observedCommands: BubbleCommand[] = [];
+    let destroyCalls = 0;
 
     const exitCode = await main(["command", "reset", "--json"], {
       createController: createControllerStub({
         onCommand(input) {
           observedCommands.push(input);
+        },
+        onDestroy() {
+          destroyCalls += 1;
         },
       }),
       stdout: stdout.writer,
@@ -101,6 +106,7 @@ describe("bubble-cli main", () => {
 
     expect(exitCode).toBe(0);
     expect(observedCommands).toEqual([{ type: "reset" }]);
+    expect(destroyCalls).toBe(1);
     expect(stdout.toString()).toBe(`${JSON.stringify({ ok: true }, null, 2)}\n`);
     expect(stderr.toString()).toBe("");
   });
@@ -146,6 +152,7 @@ describe("bubble-cli main", () => {
   test("returns a failing exit code and writes a human-readable error for control failures", async () => {
     const stdout = createWriter();
     const stderr = createWriter();
+    let destroyCalls = 0;
 
     const exitCode = await main(["query", "get-tree"], {
       createController: createControllerStub({
@@ -156,12 +163,16 @@ describe("bubble-cli main", () => {
             message: "Session session-1 has been destroyed.",
           },
         },
+        onDestroy() {
+          destroyCalls += 1;
+        },
       }),
       stdout: stdout.writer,
       stderr: stderr.writer,
     });
 
     expect(exitCode).toBe(1);
+    expect(destroyCalls).toBe(1);
     expect(stdout.toString()).toBe("");
     expect(stderr.toString()).toBe("Session session-1 has been destroyed.\n");
   });
@@ -169,6 +180,7 @@ describe("bubble-cli main", () => {
   test("writes json errors and a failing exit code for control failures in json mode", async () => {
     const stdout = createWriter();
     const stderr = createWriter();
+    let destroyCalls = 0;
 
     const exitCode = await main(["command", "reset", "--json"], {
       createController: createControllerStub({
@@ -179,12 +191,16 @@ describe("bubble-cli main", () => {
             message: "Session session-1 has been destroyed.",
           },
         },
+        onDestroy() {
+          destroyCalls += 1;
+        },
       }),
       stdout: stdout.writer,
       stderr: stderr.writer,
     });
 
     expect(exitCode).toBe(1);
+    expect(destroyCalls).toBe(1);
     expect(stdout.toString()).toBe(`{
   "ok": false,
   "error": {
@@ -194,6 +210,48 @@ describe("bubble-cli main", () => {
 }
 `);
     expect(stderr.toString()).toBe("");
+  });
+
+  test("tolerates cleanup after a destroy command completes", async () => {
+    const stdout = createWriter();
+    const stderr = createWriter();
+    let destroyCalls = 0;
+
+    const exitCode = await main(["command", "destroy"], {
+      createController: createControllerStub({
+        onDestroy() {
+          destroyCalls += 1;
+          throw {
+            code: "session_destroyed",
+            message: "Session session-1 has been destroyed.",
+          };
+        },
+      }),
+      stdout: stdout.writer,
+      stderr: stderr.writer,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(destroyCalls).toBe(1);
+    expect(stdout.toString()).toBe("OK\n");
+    expect(stderr.toString()).toBe("");
+  });
+
+  test("rethrows unexpected cleanup failures", async () => {
+    const stdout = createWriter();
+    const stderr = createWriter();
+
+    await expect(
+      main(["query", "get-tree"], {
+        createController: createControllerStub({
+          onDestroy() {
+            throw new Error("cleanup failed");
+          },
+        }),
+        stdout: stdout.writer,
+        stderr: stderr.writer,
+      }),
+    ).rejects.toThrow("cleanup failed");
   });
 
   test("returns a failing exit code for unknown cli commands", async () => {

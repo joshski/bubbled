@@ -6,6 +6,7 @@ import {
   type BubbleController,
   type BubbleQuery,
   type BubbleQueryResult,
+  type BubbleSession,
 } from "../bubble-control";
 
 interface BubbleCliWriter {
@@ -81,6 +82,23 @@ function formatTreeQuerySuccess(
   return serializeBubbleSnapshot(result.value);
 }
 
+async function destroyOneShotSession(session: Pick<BubbleSession, "destroy">): Promise<void> {
+  try {
+    await session.destroy();
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "session_destroyed"
+    ) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
 export async function main(
   argv: readonly string[],
   options: BubbleCliOptions = {},
@@ -101,47 +119,50 @@ export async function main(
 
   const controller = await createCliController();
   const session = await controller.createSession();
+  try {
+    if (category === "command" && isSupportedCommandType(type)) {
+      const result = await session.command({ type });
 
-  if (category === "command" && isSupportedCommandType(type)) {
-    const result = await session.command({ type });
+      if (!result.ok) {
+        return writeFailure(result, {
+          json,
+          stdout,
+          stderr,
+        });
+      }
 
-    if (!result.ok) {
-      return writeFailure(result, {
-        json,
-        stdout,
-        stderr,
-      });
-    }
+      if (json) {
+        writeLine(stdout, JSON.stringify(result, null, 2));
+        return 0;
+      }
 
-    if (json) {
-      writeLine(stdout, JSON.stringify(result, null, 2));
+      writeLine(stdout, formatCommandSuccess());
       return 0;
     }
 
-    writeLine(stdout, formatCommandSuccess());
-    return 0;
-  }
+    if (category === "query" && isSupportedQueryType(type)) {
+      const result = await session.query({ type });
 
-  if (category === "query" && isSupportedQueryType(type)) {
-    const result = await session.query({ type });
+      if (!result.ok) {
+        return writeFailure(result, {
+          json,
+          stdout,
+          stderr,
+        });
+      }
 
-    if (!result.ok) {
-      return writeFailure(result, {
-        json,
-        stdout,
-        stderr,
-      });
-    }
+      if (json) {
+        writeLine(stdout, JSON.stringify(result, null, 2));
+        return 0;
+      }
 
-    if (json) {
-      writeLine(stdout, JSON.stringify(result, null, 2));
+      writeLine(stdout, formatTreeQuerySuccess(result));
       return 0;
     }
 
-    writeLine(stdout, formatTreeQuerySuccess(result));
-    return 0;
+    writeLine(stderr, `Unknown command: ${argv.join(" ")}`);
+    return 1;
+  } finally {
+    await destroyOneShotSession(session);
   }
-
-  writeLine(stderr, `Unknown command: ${argv.join(" ")}`);
-  return 1;
 }
