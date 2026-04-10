@@ -40,19 +40,19 @@ Use bubbled when you want UI behavior that is more scriptable than the browser n
 If you want a stable serialized snapshot of the current runtime tree:
 
 ```ts
-import { createBubble, serializeBubbleSnapshot } from "./bubble-core";
+import { createBubble, serializeBubbleSnapshot } from './bubble-core'
 
-const bubble = createBubble();
+const bubble = createBubble()
 
-bubble.transact((tx) => {
-  const buttonId = tx.createElement({ tag: "button" });
-  const textId = tx.createText({ value: "Save" });
+bubble.transact(tx => {
+  const buttonId = tx.createElement({ tag: 'button' })
+  const textId = tx.createText({ value: 'Save' })
 
-  tx.insertChild({ parentId: buttonId, childId: textId });
-  tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
-});
+  tx.insertChild({ parentId: buttonId, childId: textId })
+  tx.insertChild({ parentId: bubble.rootId, childId: buttonId })
+})
 
-console.log(serializeBubbleSnapshot(bubble.snapshot()));
+console.log(serializeBubbleSnapshot(bubble.snapshot()))
 ```
 
 That is useful when you want tests, tooling, or logs to describe UI state without scraping live DOM.
@@ -62,13 +62,13 @@ That is useful when you want tests, tooling, or logs to describe UI state withou
 If you want React to describe the UI, while bubbled owns the canonical tree and event dispatch:
 
 ```tsx
-import { createBubble } from "./bubble-core";
-import { createBubbleReactRoot } from "./bubble-react";
+import { createBubble } from './bubble-core'
+import { createBubbleReactRoot } from './bubble-react'
 
-const bubble = createBubble();
-const root = createBubbleReactRoot({ bubble });
+const bubble = createBubble()
+const root = createBubbleReactRoot({ bubble })
 
-root.render(<button onClick={() => console.log("saved")}>Save</button>);
+root.render(<button onClick={() => console.log('saved')}>Save</button>)
 ```
 
 This is useful when you want a familiar authoring model but still want a runtime you can inspect, serialize, and control directly.
@@ -78,17 +78,17 @@ This is useful when you want a familiar authoring model but still want a runtime
 If you want a real DOM view while keeping the bubble as the source of truth:
 
 ```ts
-import { createBubble } from "./bubble-core";
-import { createDomProjector } from "./bubble-browser";
+import { createBubble } from './bubble-core'
+import { createDomProjector } from './bubble-browser'
 
-const bubble = createBubble();
+const bubble = createBubble()
 const projector = createDomProjector({
   bubble,
   bridgeEvents: true,
   syncFocus: true,
-});
+})
 
-projector.mount(document.getElementById("app") as HTMLElement);
+projector.mount(document.getElementById('app') as HTMLElement)
 ```
 
 This helps when you want native browser interaction, but you still want clicks, submits, and focus changes to flow through an explicit runtime.
@@ -98,19 +98,19 @@ This helps when you want native browser interaction, but you still want clicks, 
 If you want runtime behavior to depend on injected capabilities instead of ambient globals:
 
 ```ts
-import { createBubble } from "./bubble-core";
+import { createBubble } from './bubble-core'
 
 const bubble = createBubble({
   capabilities: {
     clock: { now: () => 1_700_000_000_000 },
   },
-});
+})
 
-bubble.resolveCapability("storage").setItem("draft", "hello");
+bubble.resolveCapability('storage').setItem('draft', 'hello')
 
 const handle = bubble.setTimeout(() => {
-  console.log("timer fired");
-}, 100);
+  console.log('timer fired')
+}, 100)
 ```
 
 That makes behavior easier to script in tests and easier to reason about in tooling.

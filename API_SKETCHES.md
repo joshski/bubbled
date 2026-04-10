@@ -120,67 +120,67 @@ That reverse direction is usually the wrong performance model and the wrong owne
 ### Core Types
 
 ```ts
-export type BubbleNodeId = string;
+export type BubbleNodeId = string
 
-export type BubbleNamespace = "html" | "svg";
+export type BubbleNamespace = 'html' | 'svg'
 
-export type BubbleNodeKind = "root" | "element" | "text";
+export type BubbleNodeKind = 'root' | 'element' | 'text'
 
 export interface BubbleRootNode {
-  id: BubbleNodeId;
-  kind: "root";
-  children: BubbleNodeId[];
+  id: BubbleNodeId
+  kind: 'root'
+  children: BubbleNodeId[]
 }
 
 export interface BubbleElementNode {
-  id: BubbleNodeId;
-  kind: "element";
-  tag: string;
-  namespace: BubbleNamespace;
-  parentId: BubbleNodeId | null;
-  children: BubbleNodeId[];
-  attributes: Record<string, string>;
-  properties: Record<string, unknown>;
+  id: BubbleNodeId
+  kind: 'element'
+  tag: string
+  namespace: BubbleNamespace
+  parentId: BubbleNodeId | null
+  children: BubbleNodeId[]
+  attributes: Record<string, string>
+  properties: Record<string, unknown>
 }
 
 export interface BubbleTextNode {
-  id: BubbleNodeId;
-  kind: "text";
-  parentId: BubbleNodeId | null;
-  value: string;
+  id: BubbleNodeId
+  kind: 'text'
+  parentId: BubbleNodeId | null
+  value: string
 }
 
-export type BubbleNode = BubbleRootNode | BubbleElementNode | BubbleTextNode;
+export type BubbleNode = BubbleRootNode | BubbleElementNode | BubbleTextNode
 ```
 
 ### Public Runtime Surface
 
 ```ts
-import type { BubbleCapabilities } from "@bubbled/bubble-capabilities";
+import type { BubbleCapabilities } from '@bubbled/bubble-capabilities'
 
 export interface CreateBubbleOptions {
-  capabilities?: Partial<BubbleCapabilities>;
+  capabilities?: Partial<BubbleCapabilities>
 }
 
 export interface BubbleRuntime {
-  readonly rootId: BubbleNodeId;
+  readonly rootId: BubbleNodeId
 
-  transact<T>(fn: (tx: BubbleTransaction) => T): T;
+  transact<T>(fn: (tx: BubbleTransaction) => T): T
 
-  getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
-  getRoot(): Readonly<BubbleRootNode>;
-  snapshot(): BubbleSnapshot;
+  getNode(id: BubbleNodeId): Readonly<BubbleNode> | null
+  getRoot(): Readonly<BubbleRootNode>
+  snapshot(): BubbleSnapshot
 
-  dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult;
+  dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult
 
-  focus(id: BubbleNodeId): void;
-  blur(): void;
-  getFocusedNodeId(): BubbleNodeId | null;
+  focus(id: BubbleNodeId): void
+  blur(): void
+  getFocusedNodeId(): BubbleNodeId | null
 
-  subscribe(listener: BubbleRuntimeListener): () => void;
+  subscribe(listener: BubbleRuntimeListener): () => void
 }
 
-export function createBubble(options?: CreateBubbleOptions): BubbleRuntime;
+export function createBubble(options?: CreateBubbleOptions): BubbleRuntime
 ```
 
 ### Transactions and Mutation Ops
@@ -199,49 +199,93 @@ That is a scoping choice, not an oversight. In particular, `setStyle` should not
 
 ```ts
 export interface BubbleTransaction {
-  createElement(input: { tag: string; namespace?: BubbleNamespace }): BubbleNodeId;
-  createText(input: { value: string }): BubbleNodeId;
+  createElement(input: {
+    tag: string
+    namespace?: BubbleNamespace
+  }): BubbleNodeId
+  createText(input: { value: string }): BubbleNodeId
 
-  insertChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId; index?: number }): void;
+  insertChild(input: {
+    parentId: BubbleNodeId
+    childId: BubbleNodeId
+    index?: number
+  }): void
 
-  removeChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId }): void;
+  removeChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId }): void
 
-  moveChild(input: { parentId: BubbleNodeId; childId: BubbleNodeId; index: number }): void;
+  moveChild(input: {
+    parentId: BubbleNodeId
+    childId: BubbleNodeId
+    index: number
+  }): void
 
-  setAttribute(input: { nodeId: BubbleNodeId; name: string; value: string }): void;
+  setAttribute(input: {
+    nodeId: BubbleNodeId
+    name: string
+    value: string
+  }): void
 
-  removeAttribute(input: { nodeId: BubbleNodeId; name: string }): void;
+  removeAttribute(input: { nodeId: BubbleNodeId; name: string }): void
 
-  setProperty(input: { nodeId: BubbleNodeId; name: string; value: unknown }): void;
+  setProperty(input: {
+    nodeId: BubbleNodeId
+    name: string
+    value: unknown
+  }): void
 
-  setText(input: { nodeId: BubbleNodeId; value: string }): void;
+  setText(input: { nodeId: BubbleNodeId; value: string }): void
 
   addEventListener(input: {
-    nodeId: BubbleNodeId;
-    type: string;
-    listener: BubbleEventListener;
-    capture?: boolean;
-  }): BubbleListenerHandle;
+    nodeId: BubbleNodeId
+    type: string
+    listener: BubbleEventListener
+    capture?: boolean
+  }): BubbleListenerHandle
 
-  removeEventListener(handle: BubbleListenerHandle): void;
+  removeEventListener(handle: BubbleListenerHandle): void
 }
 
 export type BubbleMutation =
-  | { type: "node-created"; nodeId: BubbleNodeId; kind: BubbleNodeKind }
-  | { type: "child-inserted"; parentId: BubbleNodeId; childId: BubbleNodeId; index: number }
-  | { type: "child-removed"; parentId: BubbleNodeId; childId: BubbleNodeId; index: number }
-  | { type: "child-moved"; parentId: BubbleNodeId; childId: BubbleNodeId; index: number }
-  | { type: "attribute-set"; nodeId: BubbleNodeId; name: string; value: string }
-  | { type: "attribute-removed"; nodeId: BubbleNodeId; name: string }
-  | { type: "property-set"; nodeId: BubbleNodeId; name: string; value: unknown }
-  | { type: "text-set"; nodeId: BubbleNodeId; value: string }
-  | { type: "listener-added"; nodeId: BubbleNodeId; eventType: string; capture: boolean }
-  | { type: "listener-removed"; nodeId: BubbleNodeId; eventType: string; capture: boolean }
-  | { type: "focus-set"; nodeId: BubbleNodeId | null };
+  | { type: 'node-created'; nodeId: BubbleNodeId; kind: BubbleNodeKind }
+  | {
+      type: 'child-inserted'
+      parentId: BubbleNodeId
+      childId: BubbleNodeId
+      index: number
+    }
+  | {
+      type: 'child-removed'
+      parentId: BubbleNodeId
+      childId: BubbleNodeId
+      index: number
+    }
+  | {
+      type: 'child-moved'
+      parentId: BubbleNodeId
+      childId: BubbleNodeId
+      index: number
+    }
+  | { type: 'attribute-set'; nodeId: BubbleNodeId; name: string; value: string }
+  | { type: 'attribute-removed'; nodeId: BubbleNodeId; name: string }
+  | { type: 'property-set'; nodeId: BubbleNodeId; name: string; value: unknown }
+  | { type: 'text-set'; nodeId: BubbleNodeId; value: string }
+  | {
+      type: 'listener-added'
+      nodeId: BubbleNodeId
+      eventType: string
+      capture: boolean
+    }
+  | {
+      type: 'listener-removed'
+      nodeId: BubbleNodeId
+      eventType: string
+      capture: boolean
+    }
+  | { type: 'focus-set'; nodeId: BubbleNodeId | null }
 
 export interface BubbleTransactionRecord {
-  sequence: number;
-  mutations: BubbleMutation[];
+  sequence: number
+  mutations: BubbleMutation[]
 }
 ```
 
@@ -253,37 +297,37 @@ Listener registration lives on `BubbleTransaction` intentionally. The idea is th
 
 ```ts
 export interface BubbleDispatchInput {
-  type: string;
-  targetId: BubbleNodeId;
-  data?: Record<string, unknown>;
-  cancelable?: boolean;
+  type: string
+  targetId: BubbleNodeId
+  data?: Record<string, unknown>
+  cancelable?: boolean
 }
 
 export interface BubbleEvent {
-  readonly type: string;
-  readonly targetId: BubbleNodeId;
-  readonly currentTargetId: BubbleNodeId;
-  readonly phase: "capture" | "target" | "bubble";
-  readonly cancelable: boolean;
-  readonly defaultPrevented: boolean;
-  readonly data: Readonly<Record<string, unknown>>;
+  readonly type: string
+  readonly targetId: BubbleNodeId
+  readonly currentTargetId: BubbleNodeId
+  readonly phase: 'capture' | 'target' | 'bubble'
+  readonly cancelable: boolean
+  readonly defaultPrevented: boolean
+  readonly data: Readonly<Record<string, unknown>>
 
-  preventDefault(): void;
-  stopPropagation(): void;
+  preventDefault(): void
+  stopPropagation(): void
 }
 
-export type BubbleEventListener = (event: BubbleEvent) => void;
+export type BubbleEventListener = (event: BubbleEvent) => void
 
 export interface BubbleDispatchResult {
-  defaultPrevented: boolean;
-  delivered: boolean;
+  defaultPrevented: boolean
+  delivered: boolean
 }
 
 export interface BubbleListenerHandle {
-  readonly nodeId: BubbleNodeId;
-  readonly type: string;
-  readonly capture: boolean;
-  readonly internalId: string;
+  readonly nodeId: BubbleNodeId
+  readonly type: string
+  readonly capture: boolean
+  readonly internalId: string
 }
 ```
 
@@ -293,48 +337,55 @@ Tests, projectors, and tools should use a read-only view.
 
 ```ts
 export interface BubbleSnapshot {
-  rootId: BubbleNodeId;
-  focusedNodeId: BubbleNodeId | null;
-  nodes: ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>;
-  query: BubbleQueryApi;
+  rootId: BubbleNodeId
+  focusedNodeId: BubbleNodeId | null
+  nodes: ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>
+  query: BubbleQueryApi
 }
 
 export interface BubbleQueryApi {
-  getById(id: BubbleNodeId): Readonly<BubbleNode> | null;
-  getByTag(tag: string): ReadonlyArray<Readonly<BubbleElementNode>>;
-  getByRole(role: string, options?: { name?: string }): ReadonlyArray<Readonly<BubbleElementNode>>;
+  getById(id: BubbleNodeId): Readonly<BubbleNode> | null
+  getByTag(tag: string): ReadonlyArray<Readonly<BubbleElementNode>>
+  getByRole(
+    role: string,
+    options?: { name?: string }
+  ): ReadonlyArray<Readonly<BubbleElementNode>>
 }
 
-export function createBubbleQuery(snapshot: BubbleSnapshot): BubbleQueryApi;
+export function createBubbleQuery(snapshot: BubbleSnapshot): BubbleQueryApi
 ```
 
 ### Runtime Subscription Shape
 
 ```ts
 export type BubbleRuntimeEvent =
-  | { type: "transaction-committed"; record: BubbleTransactionRecord }
-  | { type: "event-dispatched"; input: BubbleDispatchInput; result: BubbleDispatchResult }
-  | { type: "focus-changed"; nodeId: BubbleNodeId | null }
-  | { type: "error"; error: Error };
+  | { type: 'transaction-committed'; record: BubbleTransactionRecord }
+  | {
+      type: 'event-dispatched'
+      input: BubbleDispatchInput
+      result: BubbleDispatchResult
+    }
+  | { type: 'focus-changed'; nodeId: BubbleNodeId | null }
+  | { type: 'error'; error: Error }
 
-export type BubbleRuntimeListener = (event: BubbleRuntimeEvent) => void;
+export type BubbleRuntimeListener = (event: BubbleRuntimeEvent) => void
 ```
 
 ### Example: Construct a Tree Manually
 
 ```ts
-import { createBubble } from "@bubbled/bubble-core";
+import { createBubble } from '@bubbled/bubble-core'
 
-const bubble = createBubble();
+const bubble = createBubble()
 
-bubble.transact((tx) => {
-  const buttonId = tx.createElement({ tag: "button" });
-  const textId = tx.createText({ value: "Save" });
+bubble.transact(tx => {
+  const buttonId = tx.createElement({ tag: 'button' })
+  const textId = tx.createText({ value: 'Save' })
 
-  tx.setAttribute({ nodeId: buttonId, name: "type", value: "button" });
-  tx.insertChild({ parentId: bubble.rootId, childId: buttonId });
-  tx.insertChild({ parentId: buttonId, childId: textId });
-});
+  tx.setAttribute({ nodeId: buttonId, name: 'type', value: 'button' })
+  tx.insertChild({ parentId: bubble.rootId, childId: buttonId })
+  tx.insertChild({ parentId: buttonId, childId: textId })
+})
 ```
 
 ## `bubble-capabilities`
@@ -349,13 +400,13 @@ Other capabilities discussed earlier, such as clipboard, history/navigation, and
 
 ```ts
 export interface BubbleCapabilities {
-  clock: BubbleClock;
-  timers: BubbleTimers;
-  scheduler: BubbleScheduler;
-  layout: BubbleLayout;
-  viewport: BubbleViewport;
-  storage: BubbleStorage;
-  network: BubbleNetwork;
+  clock: BubbleClock
+  timers: BubbleTimers
+  scheduler: BubbleScheduler
+  layout: BubbleLayout
+  viewport: BubbleViewport
+  storage: BubbleStorage
+  network: BubbleNetwork
 }
 ```
 
@@ -363,26 +414,26 @@ export interface BubbleCapabilities {
 
 ```ts
 export interface BubbleClock {
-  now(): number;
+  now(): number
 }
 
 export interface BubbleTimers {
-  setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle;
-  clearTimeout(handle: BubbleTimerHandle): void;
+  setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle
+  clearTimeout(handle: BubbleTimerHandle): void
 }
 
 export interface BubbleTimerHandle {
-  id: string;
+  id: string
 }
 
 export interface BubbleScheduler {
-  queueMicrotask(task: () => void): void;
-  requestFrame(task: (time: number) => void): BubbleFrameHandle;
-  cancelFrame(handle: BubbleFrameHandle): void;
+  queueMicrotask(task: () => void): void
+  requestFrame(task: (time: number) => void): BubbleFrameHandle
+  cancelFrame(handle: BubbleFrameHandle): void
 }
 
 export interface BubbleFrameHandle {
-  id: string;
+  id: string
 }
 ```
 
@@ -390,25 +441,25 @@ export interface BubbleFrameHandle {
 
 ```ts
 export interface BubbleRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface BubbleLayout {
-  measureElement(nodeId: string): BubbleRect;
+  measureElement(nodeId: string): BubbleRect
 }
 
 export interface BubbleViewportState {
-  width: number;
-  height: number;
-  scrollX: number;
-  scrollY: number;
+  width: number
+  height: number
+  scrollX: number
+  scrollY: number
 }
 
 export interface BubbleViewport {
-  getState(): BubbleViewportState;
+  getState(): BubbleViewportState
 }
 ```
 
@@ -416,45 +467,45 @@ export interface BubbleViewport {
 
 ```ts
 export interface BubbleStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-  clear(): void;
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+  removeItem(key: string): void
+  clear(): void
 }
 
 export interface BubbleNetworkRequest {
-  method: string;
-  url: string;
-  headers?: Record<string, string>;
-  body?: string;
+  method: string
+  url: string
+  headers?: Record<string, string>
+  body?: string
 }
 
 export interface BubbleNetworkResponse {
-  status: number;
-  headers: Record<string, string>;
-  body: string;
+  status: number
+  headers: Record<string, string>
+  body: string
 }
 
 export interface BubbleNetwork {
-  fetch(request: BubbleNetworkRequest): Promise<BubbleNetworkResponse>;
+  fetch(request: BubbleNetworkRequest): Promise<BubbleNetworkResponse>
 }
 ```
 
 ### Example: Deterministic Test Capabilities
 
 ```ts
-import { createBubble } from "@bubbled/bubble-core";
-import { createTestCapabilities } from "@bubbled/bubble-capabilities/testing";
+import { createBubble } from '@bubbled/bubble-core'
+import { createTestCapabilities } from '@bubbled/bubble-capabilities/testing'
 
 const capabilities = createTestCapabilities({
   now: 1_700_000_000_000,
   viewport: { width: 1024, height: 768, scrollX: 0, scrollY: 0 },
-});
+})
 
-const bubble = createBubble({ capabilities });
+const bubble = createBubble({ capabilities })
 
-capabilities.timers.advanceBy(250);
-capabilities.scheduler.flushMicrotasks();
+capabilities.timers.advanceBy(250)
+capabilities.scheduler.flushMicrotasks()
 ```
 
 ## `bubble-test`
@@ -464,60 +515,60 @@ capabilities.scheduler.flushMicrotasks();
 ### Test Harness API
 
 ```ts
-import type { BubbleRuntime, BubbleNodeId } from "@bubbled/bubble-core";
+import type { BubbleRuntime, BubbleNodeId } from '@bubbled/bubble-core'
 
 export interface BubbleHarness {
-  readonly bubble: BubbleRuntime;
+  readonly bubble: BubbleRuntime
 
-  getByRole(role: string, options?: { name?: string | RegExp }): BubbleNodeId;
-  getByText(text: string | RegExp): BubbleNodeId;
+  getByRole(role: string, options?: { name?: string | RegExp }): BubbleNodeId
+  getByText(text: string | RegExp): BubbleNodeId
 
-  click(target: BubbleNodeId): BubbleDispatchResult;
-  input(target: BubbleNodeId, value: string): void;
-  tab(options?: { shift?: boolean }): void;
+  click(target: BubbleNodeId): BubbleDispatchResult
+  input(target: BubbleNodeId, value: string): void
+  tab(options?: { shift?: boolean }): void
 
-  expectText(target: BubbleNodeId, value: string): void;
-  expectFocused(target: BubbleNodeId): void;
-  expectValue(target: BubbleNodeId, value: string): void;
+  expectText(target: BubbleNodeId, value: string): void
+  expectFocused(target: BubbleNodeId): void
+  expectValue(target: BubbleNodeId, value: string): void
 }
 
-export function createHarness(bubble?: BubbleRuntime): BubbleHarness;
+export function createHarness(bubble?: BubbleRuntime): BubbleHarness
 ```
 
 ### Example: Core-Level Test
 
 ```ts
-import { createBubble } from "@bubbled/bubble-core";
-import { createHarness } from "@bubbled/bubble-test";
+import { createBubble } from '@bubbled/bubble-core'
+import { createHarness } from '@bubbled/bubble-test'
 
-it("submits the current input value", () => {
-  const bubble = createBubble();
-  const harness = createHarness(bubble);
+it('submits the current input value', () => {
+  const bubble = createBubble()
+  const harness = createHarness(bubble)
 
-  const formId = bubble.transact((tx) => {
-    const form = tx.createElement({ tag: "form" });
-    const input = tx.createElement({ tag: "input" });
-    const button = tx.createElement({ tag: "button" });
-    const text = tx.createText({ value: "Save" });
+  const formId = bubble.transact(tx => {
+    const form = tx.createElement({ tag: 'form' })
+    const input = tx.createElement({ tag: 'input' })
+    const button = tx.createElement({ tag: 'button' })
+    const text = tx.createText({ value: 'Save' })
 
-    tx.setProperty({ nodeId: input, name: "value", value: "" });
-    tx.insertChild({ parentId: bubble.rootId, childId: form });
-    tx.insertChild({ parentId: form, childId: input });
-    tx.insertChild({ parentId: form, childId: button });
-    tx.insertChild({ parentId: button, childId: text });
+    tx.setProperty({ nodeId: input, name: 'value', value: '' })
+    tx.insertChild({ parentId: bubble.rootId, childId: form })
+    tx.insertChild({ parentId: form, childId: input })
+    tx.insertChild({ parentId: form, childId: button })
+    tx.insertChild({ parentId: button, childId: text })
 
-    return form;
-  });
+    return form
+  })
 
-  const textboxId = harness.getByRole("textbox");
-  const buttonId = harness.getByRole("button", { name: "Save" });
+  const textboxId = harness.getByRole('textbox')
+  const buttonId = harness.getByRole('button', { name: 'Save' })
 
-  harness.input(textboxId, "draft");
-  const result = harness.click(buttonId);
+  harness.input(textboxId, 'draft')
+  const result = harness.click(buttonId)
 
-  expect(result.defaultPrevented).toBe(false);
-  expect(formId).toBeDefined();
-});
+  expect(result.defaultPrevented).toBe(false)
+  expect(formId).toBeDefined()
+})
 ```
 
 ## `bubble-browser`
@@ -527,45 +578,47 @@ it("submits the current input value", () => {
 ### Projector API
 
 ```ts
-import type { BubbleRuntime } from "@bubbled/bubble-core";
+import type { BubbleRuntime } from '@bubbled/bubble-core'
 
 export interface BubbleDomProjector {
-  mount(container: HTMLElement): void;
-  unmount(): void;
+  mount(container: HTMLElement): void
+  unmount(): void
 }
 
 export interface CreateDomProjectorOptions {
-  bubble: BubbleRuntime;
-  bridgeEvents?: boolean;
-  syncFocus?: boolean;
+  bubble: BubbleRuntime
+  bridgeEvents?: boolean
+  syncFocus?: boolean
 }
 
-export function createDomProjector(options: CreateDomProjectorOptions): BubbleDomProjector;
+export function createDomProjector(
+  options: CreateDomProjectorOptions
+): BubbleDomProjector
 ```
 
 ### Example: Mount Bubble into the Browser DOM
 
 ```ts
-import { createBubble } from "@bubbled/bubble-core";
-import { createDomProjector } from "@bubbled/bubble-browser";
+import { createBubble } from '@bubbled/bubble-core'
+import { createDomProjector } from '@bubbled/bubble-browser'
 
-const bubble = createBubble();
+const bubble = createBubble()
 
-bubble.transact((tx) => {
-  const heading = tx.createElement({ tag: "h1" });
-  const text = tx.createText({ value: "Bubble Inspector" });
+bubble.transact(tx => {
+  const heading = tx.createElement({ tag: 'h1' })
+  const text = tx.createText({ value: 'Bubble Inspector' })
 
-  tx.insertChild({ parentId: bubble.rootId, childId: heading });
-  tx.insertChild({ parentId: heading, childId: text });
-});
+  tx.insertChild({ parentId: bubble.rootId, childId: heading })
+  tx.insertChild({ parentId: heading, childId: text })
+})
 
 const projector = createDomProjector({
   bubble,
   bridgeEvents: true,
   syncFocus: true,
-});
+})
 
-projector.mount(document.getElementById("app")!);
+projector.mount(document.getElementById('app')!)
 ```
 
 ## `bubble-react`
@@ -575,70 +628,72 @@ projector.mount(document.getElementById("app")!);
 ### React Entry Point
 
 ```ts
-import type { ReactNode } from "react";
-import type { BubbleRuntime } from "@bubbled/bubble-core";
+import type { ReactNode } from 'react'
+import type { BubbleRuntime } from '@bubbled/bubble-core'
 
 export interface BubbleReactRoot {
-  render(node: ReactNode): void;
-  unmount(): void;
+  render(node: ReactNode): void
+  unmount(): void
 }
 
 export interface CreateBubbleReactRootOptions {
-  bubble: BubbleRuntime;
+  bubble: BubbleRuntime
 }
 
-export function createBubbleReactRoot(options: CreateBubbleReactRootOptions): BubbleReactRoot;
+export function createBubbleReactRoot(
+  options: CreateBubbleReactRootOptions
+): BubbleReactRoot
 ```
 
 ### Example: React Rendering into the Bubble
 
 ```tsx
-import { useState } from "react";
-import { createBubble } from "@bubbled/bubble-core";
-import { createBubbleReactRoot } from "@bubbled/bubble-react";
-import { createDomProjector } from "@bubbled/bubble-browser";
+import { useState } from 'react'
+import { createBubble } from '@bubbled/bubble-core'
+import { createBubbleReactRoot } from '@bubbled/bubble-react'
+import { createDomProjector } from '@bubbled/bubble-browser'
 
 function Counter() {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(0)
 
   return (
-    <button type="button" onClick={() => setCount((value) => value + 1)}>
+    <button type="button" onClick={() => setCount(value => value + 1)}>
       Count: {count}
     </button>
-  );
+  )
 }
 
-const bubble = createBubble();
-const reactRoot = createBubbleReactRoot({ bubble });
-const projector = createDomProjector({ bubble, bridgeEvents: true });
+const bubble = createBubble()
+const reactRoot = createBubbleReactRoot({ bubble })
+const projector = createDomProjector({ bubble, bridgeEvents: true })
 
-reactRoot.render(<Counter />);
-projector.mount(document.getElementById("app")!);
+reactRoot.render(<Counter />)
+projector.mount(document.getElementById('app')!)
 ```
 
 ### Example: React Adapter Contract Test
 
 ```ts
-import { createBubble } from "@bubbled/bubble-core";
-import { createBubbleReactRoot } from "@bubbled/bubble-react";
+import { createBubble } from '@bubbled/bubble-core'
+import { createBubbleReactRoot } from '@bubbled/bubble-react'
 
-it("emits bubble mutations for prop updates", () => {
-  const bubble = createBubble();
-  const records: string[] = [];
+it('emits bubble mutations for prop updates', () => {
+  const bubble = createBubble()
+  const records: string[] = []
 
-  bubble.subscribe((event) => {
-    if (event.type === "transaction-committed") {
-      records.push(...event.record.mutations.map((mutation) => mutation.type));
+  bubble.subscribe(event => {
+    if (event.type === 'transaction-committed') {
+      records.push(...event.record.mutations.map(mutation => mutation.type))
     }
-  });
+  })
 
-  const root = createBubbleReactRoot({ bubble });
+  const root = createBubbleReactRoot({ bubble })
 
-  root.render("first");
-  root.render("second");
+  root.render('first')
+  root.render('second')
 
-  expect(records).toContain("text-set");
-});
+  expect(records).toContain('text-set')
+})
 ```
 
 ## `bubble-control`
@@ -650,25 +705,25 @@ It should also be the foundation that higher-level tooling like `bubble-devtools
 ### Session API
 
 ```ts
-import type { BubbleRuntimeEvent, BubbleSnapshot } from "@bubbled/bubble-core";
+import type { BubbleRuntimeEvent, BubbleSnapshot } from '@bubbled/bubble-core'
 
 export interface BubbleSession {
-  readonly id: string;
+  readonly id: string
 
-  loadApp(input: BubbleAppDefinition): Promise<void>;
-  reset(): Promise<void>;
-  destroy(): Promise<void>;
+  loadApp(input: BubbleAppDefinition): Promise<void>
+  reset(): Promise<void>
+  destroy(): Promise<void>
 
-  command(input: BubbleCommand): Promise<BubbleCommandResult>;
-  query(input: BubbleQuery): Promise<BubbleQueryResult>;
-  artifact(input: BubbleArtifactRequest): Promise<BubbleArtifactResult>;
+  command(input: BubbleCommand): Promise<BubbleCommandResult>
+  query(input: BubbleQuery): Promise<BubbleQueryResult>
+  artifact(input: BubbleArtifactRequest): Promise<BubbleArtifactResult>
 
-  subscribe(listener: (event: BubbleSessionEvent) => void): () => void;
+  subscribe(listener: (event: BubbleSessionEvent) => void): () => void
 }
 
 export interface BubbleController {
-  createSession(options?: CreateSessionOptions): Promise<BubbleSession>;
-  getSession(id: string): Promise<BubbleSession | null>;
+  createSession(options?: CreateSessionOptions): Promise<BubbleSession>
+  getSession(id: string): Promise<BubbleSession | null>
 }
 ```
 
@@ -676,76 +731,81 @@ export interface BubbleController {
 
 ```ts
 export type BubbleCommand =
-  | { type: "dispatch-event"; targetId: string; eventType: string; data?: Record<string, unknown> }
-  | { type: "focus"; targetId: string }
-  | { type: "blur" }
-  | { type: "advance-time"; ms: number }
-  | { type: "set-capability-override"; name: string; value: unknown };
+  | {
+      type: 'dispatch-event'
+      targetId: string
+      eventType: string
+      data?: Record<string, unknown>
+    }
+  | { type: 'focus'; targetId: string }
+  | { type: 'blur' }
+  | { type: 'advance-time'; ms: number }
+  | { type: 'set-capability-override'; name: string; value: unknown }
 
 export type BubbleCommandResult =
   | { ok: true; value?: unknown }
-  | { ok: false; error: BubbleControlError };
+  | { ok: false; error: BubbleControlError }
 
 export type BubbleQuery =
-  | { type: "get-tree" }
-  | { type: "get-node"; nodeId: string }
-  | { type: "get-focus" }
-  | { type: "get-accessibility-view" };
+  | { type: 'get-tree' }
+  | { type: 'get-node'; nodeId: string }
+  | { type: 'get-focus' }
+  | { type: 'get-accessibility-view' }
 
 export type BubbleQueryResult =
   | { ok: true; value: unknown }
-  | { ok: false; error: BubbleControlError };
+  | { ok: false; error: BubbleControlError }
 
 export type BubbleArtifactRequest =
-  | { type: "snapshot" }
-  | { type: "trace"; traceId: string }
-  | { type: "recording"; recordingId: string };
+  | { type: 'snapshot' }
+  | { type: 'trace'; traceId: string }
+  | { type: 'recording'; recordingId: string }
 
 export type BubbleArtifactResult =
   | { ok: true; artifact: BubbleArtifact }
-  | { ok: false; error: BubbleControlError };
+  | { ok: false; error: BubbleControlError }
 
 export type BubbleArtifact =
-  | { type: "snapshot"; value: BubbleSnapshot }
-  | { type: "trace"; value: unknown }
-  | { type: "recording"; value: unknown };
+  | { type: 'snapshot'; value: BubbleSnapshot }
+  | { type: 'trace'; value: unknown }
+  | { type: 'recording'; value: unknown }
 
 export type BubbleSessionEvent =
-  | { type: "runtime"; event: BubbleRuntimeEvent }
-  | { type: "snapshot-updated"; snapshot: BubbleSnapshot }
-  | { type: "session-error"; error: BubbleControlError };
+  | { type: 'runtime'; event: BubbleRuntimeEvent }
+  | { type: 'snapshot-updated'; snapshot: BubbleSnapshot }
+  | { type: 'session-error'; error: BubbleControlError }
 
 export interface BubbleControlError {
-  code: string;
-  message: string;
-  details?: Record<string, unknown>;
+  code: string
+  message: string
+  details?: Record<string, unknown>
 }
 ```
 
 ### Example: Session-Oriented Usage
 
 ```ts
-import { createController } from "@bubbled/bubble-control";
+import { createController } from '@bubbled/bubble-control'
 
-const controller = await createController();
-const session = await controller.createSession();
+const controller = await createController()
+const session = await controller.createSession()
 
 await session.command({
-  type: "dispatch-event",
-  targetId: "node-17",
-  eventType: "click",
-});
+  type: 'dispatch-event',
+  targetId: 'node-17',
+  eventType: 'click',
+})
 
-const tree = await session.query({ type: "get-tree" });
+const tree = await session.query({ type: 'get-tree' })
 
 if (tree.ok) {
-  console.log(tree.value);
+  console.log(tree.value)
 }
 
-const snapshot = await session.artifact({ type: "snapshot" });
+const snapshot = await session.artifact({ type: 'snapshot' })
 
-if (snapshot.ok && snapshot.artifact.type === "snapshot") {
-  console.log(snapshot.artifact.value.rootId);
+if (snapshot.ok && snapshot.artifact.type === 'snapshot') {
+  console.log(snapshot.artifact.value.rootId)
 }
 ```
 
@@ -766,22 +826,22 @@ bubble time advance 250
 ### Example CLI Wiring
 
 ```ts
-import { createController } from "@bubbled/bubble-control";
+import { createController } from '@bubbled/bubble-control'
 
 export async function main(argv: string[]): Promise<number> {
-  const controller = await createController();
-  const session = await controller.createSession();
+  const controller = await createController()
+  const session = await controller.createSession()
 
-  const [command, ...rest] = argv;
+  const [command, ...rest] = argv
 
-  if (command === "query" && rest[0] === "get-tree") {
-    const result = await session.query({ type: "get-tree" });
-    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
-    return result.ok ? 0 : 1;
+  if (command === 'query' && rest[0] === 'get-tree') {
+    const result = await session.query({ type: 'get-tree' })
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n')
+    return result.ok ? 0 : 1
   }
 
-  process.stderr.write(`Unknown command: ${argv.join(" ")}\n`);
-  return 1;
+  process.stderr.write(`Unknown command: ${argv.join(' ')}\n`)
+  return 1
 }
 ```
 
@@ -801,86 +861,87 @@ This code is plain TypeScript. It is not React-specific, Vue-specific, or bubble
 
 ```ts
 export interface SaveDraftPort {
-  saveDraft(input: { body: string }): Promise<{ savedAt: string }>;
+  saveDraft(input: { body: string }): Promise<{ savedAt: string }>
 }
 
 export interface ComposerState {
-  body: string;
-  status: "idle" | "saving" | "saved" | "error";
-  savedAt: string | null;
-  errorMessage: string | null;
+  body: string
+  status: 'idle' | 'saving' | 'saved' | 'error'
+  savedAt: string | null
+  errorMessage: string | null
 }
 
 export interface ComposerApp {
-  getState(): ComposerState;
-  subscribe(listener: () => void): () => void;
-  setBody(body: string): void;
-  save(): Promise<void>;
+  getState(): ComposerState
+  subscribe(listener: () => void): () => void
+  setBody(body: string): void
+  save(): Promise<void>
 }
 
 export function createComposerApp(port: SaveDraftPort): ComposerApp {
   let state: ComposerState = {
-    body: "",
-    status: "idle",
+    body: '',
+    status: 'idle',
     savedAt: null,
     errorMessage: null,
-  };
+  }
 
-  const listeners = new Set<() => void>();
+  const listeners = new Set<() => void>()
 
   const publish = () => {
-    for (const listener of listeners) listener();
-  };
+    for (const listener of listeners) listener()
+  }
 
   const setState = (next: ComposerState) => {
-    state = next;
-    publish();
-  };
+    state = next
+    publish()
+  }
 
   return {
     getState() {
-      return state;
+      return state
     },
 
     subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
+      listeners.add(listener)
+      return () => listeners.delete(listener)
     },
 
     setBody(body) {
       setState({
         ...state,
         body,
-        status: "idle",
+        status: 'idle',
         errorMessage: null,
-      });
+      })
     },
 
     async save() {
       setState({
         ...state,
-        status: "saving",
+        status: 'saving',
         errorMessage: null,
-      });
+      })
 
       try {
-        const result = await port.saveDraft({ body: state.body });
+        const result = await port.saveDraft({ body: state.body })
 
         setState({
           ...state,
-          status: "saved",
+          status: 'saved',
           savedAt: result.savedAt,
           errorMessage: null,
-        });
+        })
       } catch (error) {
         setState({
           ...state,
-          status: "error",
-          errorMessage: error instanceof Error ? error.message : "Unknown error",
-        });
+          status: 'error',
+          errorMessage:
+            error instanceof Error ? error.message : 'Unknown error',
+        })
       }
     },
-  };
+  }
 }
 ```
 
@@ -891,16 +952,19 @@ If we later add a Vue adapter, it should reuse this module. Vue would not reimpl
 ### React View Over the Shared App
 
 ```tsx
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore } from 'react'
 
 function ComposerView({ app }: { app: ComposerApp }) {
-  const state = useSyncExternalStore(app.subscribe, app.getState, app.getState);
+  const state = useSyncExternalStore(app.subscribe, app.getState, app.getState)
 
   return (
     <form>
       <label>
         Message
-        <textarea value={state.body} onChange={(event) => app.setBody(event.currentTarget.value)} />
+        <textarea
+          value={state.body}
+          onChange={event => app.setBody(event.currentTarget.value)}
+        />
       </label>
 
       <button type="button" onClick={() => void app.save()}>
@@ -908,13 +972,13 @@ function ComposerView({ app }: { app: ComposerApp }) {
       </button>
 
       <output>
-        {state.status === "saving" && "Saving..."}
-        {state.status === "saved" && `Saved at ${state.savedAt}`}
-        {state.status === "error" && state.errorMessage}
-        {state.status === "idle" && "Nothing saved yet"}
+        {state.status === 'saving' && 'Saving...'}
+        {state.status === 'saved' && `Saved at ${state.savedAt}`}
+        {state.status === 'error' && state.errorMessage}
+        {state.status === 'idle' && 'Nothing saved yet'}
       </output>
     </form>
-  );
+  )
 }
 ```
 
@@ -923,27 +987,27 @@ React is only doing view composition and event binding here.
 ### Vue View Over the Same Shared App
 
 ```ts
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref } from 'vue'
 
 export function useComposerApp(app: ComposerApp) {
-  const state = ref(app.getState());
-  let unsubscribe: null | (() => void) = null;
+  const state = ref(app.getState())
+  let unsubscribe: null | (() => void) = null
 
   onMounted(() => {
     unsubscribe = app.subscribe(() => {
-      state.value = app.getState();
-    });
-  });
+      state.value = app.getState()
+    })
+  })
 
   onUnmounted(() => {
-    unsubscribe?.();
-  });
+    unsubscribe?.()
+  })
 
   return {
     state,
     setBody: app.setBody,
     save: app.save,
-  };
+  }
 }
 ```
 
@@ -954,30 +1018,30 @@ Same app logic, different view binding.
 Now the bubble concern becomes simpler: it hosts whichever framework adapter we choose.
 
 ```tsx
-import { createBubble } from "@bubbled/bubble-core";
-import { createTestCapabilities } from "@bubbled/bubble-capabilities/testing";
-import { createBubbleReactRoot } from "@bubbled/bubble-react";
-import { createDomProjector } from "@bubbled/bubble-browser";
+import { createBubble } from '@bubbled/bubble-core'
+import { createTestCapabilities } from '@bubbled/bubble-capabilities/testing'
+import { createBubbleReactRoot } from '@bubbled/bubble-react'
+import { createDomProjector } from '@bubbled/bubble-browser'
 
 const app = createComposerApp({
   async saveDraft({ body }) {
-    return { savedAt: `saved:${body.length}` };
+    return { savedAt: `saved:${body.length}` }
   },
-});
+})
 
-const capabilities = createTestCapabilities();
-const bubble = createBubble({ capabilities });
+const capabilities = createTestCapabilities()
+const bubble = createBubble({ capabilities })
 
-const reactRoot = createBubbleReactRoot({ bubble });
-reactRoot.render(<ComposerView app={app} />);
+const reactRoot = createBubbleReactRoot({ bubble })
+reactRoot.render(<ComposerView app={app} />)
 
 const projector = createDomProjector({
   bubble,
   bridgeEvents: true,
   syncFocus: true,
-});
+})
 
-projector.mount(document.getElementById("app")!);
+projector.mount(document.getElementById('app')!)
 ```
 
 If we later had `bubble-vue`, the app module would stay the same. Only the view layer and adapter setup would change.
@@ -996,34 +1060,35 @@ Layout-sensitive logic should stay outside the component where possible.
 
 ```ts
 export interface PlacementInput {
-  anchor: BubbleRect;
-  overlay: BubbleRect;
-  viewport: BubbleViewportState;
+  anchor: BubbleRect
+  overlay: BubbleRect
+  viewport: BubbleViewportState
 }
 
 export interface PlacementOutput {
-  x: number;
-  y: number;
-  placement: "top" | "bottom";
+  x: number
+  y: number
+  placement: 'top' | 'bottom'
 }
 
 export function placePopover(input: PlacementInput): PlacementOutput {
   const fitsBelow =
-    input.anchor.y + input.anchor.height + input.overlay.height <= input.viewport.height;
+    input.anchor.y + input.anchor.height + input.overlay.height <=
+    input.viewport.height
 
   if (fitsBelow) {
     return {
       x: input.anchor.x,
       y: input.anchor.y + input.anchor.height,
-      placement: "bottom",
-    };
+      placement: 'bottom',
+    }
   }
 
   return {
     x: input.anchor.x,
     y: input.anchor.y - input.overlay.height,
-    placement: "top",
-  };
+    placement: 'top',
+  }
 }
 ```
 
@@ -1034,13 +1099,13 @@ function measureAndPlacePopover(
   layout: BubbleLayout,
   viewport: BubbleViewport,
   anchorId: string,
-  overlayId: string,
+  overlayId: string
 ) {
   return placePopover({
     anchor: layout.measureElement(anchorId),
     overlay: layout.measureElement(overlayId),
     viewport: viewport.getState(),
-  });
+  })
 }
 ```
 
@@ -1054,27 +1119,27 @@ The common behavior lives in a framework-neutral module.
 
 ```ts
 export interface FileLike {
-  name: string;
-  size: number;
+  name: string
+  size: number
 }
 
 export interface ComposerState {
-  body: string;
-  status: "idle" | "saving" | "saved" | "error";
-  attachments: FileLike[];
-  canSave: boolean;
-  statusText: string;
+  body: string
+  status: 'idle' | 'saving' | 'saved' | 'error'
+  attachments: FileLike[]
+  canSave: boolean
+  statusText: string
 }
 
 export interface ComposerCommands {
-  setBody(body: string): void;
-  save(): Promise<void>;
-  attachFiles?(files: FileLike[]): Promise<void>;
+  setBody(body: string): void
+  save(): Promise<void>
+  attachFiles?(files: FileLike[]): Promise<void>
 }
 
 export interface ComposerApp extends ComposerCommands {
-  getState(): ComposerState;
-  subscribe(listener: () => void): () => void;
+  getState(): ComposerState
+  subscribe(listener: () => void): () => void
 }
 ```
 
@@ -1092,23 +1157,32 @@ The React UI can expose richer interactions if the shell supports them.
 
 ```tsx
 function ComposerReactView({ app }: { app: ComposerApp }) {
-  const state = useSyncExternalStore(app.subscribe, app.getState, app.getState);
+  const state = useSyncExternalStore(app.subscribe, app.getState, app.getState)
 
   return (
     <section>
       <label>
         Message
-        <textarea value={state.body} onChange={(event) => app.setBody(event.currentTarget.value)} />
+        <textarea
+          value={state.body}
+          onChange={event => app.setBody(event.currentTarget.value)}
+        />
       </label>
 
-      <button type="button" disabled={!state.canSave} onClick={() => void app.save()}>
+      <button
+        type="button"
+        disabled={!state.canSave}
+        onClick={() => void app.save()}
+      >
         Save Draft
       </button>
 
       {app.attachFiles && (
         <button
           type="button"
-          onClick={() => void app.attachFiles?.([{ name: "notes.txt", size: 128 }])}
+          onClick={() =>
+            void app.attachFiles?.([{ name: 'notes.txt', size: 128 }])
+          }
         >
           Attach File
         </button>
@@ -1116,7 +1190,7 @@ function ComposerReactView({ app }: { app: ComposerApp }) {
 
       <output>{state.statusText}</output>
     </section>
-  );
+  )
 }
 ```
 
@@ -1126,46 +1200,47 @@ The terminal UI can expose the same core intent through different controls.
 
 ```ts
 export interface TerminalKeybinding {
-  key: string;
-  run(): void | Promise<void>;
+  key: string
+  run(): void | Promise<void>
 }
 
 export function createComposerTerminalView(app: ComposerApp) {
   return {
     render(): string {
-      const state = app.getState();
+      const state = app.getState()
 
       return [
-        "Compose Message",
-        "",
+        'Compose Message',
+        '',
         `Body: ${state.body}`,
         `Status: ${state.statusText}`,
         `Attachments: ${state.attachments.length}`,
-        "",
-        "Ctrl-S Save",
-        app.attachFiles ? "Ctrl-A Attach" : "",
+        '',
+        'Ctrl-S Save',
+        app.attachFiles ? 'Ctrl-A Attach' : '',
       ]
         .filter(Boolean)
-        .join("\n");
+        .join('\n')
     },
 
     keybindings(): TerminalKeybinding[] {
       return [
         {
-          key: "Ctrl-S",
+          key: 'Ctrl-S',
           run: () => app.save(),
         },
         ...(app.attachFiles
           ? [
               {
-                key: "Ctrl-A",
-                run: () => app.attachFiles?.([{ name: "terminal.txt", size: 64 }]),
+                key: 'Ctrl-A',
+                run: () =>
+                  app.attachFiles?.([{ name: 'terminal.txt', size: 64 }]),
               },
             ]
           : []),
-      ];
+      ]
     },
-  };
+  }
 }
 ```
 
@@ -1186,15 +1261,17 @@ Different shells can expose different capabilities without forking the app’s c
 
 ```ts
 export interface ComposerEnvironment {
-  attachments: "supported" | "unsupported";
+  attachments: 'supported' | 'unsupported'
 }
 
-export function createComposerAppForEnvironment(env: ComposerEnvironment): ComposerApp {
-  if (env.attachments === "supported") {
-    return createComposerAppWithAttachments();
+export function createComposerAppForEnvironment(
+  env: ComposerEnvironment
+): ComposerApp {
+  if (env.attachments === 'supported') {
+    return createComposerAppWithAttachments()
   }
 
-  return createComposerAppWithoutAttachments();
+  return createComposerAppWithoutAttachments()
 }
 ```
 
@@ -1237,19 +1314,19 @@ If we keep the first implementation disciplined, the earliest public surface mig
 
 ```ts
 // bubble-core
-createBubble();
+createBubble()
 
 // bubble-test
-createHarness();
+createHarness()
 
 // bubble-browser
-createDomProjector();
+createDomProjector()
 
 // bubble-react
-createBubbleReactRoot();
+createBubbleReactRoot()
 
 // bubble-control
-createController();
+createController()
 ```
 
 Everything else can stay internal until the behavior is proven by tests.

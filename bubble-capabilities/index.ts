@@ -1,115 +1,123 @@
 export interface BubbleClock {
-  now(): number;
+  now(): number
 }
 
 export interface BubbleTimerHandle {
-  id: string;
+  id: string
 }
 
 export interface BubbleTimers {
-  setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle;
-  clearTimeout(handle: BubbleTimerHandle): void;
+  setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle
+  clearTimeout(handle: BubbleTimerHandle): void
 }
 
 export interface BubbleFrameHandle {
-  id: string;
+  id: string
 }
 
 export interface BubbleScheduler {
-  queueMicrotask(task: () => void): void;
-  requestFrame(task: (time: number) => void): BubbleFrameHandle;
-  cancelFrame(handle: BubbleFrameHandle): void;
+  queueMicrotask(task: () => void): void
+  requestFrame(task: (time: number) => void): BubbleFrameHandle
+  cancelFrame(handle: BubbleFrameHandle): void
 }
 
 export interface BubbleRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface BubbleLayout {
-  measureElement(nodeId: string): BubbleRect;
+  measureElement(nodeId: string): BubbleRect
 }
 
 export interface BubbleViewportState {
-  width: number;
-  height: number;
-  scrollX: number;
-  scrollY: number;
+  width: number
+  height: number
+  scrollX: number
+  scrollY: number
 }
 
-export type BubbleViewportListener = (state: BubbleViewportState) => void;
+export type BubbleViewportListener = (state: BubbleViewportState) => void
 
 export interface BubbleViewport {
-  getState(): BubbleViewportState;
-  subscribe?(listener: BubbleViewportListener): () => void;
+  getState(): BubbleViewportState
+  subscribe?(listener: BubbleViewportListener): () => void
 }
 
 export interface BubbleStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-  clear(): void;
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+  removeItem(key: string): void
+  clear(): void
 }
 
 export interface BubbleNetworkRequest {
-  method: string;
-  url: string;
-  headers?: Record<string, string>;
-  body?: string;
+  method: string
+  url: string
+  headers?: Record<string, string>
+  body?: string
 }
 
 export interface BubbleNetworkResponse {
-  status: number;
-  headers: Record<string, string>;
-  body: string;
+  status: number
+  headers: Record<string, string>
+  body: string
 }
 
 export interface BubbleNetwork {
-  fetch(request: BubbleNetworkRequest): Promise<BubbleNetworkResponse>;
+  fetch(request: BubbleNetworkRequest): Promise<BubbleNetworkResponse>
 }
 
 export interface BubbleCapabilities {
-  clock: BubbleClock;
-  timers: BubbleTimers;
-  scheduler: BubbleScheduler;
-  layout: BubbleLayout;
-  viewport: BubbleViewport;
-  storage: BubbleStorage;
-  network: BubbleNetwork;
+  clock: BubbleClock
+  timers: BubbleTimers
+  scheduler: BubbleScheduler
+  layout: BubbleLayout
+  viewport: BubbleViewport
+  storage: BubbleStorage
+  network: BubbleNetwork
 }
 
-export type BubbleCapabilityName = keyof BubbleCapabilities;
+export type BubbleCapabilityName = keyof BubbleCapabilities
 
 export class BubbleUnsupportedCapabilityError extends Error {
-  readonly capabilityName: BubbleCapabilityName;
+  readonly capabilityName: BubbleCapabilityName
 
   constructor(capabilityName: BubbleCapabilityName) {
-    super(`Bubble capability ${JSON.stringify(capabilityName)} is not supported by this runtime.`);
-    this.name = "BubbleUnsupportedCapabilityError";
-    this.capabilityName = capabilityName;
+    super(
+      `Bubble capability ${JSON.stringify(capabilityName)} is not supported by this runtime.`
+    )
+    this.name = 'BubbleUnsupportedCapabilityError'
+    this.capabilityName = capabilityName
   }
 }
 
 export interface BubbleCapabilityRegistry {
-  resolveCapability<Name extends BubbleCapabilityName>(name: Name): BubbleCapabilities[Name];
+  resolveCapability<Name extends BubbleCapabilityName>(
+    name: Name
+  ): BubbleCapabilities[Name]
 }
 
 export function createCapabilityRegistry(
-  capabilities: Partial<BubbleCapabilities> = {},
+  capabilities: Partial<BubbleCapabilities> = {}
 ): BubbleCapabilityRegistry {
-  const registeredCapabilities: Partial<BubbleCapabilities> = { ...capabilities };
+  const registeredCapabilities: Partial<BubbleCapabilities> = {
+    ...capabilities,
+  }
 
   return Object.freeze({
-    resolveCapability<Name extends BubbleCapabilityName>(name: Name): BubbleCapabilities[Name] {
-      const capability = registeredCapabilities[name];
+    resolveCapability<Name extends BubbleCapabilityName>(
+      name: Name
+    ): BubbleCapabilities[Name] {
+      const capability = registeredCapabilities[name]
 
       if (capability === undefined) {
-        throw new BubbleUnsupportedCapabilityError(name);
+        throw new BubbleUnsupportedCapabilityError(name)
       }
 
-      return capability;
+      return capability
     },
-  });
+  })
 }

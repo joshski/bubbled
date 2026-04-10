@@ -1,1 +1,1 @@
-export type BubbledEntrypoint = never;
+export type BubbledEntrypoint = never

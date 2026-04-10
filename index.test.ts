@@ -1,117 +1,133 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from 'bun:test'
 
 const emptyEntrypoints = [
-  "./index",
-  "./bubble-capabilities",
-  "./bubble-browser",
-  "./bubble-control",
-  "./bubble-cli",
-] as const;
+  './index',
+  './bubble-capabilities',
+  './bubble-browser',
+  './bubble-control',
+  './bubble-cli',
+] as const
 
-describe("public entrypoints", () => {
-  test("./bubble-core exposes the bubble runtime entrypoint", async () => {
-    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+describe('public entrypoints', () => {
+  test('./bubble-core exposes the bubble runtime entrypoint', async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-    const entrypoint = await import("./bubble-core");
+    const entrypoint = await import('./bubble-core')
 
     expect(entrypoint).toEqual({
       createBubble: expect.any(Function),
       createBubbleQuery: expect.any(Function),
       serializeBubbleSnapshot: expect.any(Function),
-    });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-  });
+    })
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+      globalsBeforeImport
+    )
+  })
 
-  test("./bubble-test exposes the test harness helper entrypoints", async () => {
-    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+  test('./bubble-test exposes the test harness helper entrypoints', async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-    const entrypoint = await import("./bubble-test");
+    const entrypoint = await import('./bubble-test')
 
     expect(entrypoint).toEqual({
       createHarness: expect.any(Function),
       createRenderHarness: expect.any(Function),
       createSemanticAssertions: expect.any(Function),
       createSemanticQueries: expect.any(Function),
-    });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-  });
+    })
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+      globalsBeforeImport
+    )
+  })
 
-  test("./bubble-browser exposes the DOM projector entrypoint", async () => {
-    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+  test('./bubble-browser exposes the DOM projector entrypoint', async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-    const entrypoint = await import("./bubble-browser");
+    const entrypoint = await import('./bubble-browser')
 
     expect(entrypoint).toEqual({
       createDomLayout: expect.any(Function),
       createDomProjector: expect.any(Function),
       measureAndPlacePopover: expect.any(Function),
       placePopover: expect.any(Function),
-    });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-  });
+    })
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+      globalsBeforeImport
+    )
+  })
 
-  test("./bubble-react exposes the React adapter entrypoint", async () => {
-    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+  test('./bubble-react exposes the React adapter entrypoint', async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-    const entrypoint = await import("./bubble-react");
+    const entrypoint = await import('./bubble-react')
 
     expect(entrypoint).toEqual({
       createBubbleReactRoot: expect.any(Function),
-    });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-  });
+    })
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+      globalsBeforeImport
+    )
+  })
 
-  test("./bubble-control exposes the control entrypoint", async () => {
-    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+  test('./bubble-control exposes the control entrypoint', async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-    const entrypoint = await import("./bubble-control");
+    const entrypoint = await import('./bubble-control')
 
     expect(entrypoint).toEqual({
       createController: expect.any(Function),
-    });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-  });
+    })
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+      globalsBeforeImport
+    )
+  })
 
-  test("./bubble-cli exposes the CLI entrypoint", async () => {
-    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+  test('./bubble-cli exposes the CLI entrypoint', async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-    const entrypoint = await import("./bubble-cli");
+    const entrypoint = await import('./bubble-cli')
 
     expect(entrypoint).toEqual({
       main: expect.any(Function),
-    });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-  });
+    })
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+      globalsBeforeImport
+    )
+  })
 
   for (const entrypointPath of emptyEntrypoints) {
     if (
-      entrypointPath === "./bubble-capabilities" ||
-      entrypointPath === "./bubble-browser" ||
-      entrypointPath === "./bubble-control" ||
-      entrypointPath === "./bubble-cli"
+      entrypointPath === './bubble-capabilities' ||
+      entrypointPath === './bubble-browser' ||
+      entrypointPath === './bubble-control' ||
+      entrypointPath === './bubble-cli'
     ) {
-      continue;
+      continue
     }
 
     test(`${entrypointPath} imports without side effects`, async () => {
-      const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+      const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-      const entrypoint = await import(entrypointPath);
+      const entrypoint = await import(entrypointPath)
 
-      expect(entrypoint).toEqual({});
-      expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-    });
+      expect(entrypoint).toEqual({})
+      expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+        globalsBeforeImport
+      )
+    })
   }
 
-  test("./bubble-capabilities exposes the capability registry entrypoint", async () => {
-    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+  test('./bubble-capabilities exposes the capability registry entrypoint', async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis)
 
-    const entrypoint = await import("./bubble-capabilities");
+    const entrypoint = await import('./bubble-capabilities')
 
     expect(entrypoint).toEqual({
       BubbleUnsupportedCapabilityError: expect.any(Function),
       createCapabilityRegistry: expect.any(Function),
-    });
-    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
-  });
-});
+    })
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
+      globalsBeforeImport
+    )
+  })
+})
