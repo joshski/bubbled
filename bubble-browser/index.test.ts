@@ -16,6 +16,7 @@ abstract class FakeDomNode {
 interface FakeDomEvent {
   readonly type: string;
   readonly target: FakeDomNode | null;
+  preventDefault(): void;
 }
 
 class FakeDomText extends FakeDomNode {
@@ -35,6 +36,7 @@ class FakeDomElement extends FakeDomNode {
   readonly childNodes: FakeDomNode[] = [];
   readonly attributes = new Map<string, string>();
   readonly listeners = new Map<string, Array<(event: FakeDomEvent) => void>>();
+  defaultPrevented = false;
   rect = {
     x: 0,
     y: 0,
@@ -103,6 +105,7 @@ class FakeDomElement extends FakeDomNode {
     this.dispatchEvent({
       type: "focus",
       target: this,
+      preventDefault() {},
     });
   }
 
@@ -115,17 +118,22 @@ class FakeDomElement extends FakeDomNode {
     this.dispatchEvent({
       type: "blur",
       target: this,
+      preventDefault() {},
     });
   }
 
-  addEventListener(type: string, listener: (event: FakeDomEvent) => void) {
+  addEventListener(type: string, listener: (event: FakeDomEvent) => void, _options?: boolean) {
     const listeners = this.listeners.get(type) ?? [];
 
     listeners.push(listener);
     this.listeners.set(type, listeners);
   }
 
-  removeEventListener(type: string, listener: (event: FakeDomEvent) => void) {
+  removeEventListener(
+    type: string,
+    listener: (event: FakeDomEvent) => void,
+    _options?: boolean,
+  ) {
     const listeners = this.listeners.get(type);
 
     if (listeners === undefined) {
@@ -583,6 +591,7 @@ describe("createDomProjector", () => {
     (container.childNodes[0] as FakeDomElement).dispatchEvent({
       type: "click",
       target: container.childNodes[0] ?? null,
+      preventDefault() {},
     });
 
     expect(buttonId).not.toBe("");
@@ -623,6 +632,7 @@ describe("createDomProjector", () => {
     button.dispatchEvent({
       type: "click",
       target: button,
+      preventDefault() {},
     });
 
     expect(buttonId).not.toBe(sectionId);
@@ -656,6 +666,7 @@ describe("createDomProjector", () => {
       container.dispatchEvent({
         type: "click",
         target: unknownTarget,
+        preventDefault() {},
       });
     }).not.toThrow();
     expect(calls).toEqual([]);
@@ -672,6 +683,7 @@ describe("createDomProjector", () => {
       container.dispatchEvent({
         type: "click",
         target: null,
+        preventDefault() {},
       });
     }).not.toThrow();
   });
@@ -703,6 +715,7 @@ describe("createDomProjector", () => {
     projectedButton.dispatchEvent({
       type: "click",
       target: projectedButton,
+      preventDefault() {},
     });
 
     projector.unmount();
@@ -711,9 +724,114 @@ describe("createDomProjector", () => {
     button.dispatchEvent({
       type: "click",
       target: button,
+      preventDefault() {},
     });
 
     expect(calls).toEqual(["clicked"]);
+  });
+
+  test("bridged DOM submits dispatch bubble submit events and prevent native submission", () => {
+    const bubble = createBubble();
+    const calls: Array<{ currentTargetId: string; defaultPrevented: boolean }> = [];
+    let formId = "";
+
+    bubble.transact((tx) => {
+      formId = tx.createElement({ tag: "form" });
+      const inputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: inputId, name: "name", value: "email" });
+      tx.setProperty({ nodeId: inputId, name: "value", value: "person@example.com" });
+      tx.insertChild({ parentId: bubble.rootId, childId: formId });
+      tx.insertChild({ parentId: formId, childId: inputId });
+      tx.addEventListener({
+        nodeId: formId,
+        type: "submit",
+        listener: (event) => {
+          calls.push({
+            currentTargetId: event.currentTargetId,
+            defaultPrevented: event.defaultPrevented,
+          });
+        },
+      });
+    });
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    const form = container.childNodes[0] as FakeDomElement;
+
+    form.dispatchEvent({
+      type: "submit",
+      target: form,
+      preventDefault() {
+        form.defaultPrevented = true;
+      },
+    });
+
+    expect(formId).not.toBe("");
+    expect(calls).toEqual([
+      {
+        currentTargetId: formId,
+        defaultPrevented: false,
+      },
+    ]);
+    expect(form.defaultPrevented).toBe(true);
+  });
+
+  test("bridged DOM submits ignore unknown targets", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    bubble.transact((tx) => {
+      const formId = tx.createElement({ tag: "form" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: formId });
+      tx.addEventListener({
+        nodeId: formId,
+        type: "submit",
+        listener: () => {
+          calls.push("submitted");
+        },
+      });
+    });
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+    const unknownTarget = container.ownerDocument.createElement("form");
+
+    projector.mount(container as unknown as HTMLElement);
+
+    expect(() => {
+      container.dispatchEvent({
+        type: "submit",
+        target: unknownTarget,
+        preventDefault() {
+          unknownTarget.defaultPrevented = true;
+        },
+      });
+    }).not.toThrow();
+    expect(calls).toEqual([]);
+    expect(unknownTarget.defaultPrevented).toBe(false);
+  });
+
+  test("bridged DOM submits ignore null targets", () => {
+    const bubble = createBubble();
+    const projector = createDomProjector({ bubble, bridgeEvents: true });
+    const { container } = createContainer();
+
+    projector.mount(container as unknown as HTMLElement);
+
+    expect(() => {
+      container.dispatchEvent({
+        type: "submit",
+        target: null,
+        preventDefault() {
+          throw new Error("submit preventDefault should not be called for null targets");
+        },
+      });
+    }).not.toThrow();
   });
 
   test("bubble focus updates the projected DOM focus when sync is enabled", () => {

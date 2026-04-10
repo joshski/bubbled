@@ -46,8 +46,12 @@ interface DomTextNode extends DomChildNode {
 }
 
 interface DomElementNode extends DomChildNode, DomParentNode {
-  addEventListener(type: string, listener: (event: DomEvent) => void): void;
-  removeEventListener(type: string, listener: (event: DomEvent) => void): void;
+  addEventListener(type: string, listener: (event: DomEvent) => void, options?: boolean): void;
+  removeEventListener(
+    type: string,
+    listener: (event: DomEvent) => void,
+    options?: boolean,
+  ): void;
   focus(): void;
   blur(): void;
   getBoundingClientRect(): BubbleRect;
@@ -58,6 +62,7 @@ interface DomElementNode extends DomChildNode, DomParentNode {
 interface DomEvent {
   readonly type: string;
   readonly target: DomChildNode | null;
+  preventDefault(): void;
 }
 
 interface DomDocument {
@@ -67,6 +72,12 @@ interface DomDocument {
 }
 
 interface DomContainer extends DomParentNode {
+  addEventListener(type: string, listener: (event: DomEvent) => void, options?: boolean): void;
+  removeEventListener(
+    type: string,
+    listener: (event: DomEvent) => void,
+    options?: boolean,
+  ): void;
   ownerDocument: DomDocument;
 }
 
@@ -339,6 +350,26 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
     options.bubble.dispatchEvent({ type: "click", targetId });
   };
 
+  const bridgeSubmitEvent = (event: DomEvent): void => {
+    const targetNode = event.target;
+
+    if (targetNode === null) {
+      return;
+    }
+
+    const targetId = bubbleIdByDomNode.get(targetNode);
+
+    if (targetId === undefined) {
+      return;
+    }
+
+    options.bubble.dispatchEvent({ type: "submit", targetId });
+
+    // Native form navigation is outside the bubble runtime; keep the browser
+    // on the current document after translating the submit into bubble events.
+    event.preventDefault();
+  };
+
   const projector = Object.freeze({
     mount(container) {
       if (mountedContainer !== null) {
@@ -361,8 +392,10 @@ export function createDomProjector(options: CreateDomProjectorOptions): BubbleDo
 
       if (options.bridgeEvents === true) {
         domContainer.addEventListener("click", bridgeClickEvent);
+        domContainer.addEventListener("submit", bridgeSubmitEvent, true);
         removeDomEventBridges = () => {
           domContainer.removeEventListener("click", bridgeClickEvent);
+          domContainer.removeEventListener("submit", bridgeSubmitEvent, true);
         };
       }
 

@@ -232,3 +232,107 @@ test("real browser verifies native label clicks move focus to the associated inp
     await rm(tempDir, { force: true, recursive: true });
   }
 }, 20_000);
+
+test("real browser verifies default submit buttons trigger bridged bubble form submission", async () => {
+  const tempDir = await mkdtemp(join(process.cwd(), ".tmp-browser-verification-"));
+  const entryPath = join(tempDir, "entry.ts");
+  const bundlePath = join(tempDir, "entry.js");
+  const browser = await launchBrowser();
+
+  try {
+    await Bun.write(
+      entryPath,
+      [
+        'import { createBubble } from "../bubble-core/index.ts";',
+        'import { createDomProjector } from "../bubble-browser/index.ts";',
+        "",
+        "export function run() {",
+        "  document.body.innerHTML = '';",
+        "  const container = document.createElement('div');",
+        "  document.body.appendChild(container);",
+        "  const bubble = createBubble();",
+        "  const submitPayloads = [];",
+        "  let formId = '';",
+        "  bubble.transact((tx) => {",
+        "    formId = tx.createElement({ tag: 'form' });",
+        "    const inputId = tx.createElement({ tag: 'input' });",
+        "    const buttonId = tx.createElement({ tag: 'button' });",
+        "    const textId = tx.createText({ value: 'Save' });",
+        "    tx.setAttribute({ nodeId: formId, name: 'id', value: 'settings-form' });",
+        "    tx.setAttribute({ nodeId: inputId, name: 'name', value: 'email' });",
+        "    tx.setProperty({ nodeId: inputId, name: 'value', value: 'person@example.com' });",
+        "    tx.setAttribute({ nodeId: buttonId, name: 'id', value: 'submit-button' });",
+        "    tx.insertChild({ parentId: bubble.rootId, childId: formId });",
+        "    tx.insertChild({ parentId: formId, childId: inputId });",
+        "    tx.insertChild({ parentId: formId, childId: buttonId });",
+        "    tx.insertChild({ parentId: buttonId, childId: textId });",
+        "    tx.addEventListener({",
+        "      nodeId: formId,",
+        "      type: 'submit',",
+        "      listener: () => {",
+        "        submitPayloads.push(bubble.serializeForm(formId));",
+        "      },",
+        "    });",
+        "  });",
+        "  createDomProjector({ bubble, bridgeEvents: true }).mount(container);",
+        "  (window as typeof window & { __getSubmitPayloads?: () => unknown[] }).__getSubmitPayloads = () => submitPayloads.slice();",
+        "  return { formId };",
+        "}",
+      ].join("\n"),
+    );
+
+    const buildResult = await Bun.build({
+      entrypoints: [entryPath],
+      format: "esm",
+      outdir: tempDir,
+      target: "browser",
+    });
+
+    if (!buildResult.success) {
+      throw new Error(buildResult.logs.map((log) => log.message).join("\n"));
+    }
+
+    const moduleSource = await readFile(bundlePath, "utf8");
+    const page = await browser.newPage();
+
+    await page.evaluate(async (source) => {
+      const moduleUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+
+      try {
+        const module = await import(moduleUrl);
+
+        return module.run();
+      } finally {
+        URL.revokeObjectURL(moduleUrl);
+      }
+    }, moduleSource);
+
+    await page.locator("#submit-button").evaluate((button) => {
+      (button as HTMLButtonElement).click();
+    });
+    await page.waitForFunction(() => {
+      const getSubmitPayloads = (
+        window as typeof window & { __getSubmitPayloads?: () => unknown[] }
+      ).__getSubmitPayloads;
+
+      return (getSubmitPayloads?.().length ?? 0) === 1;
+    });
+
+    const result = await page.evaluate(() => {
+      const getSubmitPayloads = (
+        window as typeof window & { __getSubmitPayloads?: () => unknown[] }
+      ).__getSubmitPayloads;
+
+      return {
+        submitPayloads: getSubmitPayloads?.() ?? [],
+      };
+    });
+
+    expect(result).toEqual({
+      submitPayloads: [[{ name: "email", value: "person@example.com" }]],
+    });
+  } finally {
+    await browser.close();
+    await rm(tempDir, { force: true, recursive: true });
+  }
+}, 20_000);
