@@ -169,24 +169,14 @@ describe("createBubble", () => {
   test("updates text nodes in place while preserving node identity", () => {
     const bubble = createBubble();
 
-    const { textId, textBeforeUpdate } = bubble.transact((tx) => {
+    const textId = bubble.transact((tx) => {
       const createdTextId = tx.createText({ value: "Save" });
-      const createdText = bubble.getNode(createdTextId);
 
       tx.setText({ nodeId: createdTextId, value: "Saved" });
 
-      return {
-        textId: createdTextId,
-        textBeforeUpdate: createdText,
-      };
+      return createdTextId;
     });
 
-    expect(textBeforeUpdate).toEqual({
-      id: textId,
-      kind: "text",
-      parentId: null,
-      value: "Save",
-    });
     expect(bubble.getNode(textId)).toEqual({
       id: textId,
       kind: "text",
@@ -482,7 +472,7 @@ describe("createBubble", () => {
   test("preserves node identity after moving a child", () => {
     const bubble = createBubble();
 
-    const { parentId, childId, childBeforeMove } = bubble.transact((tx) => {
+    const { parentId, childId } = bubble.transact((tx) => {
       const createdParentId = tx.createElement({ tag: "article" });
       const createdChildId = tx.createElement({ tag: "section" });
       const siblingId = tx.createElement({ tag: "aside" });
@@ -491,27 +481,14 @@ describe("createBubble", () => {
       tx.insertChild({ parentId: createdParentId, childId: createdChildId });
       tx.insertChild({ parentId: createdParentId, childId: siblingId });
 
-      const createdChild = bubble.getNode(createdChildId);
-
       tx.moveChild({ parentId: createdParentId, childId: createdChildId, index: 1 });
 
       return {
         parentId: createdParentId,
         childId: createdChildId,
-        childBeforeMove: createdChild,
       };
     });
 
-    expect(childBeforeMove).toEqual({
-      id: childId,
-      kind: "element",
-      tag: "section",
-      namespace: "html",
-      parentId,
-      children: [],
-      attributes: {},
-      properties: {},
-    });
     expect(bubble.getNode(childId)).toEqual({
       id: childId,
       kind: "element",
@@ -533,6 +510,129 @@ describe("createBubble", () => {
       attributes: {},
       properties: {},
     });
+  });
+
+  test("does not expose uncommitted changes to subscribers", () => {
+    const bubble = createBubble();
+    const observedRoots: Array<ReturnType<typeof bubble.getRoot>> = [];
+
+    bubble.subscribe((event) => {
+      expect(event.type).toBe("transaction-committed");
+      observedRoots.push(bubble.getRoot());
+    });
+
+    bubble.transact((tx) => {
+      const elementId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: elementId });
+
+      expect(observedRoots).toEqual([]);
+      expect(bubble.getRoot()).toEqual({
+        id: bubble.rootId,
+        kind: "root",
+        children: [],
+      });
+    });
+
+    expect(observedRoots).toEqual([
+      {
+        id: bubble.rootId,
+        kind: "root",
+        children: [expect.any(String)],
+      },
+    ]);
+  });
+
+  test("publishes committed changes atomically", () => {
+    const bubble = createBubble();
+    const observedNodes: Array<{
+      root: ReturnType<typeof bubble.getRoot>;
+      element: ReturnType<typeof bubble.getNode>;
+      text: ReturnType<typeof bubble.getNode>;
+    }> = [];
+
+    const { elementId, textId } = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+      const createdTextId = tx.createText({ value: "Saved" });
+
+      tx.setAttribute({ nodeId: createdElementId, name: "type", value: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdElementId });
+      tx.insertChild({ parentId: createdElementId, childId: createdTextId });
+
+      return {
+        elementId: createdElementId,
+        textId: createdTextId,
+      };
+    });
+
+    bubble.subscribe(() => {
+      observedNodes.push({
+        root: bubble.getRoot(),
+        element: bubble.getNode(elementId),
+        text: bubble.getNode(textId),
+      });
+    });
+
+    bubble.transact((tx) => {
+      tx.setAttribute({ nodeId: elementId, name: "role", value: "status" });
+      tx.setText({ nodeId: textId, value: "Committed" });
+    });
+
+    expect(observedNodes).toEqual([
+      {
+        root: {
+          id: bubble.rootId,
+          kind: "root",
+          children: [elementId],
+        },
+        element: {
+          id: elementId,
+          kind: "element",
+          tag: "button",
+          namespace: "html",
+          parentId: bubble.rootId,
+          children: [textId],
+          attributes: {
+            type: "button",
+            role: "status",
+          },
+          properties: {},
+        },
+        text: {
+          id: textId,
+          kind: "text",
+          parentId: elementId,
+          value: "Committed",
+        },
+      },
+    ]);
+  });
+
+  test("rejects nested transactions explicitly", () => {
+    const bubble = createBubble();
+
+    expect(() => {
+      bubble.transact(() => {
+        bubble.transact(() => bubble.rootId);
+      });
+    }).toThrow("Nested transactions are not supported");
+  });
+
+  test("stops notifying listeners after unsubscribe", () => {
+    const bubble = createBubble();
+    const listener = () => {
+      throw new Error("listener should have been unsubscribed");
+    };
+
+    const unsubscribe = bubble.subscribe(listener);
+
+    unsubscribe();
+
+    expect(() => {
+      bubble.transact((tx) => {
+        tx.createElement({ tag: "button" });
+      });
+    }).not.toThrow();
   });
 
   test("sets a new attribute on an element", () => {

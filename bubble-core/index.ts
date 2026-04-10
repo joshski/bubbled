@@ -65,11 +65,23 @@ export interface BubbleTransaction {
   }): void;
 }
 
+export interface BubbleTransactionRecord {
+  mutations: readonly [];
+}
+
+export type BubbleRuntimeEvent = {
+  type: "transaction-committed";
+  record: BubbleTransactionRecord;
+};
+
+export type BubbleRuntimeListener = (event: BubbleRuntimeEvent) => void;
+
 export interface BubbleRuntime {
   readonly rootId: BubbleNodeId;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
+  subscribe(listener: BubbleRuntimeListener): () => void;
 }
 
 const ROOT_NODE_ID = "root";
@@ -78,6 +90,7 @@ const NODE_ID_PREFIX = "node:";
 const ELEMENT_TAG_ERROR = "Element tag must be a non-empty string";
 const TEXT_VALUE_ERROR = "Text value must be a string";
 const CHILD_INDEX_ERROR = "Child index must be an integer within the parent child range";
+const NESTED_TRANSACTION_ERROR = "Nested transactions are not supported";
 
 let nextBubbleInstanceId = 0;
 
@@ -122,10 +135,12 @@ export function createBubble(): BubbleRuntime {
     children: [],
   };
 
-  const nodes = new Map<BubbleNodeId, BubbleNode>([[root.id, root]]);
+  let nodes = new Map<BubbleNodeId, BubbleNode>([[root.id, root]]);
   nextBubbleInstanceId += 1;
   const bubbleInstanceId = nextBubbleInstanceId;
   let nextNodeId = 0;
+  let transactionDepth = 0;
+  const listeners = new Set<BubbleRuntimeListener>();
 
   const allocateNodeId = (): BubbleNodeId => {
     nextNodeId += 1;
@@ -133,14 +148,34 @@ export function createBubble(): BubbleRuntime {
     return `${NODE_ID_PREFIX}${bubbleInstanceId}:${nextNodeId}`;
   };
 
-  const getMutableNode = (id: BubbleNodeId): BubbleNode => {
-    const node = nodes.get(id);
-
-    if (node === undefined) {
-      throw new Error(`Unknown node ID: ${id}`);
+  const cloneNode = (node: BubbleNode): BubbleNode => {
+    if (node.kind === "root") {
+      return {
+        id: node.id,
+        kind: node.kind,
+        children: [...node.children],
+      };
     }
 
-    return node;
+    if (node.kind === "element") {
+      return {
+        id: node.id,
+        kind: node.kind,
+        tag: node.tag,
+        namespace: node.namespace,
+        parentId: node.parentId,
+        children: [...node.children],
+        attributes: { ...node.attributes },
+        properties: { ...node.properties },
+      };
+    }
+
+    return {
+      id: node.id,
+      kind: node.kind,
+      parentId: node.parentId,
+      value: node.value,
+    };
   };
 
   const snapshotNode = (node: BubbleNode): Readonly<BubbleNode> => {
@@ -215,13 +250,34 @@ export function createBubble(): BubbleRuntime {
   return {
     rootId: root.id,
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
+      if (transactionDepth > 0) {
+        throw new Error(NESTED_TRANSACTION_ERROR);
+      }
+
+      transactionDepth += 1;
+      const draftNodes = new Map<BubbleNodeId, BubbleNode>();
+
+      for (const [nodeId, node] of nodes) {
+        draftNodes.set(nodeId, cloneNode(node));
+      }
+
+      const getDraftNode = (id: BubbleNodeId): BubbleNode => {
+        const node = draftNodes.get(id);
+
+        if (node === undefined) {
+          throw new Error(`Unknown node ID: ${id}`);
+        }
+
+        return node;
+      };
+
       const transaction: BubbleTransaction = {
         createElement({ tag, namespace = "html" }) {
           assertValidElementTag(tag);
 
           const id = allocateNodeId();
 
-          nodes.set(id, {
+          draftNodes.set(id, {
             id,
             kind: "element",
             tag,
@@ -239,7 +295,7 @@ export function createBubble(): BubbleRuntime {
 
           const id = allocateNodeId();
 
-          nodes.set(id, {
+          draftNodes.set(id, {
             id,
             kind: "text",
             parentId: null,
@@ -249,15 +305,15 @@ export function createBubble(): BubbleRuntime {
           return id;
         },
         setText({ nodeId, value }) {
-          const node = getMutableNode(nodeId);
+          const node = getDraftNode(nodeId);
 
           assertValidTextValue(value);
           assertTextNode(node, nodeId);
           node.value = value;
         },
         insertChild({ parentId, childId, index }) {
-          const parent = getMutableNode(parentId);
-          const child = getMutableNode(childId);
+          const parent = getDraftNode(parentId);
+          const child = getDraftNode(childId);
 
           if (parent.kind === "text") {
             throw new Error(`Text nodes cannot have children: ${parentId}`);
@@ -271,8 +327,8 @@ export function createBubble(): BubbleRuntime {
           insertIntoParent(parent, childId, index);
         },
         removeChild({ parentId, childId }) {
-          const parent = getMutableNode(parentId);
-          const child = getMutableNode(childId);
+          const parent = getDraftNode(parentId);
+          const child = getDraftNode(childId);
 
           if (parent.kind === "text") {
             throw new Error(`Text nodes cannot have children: ${parentId}`);
@@ -286,8 +342,8 @@ export function createBubble(): BubbleRuntime {
           child.parentId = null;
         },
         moveChild({ parentId, childId, index }) {
-          const parent = getMutableNode(parentId);
-          const child = getMutableNode(childId);
+          const parent = getDraftNode(parentId);
+          const child = getDraftNode(childId);
 
           if (parent.kind === "text") {
             throw new Error(`Text nodes cannot have children: ${parentId}`);
@@ -304,26 +360,45 @@ export function createBubble(): BubbleRuntime {
           moveWithinParent(parent, childId, index);
         },
         setAttribute({ nodeId, name, value }) {
-          const node = getMutableNode(nodeId);
+          const node = getDraftNode(nodeId);
 
           assertElementNode(node, nodeId, "Attributes");
           node.attributes[name] = value;
         },
         removeAttribute({ nodeId, name }) {
-          const node = getMutableNode(nodeId);
+          const node = getDraftNode(nodeId);
 
           assertElementNode(node, nodeId, "Attributes");
           delete node.attributes[name];
         },
         setProperty({ nodeId, name, value }) {
-          const node = getMutableNode(nodeId);
+          const node = getDraftNode(nodeId);
 
           assertElementNode(node, nodeId, "Properties");
           node.properties[name] = value;
         },
       };
 
-      return fn(transaction);
+      try {
+        const result = fn(transaction);
+
+        nodes = draftNodes;
+        transactionDepth = 0;
+
+        const event: BubbleRuntimeEvent = {
+          type: "transaction-committed",
+          record: { mutations: [] },
+        };
+
+        for (const listener of listeners) {
+          listener(event);
+        }
+
+        return result;
+      } catch (error) {
+        transactionDepth = 0;
+        throw error;
+      }
     },
     getNode(id) {
       const node = nodes.get(id);
@@ -331,7 +406,14 @@ export function createBubble(): BubbleRuntime {
       return node === undefined ? null : snapshotNode(node);
     },
     getRoot() {
-      return snapshotNode(root) as Readonly<BubbleRootNode>;
+      return snapshotNode(nodes.get(root.id) as BubbleRootNode) as Readonly<BubbleRootNode>;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 }

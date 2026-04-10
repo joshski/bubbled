@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 13: Begin and commit transactions](./task-13-begin-and-commit-transactions.md)
+(none)
 
 ## Definition of Done
 
