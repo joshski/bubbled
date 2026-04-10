@@ -20,6 +20,10 @@ implement
 
 - [Build Thin Tested Slices](../principles/build-thin-tested-slices.md)
 
+## Blocked By
+
+- None
+
 ## Definition of Done
 
 - [ ] A CLI can invoke the control API for one-shot commands.
