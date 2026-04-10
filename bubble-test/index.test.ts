@@ -1,11 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
 import { createBubble } from "../bubble-core";
-import { createHarness } from "./index";
+import {
+  createHarness,
+  createRenderHarness,
+  createSemanticAssertions,
+  createSemanticQueries,
+} from "./index";
 
-describe("createHarness", () => {
+function createSemanticHarness(bubble = createBubble()) {
+  const renderHarness = createRenderHarness(bubble);
+
+  return Object.assign(
+    renderHarness,
+    createSemanticQueries(renderHarness),
+    createSemanticAssertions(renderHarness),
+  );
+}
+
+describe("createRenderHarness", () => {
   test("renders root content through the harness helper", () => {
-    const harness = createHarness();
+    const harness = createSemanticHarness();
 
     harness.render({
       tag: "button",
@@ -42,7 +57,7 @@ describe("createHarness", () => {
   });
 
   test("re-renders compatible content by updating the existing nodes in place", () => {
-    const harness = createHarness();
+    const harness = createRenderHarness();
 
     harness.render("first");
 
@@ -62,7 +77,7 @@ describe("createHarness", () => {
   });
 
   test("re-renders compatible element trees by updating attributes, properties, and children", () => {
-    const harness = createHarness();
+    const harness = createSemanticHarness();
 
     harness.render({
       tag: "section",
@@ -162,7 +177,7 @@ describe("createHarness", () => {
   });
 
   test("re-renders incompatible content by replacing nodes and trimming removed roots", () => {
-    const harness = createHarness();
+    const harness = createRenderHarness();
 
     harness.render([
       { tag: "button", children: ["Save"] },
@@ -187,7 +202,7 @@ describe("createHarness", () => {
   });
 
   test("re-renders incompatible element content by replacing the previous root node", () => {
-    const harness = createHarness();
+    const harness = createRenderHarness();
 
     harness.render({ tag: "button", children: ["Save"] });
 
@@ -207,7 +222,7 @@ describe("createHarness", () => {
   });
 
   test("cleanup resets harness state", () => {
-    const harness = createHarness();
+    const harness = createSemanticHarness();
 
     harness.render({
       tag: "button",
@@ -231,190 +246,9 @@ describe("createHarness", () => {
     );
   });
 
-  test("finds nodes by role only", () => {
-    const bubble = createBubble();
-    const harness = createHarness(bubble);
-
-    const buttonId = bubble.transact((tx) => {
-      const createdButtonId = tx.createElement({ tag: "button" });
-      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
-      return createdButtonId;
-    });
-
-    expect(harness.getByRole("button")).toBe(buttonId);
-  });
-
-  test("finds nodes by role and accessible name", () => {
-    const bubble = createBubble();
-    const harness = createHarness(bubble);
-
-    const saveButtonId = bubble.transact((tx) => {
-      const createdCancelButtonId = tx.createElement({ tag: "button" });
-      const cancelTextId = tx.createText({ value: "Cancel" });
-      const createdSaveButtonId = tx.createElement({ tag: "button" });
-      const saveTextId = tx.createText({ value: "Save" });
-
-      tx.insertChild({ parentId: bubble.rootId, childId: createdCancelButtonId });
-      tx.insertChild({ parentId: createdCancelButtonId, childId: cancelTextId });
-      tx.insertChild({ parentId: bubble.rootId, childId: createdSaveButtonId });
-      tx.insertChild({ parentId: createdSaveButtonId, childId: saveTextId });
-
-      return createdSaveButtonId;
-    });
-
-    expect(harness.getByRole("button", { name: "Save" })).toBe(saveButtonId);
-  });
-
-  test("finds nodes by role and accessible name pattern", () => {
-    const bubble = createBubble();
-    const harness = createHarness(bubble);
-
-    const saveButtonId = bubble.transact((tx) => {
-      const createdSaveButtonId = tx.createElement({ tag: "button" });
-      const saveTextId = tx.createText({ value: "Save draft" });
-
-      tx.insertChild({ parentId: bubble.rootId, childId: createdSaveButtonId });
-      tx.insertChild({ parentId: createdSaveButtonId, childId: saveTextId });
-
-      return createdSaveButtonId;
-    });
-
-    expect(harness.getByRole("button", { name: /^Save/ })).toBe(saveButtonId);
-  });
-
-  test("reports clear output when a semantic query misses", () => {
-    const bubble = createBubble();
-    const harness = createHarness(bubble);
-
-    bubble.transact((tx) => {
-      const createdButtonId = tx.createElement({ tag: "button" });
-      const textId = tx.createText({ value: "Cancel" });
-
-      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
-      tx.insertChild({ parentId: createdButtonId, childId: textId });
-    });
-
-    expect(() => harness.getByRole("button", { name: "Save" })).toThrow(
-      'Unable to find a node with role "button" and name "Save". Nodes with role "button": node:',
-    );
-    expect(() => harness.getByRole("button", { name: "Save" })).toThrow('("Cancel")');
-  });
-
-  test("supports semantic assertion helpers for role, name, text, focus, and form state", () => {
-    const harness = createHarness();
-
-    harness.render({
-      tag: "form",
-      children: [
-        {
-          tag: "input",
-          attributes: { type: "text", name: "email", "aria-label": "Email" },
-          properties: { value: "josh@example.com" },
-        },
-        {
-          tag: "input",
-          attributes: { type: "checkbox", name: "subscribe", "aria-label": "Subscribe" },
-          properties: { checked: true },
-        },
-        { tag: "button", children: ["Save"] },
-      ],
-    });
-
-    const textboxId = harness.getByRole("textbox", { name: "Email" });
-    const form = harness.bubble.getNode(harness.bubble.getRoot().children[0]);
-    const checkboxId = form?.kind === "element" ? form.children[1] : null;
-    const buttonId = harness.getByRole("button", { name: "Save" });
-    const buttonTextId = harness.getByText("Save");
-
-    harness.tab();
-
-    harness.expectRole(textboxId, "textbox");
-    harness.expectName(textboxId, "Email");
-    harness.expectValue(textboxId, "josh@example.com");
-    expect(checkboxId).not.toBeNull();
-    harness.expectChecked(checkboxId as string, true);
-    harness.expectText(buttonId, "Save");
-    harness.expectFocused(textboxId);
-    harness.expectText(buttonTextId, "Save");
-  });
-
-  test("semantic assertion failures include useful details", () => {
-    const harness = createHarness();
-
-    harness.render({
-      tag: "input",
-      attributes: { type: "text", "aria-label": "Email" },
-      properties: { value: "draft@example.com" },
-    });
-
-    const textboxId = harness.getByRole("textbox", { name: "Email" });
-
-    expect(() => harness.expectName(textboxId, "Username")).toThrow(
-      `Expected accessible name for ${textboxId} to be "Username". Received "Email".`,
-    );
-    expect(() => harness.expectName(textboxId, "Username")).toThrow('role="textbox"');
-    expect(() => harness.expectRole(textboxId, "button")).toThrow(
-      `Expected role for ${textboxId} to be "button". Received "textbox".`,
-    );
-    expect(() => harness.expectValue(textboxId, "published@example.com")).toThrow(
-      `Expected value for ${textboxId} to be "published@example.com". Received "draft@example.com".`,
-    );
-  });
-
-  test("getByText supports regex matches and reports useful misses", () => {
-    const harness = createHarness();
-
-    harness.render({ tag: "button", children: ["Save draft"] });
-
-    const matchedId = harness.getByText(/^Save/);
-
-    harness.expectText(matchedId, "Save draft");
-    expect(() => harness.getByText(/^Publish/)).toThrow(
-      'Unable to find a node with text /^Publish/. Current root text content is "Save draft".',
-    );
-  });
-
-  test("reports useful assertion failures for focus, checked state, and non-element targets", () => {
-    const harness = createHarness();
-
-    harness.render([
-      {
-        tag: "input",
-        attributes: { type: "checkbox", "aria-label": "Subscribe" },
-        properties: { checked: true },
-      },
-      { tag: "button", children: ["Save"] },
-    ]);
-
-    const [checkboxId, buttonId] = harness.bubble.getRoot().children;
-    const button = harness.bubble.getNode(buttonId);
-    const textId = button?.kind === "element" ? button.children[0] : null;
-
-    expect(() => harness.expectFocused(buttonId)).toThrow(
-      `Expected focused node to be ${buttonId}. Received null.`,
-    );
-    expect(() => harness.expectChecked(checkboxId, false)).toThrow(
-      `Expected checked state for ${checkboxId} to be false. Received true.`,
-    );
-    expect(() => harness.expectRole(textId as string, "button")).toThrow(
-      `Expected an element node for ${textId}. Received ${textId} <text "Save">.`,
-    );
-    expect(() => harness.expectValue("missing", "value")).toThrow("Unknown node ID: missing");
-  });
-
-  test("reports root text mismatches with a root description", () => {
-    const harness = createHarness();
-
-    harness.render("Save");
-
-    expect(() => harness.expectText(harness.bubble.rootId, "Publish")).toThrow(
-      `Expected text content for ${harness.bubble.rootId} to be "Publish". Received "Save". ${harness.bubble.rootId} <root>`,
-    );
-  });
-
   test("click helper dispatches expected event", () => {
     const bubble = createBubble();
-    const harness = createHarness(bubble);
+    const harness = createRenderHarness(bubble);
     const receivedEvents: Array<Record<string, unknown>> = [];
 
     const buttonId = bubble.transact((tx) => {
@@ -440,7 +274,7 @@ describe("createHarness", () => {
   });
 
   test("missing target produces clear failure", () => {
-    const harness = createHarness();
+    const harness = createRenderHarness();
 
     expect(() => harness.click("missing")).toThrow(
       'Unable to dispatch "click" event. Unknown node ID: missing',
@@ -449,7 +283,7 @@ describe("createHarness", () => {
 
   test("event helper returns dispatch result", () => {
     const bubble = createBubble();
-    const harness = createHarness(bubble);
+    const harness = createRenderHarness(bubble);
 
     const textId = bubble.transact((tx) => {
       const createdTextId = tx.createText({ value: "hello" });
@@ -465,7 +299,7 @@ describe("createHarness", () => {
 
   test("advances focus forward in tab order", () => {
     const bubble = createBubble();
-    const harness = createHarness(bubble);
+    const harness = createRenderHarness(bubble);
 
     const { firstButtonId, inputId, nestedButtonId } = bubble.transact((tx) => {
       const createdFirstButtonId = tx.createElement({ tag: "button" });
@@ -497,7 +331,7 @@ describe("createHarness", () => {
 
   test("stops at the end of the tab order", () => {
     const bubble = createBubble();
-    const harness = createHarness(bubble);
+    const harness = createRenderHarness(bubble);
 
     const { firstButtonId, secondButtonId } = bubble.transact((tx) => {
       const createdFirstButtonId = tx.createElement({ tag: "button" });
@@ -522,7 +356,7 @@ describe("createHarness", () => {
 
   test("moves focus backward with Shift+Tab and stops at the start", () => {
     const bubble = createBubble();
-    const harness = createHarness(bubble);
+    const harness = createRenderHarness(bubble);
 
     const { firstButtonId, secondButtonId, thirdButtonId } = bubble.transact((tx) => {
       const createdFirstButtonId = tx.createElement({ tag: "button" });
@@ -555,7 +389,7 @@ describe("createHarness", () => {
 
   test("is a no-op when no tabbable elements exist", () => {
     const bubble = createBubble();
-    const harness = createHarness(bubble);
+    const harness = createRenderHarness(bubble);
 
     bubble.transact((tx) => {
       const containerId = tx.createElement({ tag: "section" });
@@ -566,5 +400,209 @@ describe("createHarness", () => {
     harness.tab({ shift: true });
 
     expect(bubble.getFocusedNodeId()).toBeNull();
+  });
+});
+
+describe("semantic helpers", () => {
+  test("finds nodes by role only", () => {
+    const bubble = createBubble();
+    const queries = createSemanticQueries({ bubble });
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      return createdButtonId;
+    });
+
+    expect(queries.getByRole("button")).toBe(buttonId);
+  });
+
+  test("finds nodes by role and accessible name", () => {
+    const bubble = createBubble();
+    const queries = createSemanticQueries({ bubble });
+
+    const saveButtonId = bubble.transact((tx) => {
+      const createdCancelButtonId = tx.createElement({ tag: "button" });
+      const cancelTextId = tx.createText({ value: "Cancel" });
+      const createdSaveButtonId = tx.createElement({ tag: "button" });
+      const saveTextId = tx.createText({ value: "Save" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdCancelButtonId });
+      tx.insertChild({ parentId: createdCancelButtonId, childId: cancelTextId });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSaveButtonId });
+      tx.insertChild({ parentId: createdSaveButtonId, childId: saveTextId });
+
+      return createdSaveButtonId;
+    });
+
+    expect(queries.getByRole("button", { name: "Save" })).toBe(saveButtonId);
+  });
+
+  test("finds nodes by role and accessible name pattern", () => {
+    const bubble = createBubble();
+    const queries = createSemanticQueries({ bubble });
+
+    const saveButtonId = bubble.transact((tx) => {
+      const createdSaveButtonId = tx.createElement({ tag: "button" });
+      const saveTextId = tx.createText({ value: "Save draft" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSaveButtonId });
+      tx.insertChild({ parentId: createdSaveButtonId, childId: saveTextId });
+
+      return createdSaveButtonId;
+    });
+
+    expect(queries.getByRole("button", { name: /^Save/ })).toBe(saveButtonId);
+  });
+
+  test("reports clear output when a semantic query misses", () => {
+    const bubble = createBubble();
+    const queries = createSemanticQueries({ bubble });
+
+    bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const textId = tx.createText({ value: "Cancel" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.insertChild({ parentId: createdButtonId, childId: textId });
+    });
+
+    expect(() => queries.getByRole("button", { name: "Save" })).toThrow(
+      'Unable to find a node with role "button" and name "Save". Nodes with role "button": node:',
+    );
+    expect(() => queries.getByRole("button", { name: "Save" })).toThrow('("Cancel")');
+  });
+
+  test("supports semantic assertion helpers for role, name, text, focus, and form state", () => {
+    const renderHarness = createRenderHarness();
+    const queries = createSemanticQueries(renderHarness);
+    const assertions = createSemanticAssertions(renderHarness);
+
+    renderHarness.render({
+      tag: "form",
+      children: [
+        {
+          tag: "input",
+          attributes: { type: "text", name: "email", "aria-label": "Email" },
+          properties: { value: "josh@example.com" },
+        },
+        {
+          tag: "input",
+          attributes: { type: "checkbox", name: "subscribe", "aria-label": "Subscribe" },
+          properties: { checked: true },
+        },
+        { tag: "button", children: ["Save"] },
+      ],
+    });
+
+    const textboxId = queries.getByRole("textbox", { name: "Email" });
+    const form = renderHarness.bubble.getNode(renderHarness.bubble.getRoot().children[0]);
+    const checkboxId = form?.kind === "element" ? form.children[1] : null;
+    const buttonId = queries.getByRole("button", { name: "Save" });
+    const buttonTextId = queries.getByText("Save");
+
+    renderHarness.tab();
+
+    assertions.expectRole(textboxId, "textbox");
+    assertions.expectName(textboxId, "Email");
+    assertions.expectValue(textboxId, "josh@example.com");
+    expect(checkboxId).not.toBeNull();
+    assertions.expectChecked(checkboxId as string, true);
+    assertions.expectText(buttonId, "Save");
+    assertions.expectFocused(textboxId);
+    assertions.expectText(buttonTextId, "Save");
+  });
+
+  test("semantic assertion failures include useful details", () => {
+    const renderHarness = createRenderHarness();
+    const queries = createSemanticQueries(renderHarness);
+    const assertions = createSemanticAssertions(renderHarness);
+
+    renderHarness.render({
+      tag: "input",
+      attributes: { type: "text", "aria-label": "Email" },
+      properties: { value: "draft@example.com" },
+    });
+
+    const textboxId = queries.getByRole("textbox", { name: "Email" });
+
+    expect(() => assertions.expectName(textboxId, "Username")).toThrow(
+      `Expected accessible name for ${textboxId} to be "Username". Received "Email".`,
+    );
+    expect(() => assertions.expectName(textboxId, "Username")).toThrow('role="textbox"');
+    expect(() => assertions.expectRole(textboxId, "button")).toThrow(
+      `Expected role for ${textboxId} to be "button". Received "textbox".`,
+    );
+    expect(() => assertions.expectValue(textboxId, "published@example.com")).toThrow(
+      `Expected value for ${textboxId} to be "published@example.com". Received "draft@example.com".`,
+    );
+  });
+
+  test("getByText supports regex matches and reports useful misses", () => {
+    const renderHarness = createRenderHarness();
+    const queries = createSemanticQueries(renderHarness);
+    const assertions = createSemanticAssertions(renderHarness);
+
+    renderHarness.render({ tag: "button", children: ["Save draft"] });
+
+    const matchedId = queries.getByText(/^Save/);
+
+    assertions.expectText(matchedId, "Save draft");
+    expect(() => queries.getByText(/^Publish/)).toThrow(
+      'Unable to find a node with text /^Publish/. Current root text content is "Save draft".',
+    );
+  });
+
+  test("reports useful assertion failures for focus, checked state, and non-element targets", () => {
+    const renderHarness = createRenderHarness();
+    const assertions = createSemanticAssertions(renderHarness);
+
+    renderHarness.render([
+      {
+        tag: "input",
+        attributes: { type: "checkbox", "aria-label": "Subscribe" },
+        properties: { checked: true },
+      },
+      { tag: "button", children: ["Save"] },
+    ]);
+
+    const [checkboxId, buttonId] = renderHarness.bubble.getRoot().children;
+    const button = renderHarness.bubble.getNode(buttonId);
+    const textId = button?.kind === "element" ? button.children[0] : null;
+
+    expect(() => assertions.expectFocused(buttonId)).toThrow(
+      `Expected focused node to be ${buttonId}. Received null.`,
+    );
+    expect(() => assertions.expectChecked(checkboxId, false)).toThrow(
+      `Expected checked state for ${checkboxId} to be false. Received true.`,
+    );
+    expect(() => assertions.expectRole(textId as string, "button")).toThrow(
+      `Expected an element node for ${textId}. Received ${textId} <text "Save">.`,
+    );
+    expect(() => assertions.expectValue("missing", "value")).toThrow("Unknown node ID: missing");
+  });
+
+  test("reports root text mismatches with a root description", () => {
+    const renderHarness = createRenderHarness();
+    const assertions = createSemanticAssertions(renderHarness);
+
+    renderHarness.render("Save");
+
+    expect(() => assertions.expectText(renderHarness.bubble.rootId, "Publish")).toThrow(
+      `Expected text content for ${renderHarness.bubble.rootId} to be "Publish". Received "Save". ${renderHarness.bubble.rootId} <root>`,
+    );
+  });
+});
+
+describe("createHarness", () => {
+  test("composes render, query, and assertion helpers into one convenience API", () => {
+    const harness = createHarness();
+
+    harness.render({ tag: "button", children: ["Save"] });
+
+    const buttonId = harness.getByRole("button", { name: "Save" });
+
+    harness.expectRole(buttonId, "button");
+    harness.expectText(buttonId, "Save");
   });
 });

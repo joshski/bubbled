@@ -24,13 +24,16 @@ describe("public entrypoints", () => {
     );
   });
 
-  test("./bubble-test exposes the test harness entrypoint", async () => {
+  test("./bubble-test exposes the test harness helper entrypoints", async () => {
     const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
 
     const entrypoint = await import("./bubble-test");
 
     expect(entrypoint).toEqual({
       createHarness: expect.any(Function),
+      createRenderHarness: expect.any(Function),
+      createSemanticAssertions: expect.any(Function),
+      createSemanticQueries: expect.any(Function),
     });
     expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(
       globalsBeforeImport,
