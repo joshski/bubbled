@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 40: Timer capability](./task-40-timer-capability.md)
+- Task 40: Timer capability
 
 ## Definition of Done
 
