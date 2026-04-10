@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 33: Checkbox checked state](./task-33-checkbox-checked-state.md)
+- None
 
 ## Definition of Done
 

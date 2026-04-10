@@ -18,6 +18,7 @@ export interface BubbleElementNode {
   attributes: Record<string, string>;
   properties: Record<string, unknown>;
   value: string | null;
+  checked: boolean | null;
   role: string | null;
   name: string | null;
 }
@@ -224,6 +225,12 @@ function assertValidTextValue(value: unknown): asserts value is string {
   }
 }
 
+function assertValidCheckedValue(value: unknown): asserts value is boolean {
+  if (typeof value !== "boolean") {
+    throw new Error("Checked value must be a boolean");
+  }
+}
+
 function assertValidEventType(type: unknown): asserts type is string {
   if (typeof type !== "string" || type.trim().length === 0) {
     throw new Error(EVENT_TYPE_ERROR);
@@ -246,14 +253,20 @@ function assertElementNode(
   }
 }
 
-function isTextInputElement(node: BubbleElementNode): boolean {
+function getInputType(node: BubbleElementNode): string | null {
   if (node.namespace !== "html" || node.tag !== "input") {
-    return false;
+    return null;
   }
 
-  const inputType = (node.attributes.type ?? getStringProperty(node, "type") ?? "text").toLowerCase();
+  return (node.attributes.type ?? getStringProperty(node, "type") ?? "text").toLowerCase();
+}
 
-  return inputType === "text";
+function isTextInputElement(node: BubbleElementNode): boolean {
+  return getInputType(node) === "text";
+}
+
+function isCheckboxInputElement(node: BubbleElementNode): boolean {
+  return getInputType(node) === "checkbox";
 }
 
 function assertValuePropertyTarget(
@@ -262,6 +275,15 @@ function assertValuePropertyTarget(
 ): asserts node is BubbleElementNode & { value: string } {
   if (!isTextInputElement(node)) {
     throw new Error(`The value property is only supported on text input elements: ${nodeId}`);
+  }
+}
+
+function assertCheckedPropertyTarget(
+  node: BubbleElementNode,
+  nodeId: BubbleNodeId,
+): asserts node is BubbleElementNode & { checked: boolean } {
+  if (!isCheckboxInputElement(node)) {
+    throw new Error(`The checked property is only supported on checkbox input elements: ${nodeId}`);
   }
 }
 
@@ -442,6 +464,7 @@ export function createBubble(): BubbleRuntime {
         attributes: { ...node.attributes },
         properties: { ...node.properties },
         value: node.value,
+        checked: node.checked,
         role: node.role,
         name: node.name,
       };
@@ -492,6 +515,13 @@ export function createBubble(): BubbleRuntime {
 
       Object.defineProperty(elementSnapshot, "value", {
         value: node.value,
+        enumerable: false,
+        writable: false,
+        configurable: false,
+      });
+
+      Object.defineProperty(elementSnapshot, "checked", {
+        value: node.checked,
         enumerable: false,
         writable: false,
         configurable: false,
@@ -792,6 +822,12 @@ export function createBubble(): BubbleRuntime {
         continue;
       }
 
+      node.checked =
+        isCheckboxInputElement(node) && typeof node.properties.checked === "boolean"
+          ? node.properties.checked
+          : isCheckboxInputElement(node)
+            ? false
+            : null;
       node.role = deriveElementRole(node);
       node.name = deriveElementName(node, nodeLookup);
     }
@@ -839,6 +875,7 @@ export function createBubble(): BubbleRuntime {
             attributes: {},
             properties: {},
             value: tag === "input" && namespace === "html" ? "" : null,
+            checked: null,
             role: null,
             name: null,
           };
@@ -956,6 +993,11 @@ export function createBubble(): BubbleRuntime {
             assertValuePropertyTarget(node, nodeId);
             assertValidTextValue(value);
             node.value = value;
+          }
+          if (name === "checked") {
+            assertCheckedPropertyTarget(node, nodeId);
+            assertValidCheckedValue(value);
+            node.checked = value;
           }
           node.properties[name] = value;
           mutations.push({ type: "property-set", nodeId, name, value });

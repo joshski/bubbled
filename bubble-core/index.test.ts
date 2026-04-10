@@ -1684,6 +1684,100 @@ describe("createBubble", () => {
     expect(input.properties).toEqual({ value: "draft@example.com" });
   });
 
+  test("defaults checkbox inputs to an unchecked state", () => {
+    const bubble = createBubble();
+
+    const inputId = bubble.transact((tx) => {
+      const createdInputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdInputId, name: "type", value: "checkbox" });
+
+      return createdInputId;
+    });
+    const input = bubble.getNode(inputId) as {
+      kind: "element";
+      checked: boolean | null;
+      properties: Record<string, unknown>;
+    };
+
+    expect(input.kind).toBe("element");
+    expect(input.checked).toBe(false);
+    expect(input.properties).toEqual({});
+  });
+
+  test("sets checkbox inputs checked and unchecked", () => {
+    const bubble = createBubble();
+
+    const checkedInputId = bubble.transact((tx) => {
+      const createdInputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdInputId, name: "type", value: "checkbox" });
+      tx.setProperty({ nodeId: createdInputId, name: "checked", value: true });
+
+      return createdInputId;
+    });
+    const checkedInput = bubble.getNode(checkedInputId) as {
+      kind: "element";
+      checked: boolean | null;
+      properties: Record<string, unknown>;
+    };
+
+    expect(checkedInput.kind).toBe("element");
+    expect(checkedInput.checked).toBe(true);
+    expect(checkedInput.properties).toEqual({ checked: true });
+
+    bubble.transact((tx) => {
+      tx.setProperty({ nodeId: checkedInputId, name: "checked", value: false });
+    });
+
+    const uncheckedInput = bubble.getNode(checkedInputId) as {
+      kind: "element";
+      checked: boolean | null;
+      properties: Record<string, unknown>;
+    };
+
+    expect(uncheckedInput.kind).toBe("element");
+    expect(uncheckedInput.checked).toBe(false);
+    expect(uncheckedInput.properties).toEqual({ checked: false });
+  });
+
+  test("serializes checkbox checked state in snapshots", () => {
+    const bubble = createBubble();
+
+    const inputIds = bubble.transact((tx) => {
+      const checkedInputId = tx.createElement({ tag: "input" });
+      const uncheckedInputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: checkedInputId, name: "type", value: "checkbox" });
+      tx.setAttribute({ nodeId: uncheckedInputId, name: "type", value: "checkbox" });
+      tx.setProperty({ nodeId: checkedInputId, name: "checked", value: true });
+      tx.setProperty({ nodeId: uncheckedInputId, name: "checked", value: false });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: checkedInputId });
+      tx.insertChild({ parentId: bubble.rootId, childId: uncheckedInputId });
+
+      return { checkedInputId, uncheckedInputId };
+    });
+    const snapshot = bubble.snapshot();
+    const checkedInput = snapshot.nodes.get(inputIds.checkedInputId) as {
+      kind: "element";
+      checked: boolean | null;
+      properties: Record<string, unknown>;
+    };
+    const uncheckedInput = snapshot.nodes.get(inputIds.uncheckedInputId) as {
+      kind: "element";
+      checked: boolean | null;
+      properties: Record<string, unknown>;
+    };
+
+    expect(checkedInput.kind).toBe("element");
+    expect(uncheckedInput.kind).toBe("element");
+    expect(checkedInput.checked).toBe(true);
+    expect(uncheckedInput.checked).toBe(false);
+    expect(checkedInput.properties).toEqual({ checked: true });
+    expect(uncheckedInput.properties).toEqual({ checked: false });
+  });
+
   test("stores attributes and properties independently", () => {
     const bubble = createBubble();
 
@@ -2794,6 +2888,16 @@ describe("createBubble", () => {
       expect(() => {
         tx.setProperty({ nodeId: buttonId, name: "value", value: "label" });
       }).toThrow(`The value property is only supported on text input elements: ${buttonId}`);
+      expect(() => {
+        tx.setProperty({ nodeId: buttonId, name: "checked", value: true });
+      }).toThrow(`The checked property is only supported on checkbox input elements: ${buttonId}`);
+
+      const checkboxId = tx.createElement({ tag: "input" });
+      tx.setAttribute({ nodeId: checkboxId, name: "type", value: "checkbox" });
+
+      expect(() => {
+        tx.setProperty({ nodeId: checkboxId, name: "checked", value: "yes" });
+      }).toThrow("Checked value must be a boolean");
     });
   });
 
