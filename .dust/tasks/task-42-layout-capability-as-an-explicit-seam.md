@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 41: Microtask or scheduler queue](./task-41-microtask-or-scheduler-queue.md)
+- None
 
 ## Definition of Done
 

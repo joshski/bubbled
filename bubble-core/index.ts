@@ -180,6 +180,7 @@ export interface BubbleRuntime {
   now(): number;
   setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle;
   clearTimeout(handle: BubbleTimerHandle): void;
+  queueMicrotask(task: () => void): void;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
@@ -1076,6 +1077,9 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     },
     clearTimeout(handle) {
       capabilityRegistry.resolveCapability("timers").clearTimeout(handle);
+    },
+    queueMicrotask(task) {
+      capabilityRegistry.resolveCapability("scheduler").queueMicrotask(task);
     },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       if (transactionDepth > 0) {

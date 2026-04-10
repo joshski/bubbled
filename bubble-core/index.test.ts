@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BubbleUnsupportedCapabilityError,
+  type BubbleScheduler,
   type BubbleTimerHandle,
 } from "../bubble-capabilities";
 import { createBubble } from "./index";
@@ -77,6 +78,28 @@ function createFakeClockAndTimers(initialTime: number) {
     advanceBy(deltaMs: number) {
       currentTime += deltaMs;
       runDueTimers();
+    },
+  };
+}
+
+function createFakeScheduler() {
+  const microtasks: Array<() => void> = [];
+
+  return {
+    scheduler: {
+      queueMicrotask(task: () => void) {
+        microtasks.push(task);
+      },
+      requestFrame() {
+        throw new Error("requestFrame is not implemented in this test fake");
+      },
+      cancelFrame() {},
+    } satisfies BubbleScheduler,
+    flushMicrotasks() {
+      while (microtasks.length > 0) {
+        const task = microtasks.shift() as () => void;
+        task();
+      }
     },
   };
 }
@@ -311,6 +334,72 @@ describe("createBubble", () => {
     fakeTime.advanceBy(10);
 
     expect(fired).toEqual([]);
+  });
+
+  test("queues scheduled work until the scheduler flushes microtasks", () => {
+    const fakeScheduler = createFakeScheduler();
+    const bubble = createBubble({
+      capabilities: {
+        scheduler: fakeScheduler.scheduler,
+      },
+    });
+    const calls: string[] = [];
+
+    bubble.queueMicrotask(() => {
+      calls.push("queued");
+    });
+
+    expect(calls).toEqual([]);
+
+    fakeScheduler.flushMicrotasks();
+
+    expect(calls).toEqual(["queued"]);
+  });
+
+  test("runs queued microtasks in explicit scheduling order", () => {
+    const fakeScheduler = createFakeScheduler();
+    const bubble = createBubble({
+      capabilities: {
+        scheduler: fakeScheduler.scheduler,
+      },
+    });
+    const calls: string[] = [];
+
+    bubble.queueMicrotask(() => {
+      calls.push("first");
+    });
+    bubble.queueMicrotask(() => {
+      calls.push("second");
+    });
+    bubble.queueMicrotask(() => {
+      calls.push("third");
+    });
+
+    fakeScheduler.flushMicrotasks();
+
+    expect(calls).toEqual(["first", "second", "third"]);
+  });
+
+  test("flushes re-entrant microtasks after the currently running task", () => {
+    const fakeScheduler = createFakeScheduler();
+    const bubble = createBubble({
+      capabilities: {
+        scheduler: fakeScheduler.scheduler,
+      },
+    });
+    const calls: string[] = [];
+
+    bubble.queueMicrotask(() => {
+      calls.push("outer");
+      bubble.queueMicrotask(() => {
+        calls.push("inner");
+      });
+      calls.push("outer-complete");
+    });
+
+    fakeScheduler.flushMicrotasks();
+
+    expect(calls).toEqual(["outer", "outer-complete", "inner"]);
   });
 
   test("returns read-only root snapshots", () => {
