@@ -17,6 +17,7 @@ export interface BubbleElementNode {
   children: BubbleNodeId[];
   attributes: Record<string, string>;
   properties: Record<string, unknown>;
+  role: string | null;
 }
 
 export interface BubbleTextNode {
@@ -282,6 +283,46 @@ function isTabbableElement(node: BubbleElementNode): boolean {
   return tabIndex === null || tabIndex >= 0;
 }
 
+function getStringProperty(node: BubbleElementNode, name: string): string | null {
+  const propertyValue = node.properties[name];
+
+  return typeof propertyValue === "string" ? propertyValue : null;
+}
+
+function getExplicitRole(node: BubbleElementNode): string | null {
+  const role = node.attributes.role?.trim();
+
+  return role ? role : null;
+}
+
+function deriveImplicitRole(node: BubbleElementNode): string | null {
+  if (node.namespace !== "html") {
+    return null;
+  }
+
+  switch (node.tag.toLowerCase()) {
+    case "button":
+      return "button";
+    case "a":
+      return node.attributes.href !== undefined || getStringProperty(node, "href") !== null
+        ? "link"
+        : null;
+    case "textarea":
+      return "textbox";
+    case "input": {
+      const inputType = (node.attributes.type ?? getStringProperty(node, "type") ?? "text").toLowerCase();
+
+      return inputType === "text" ? "textbox" : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function deriveElementRole(node: BubbleElementNode): string | null {
+  return getExplicitRole(node) ?? deriveImplicitRole(node);
+}
+
 export function createBubble(): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -331,6 +372,7 @@ export function createBubble(): BubbleRuntime {
         children: [...node.children],
         attributes: { ...node.attributes },
         properties: { ...node.properties },
+        role: node.role,
       };
     }
 
@@ -352,7 +394,7 @@ export function createBubble(): BubbleRuntime {
     }
 
     if (node.kind === "element") {
-      return Object.freeze({
+      const elementSnapshot = {
         id: node.id,
         kind: node.kind,
         tag: node.tag,
@@ -361,7 +403,16 @@ export function createBubble(): BubbleRuntime {
         children: Object.freeze([...node.children]),
         attributes: Object.freeze({ ...node.attributes }),
         properties: Object.freeze({ ...node.properties }),
+      };
+
+      Object.defineProperty(elementSnapshot, "role", {
+        value: node.role,
+        enumerable: false,
+        writable: false,
+        configurable: false,
       });
+
+      return Object.freeze(elementSnapshot) as Readonly<BubbleNode>;
     }
 
     return Object.freeze({
@@ -680,8 +731,7 @@ export function createBubble(): BubbleRuntime {
           assertValidElementTag(tag);
 
           const id = allocateNodeId();
-
-          draftNodes.set(id, {
+          const elementNode: BubbleElementNode = {
             id,
             kind: "element",
             tag,
@@ -690,7 +740,12 @@ export function createBubble(): BubbleRuntime {
             children: [],
             attributes: {},
             properties: {},
-          });
+            role: null,
+          };
+
+          elementNode.role = deriveElementRole(elementNode);
+
+          draftNodes.set(id, elementNode);
           mutations.push({ type: "node-created", nodeId: id, kind: "element" });
 
           return id;
@@ -786,6 +841,7 @@ export function createBubble(): BubbleRuntime {
 
           assertElementNode(node, nodeId, "Attributes");
           node.attributes[name] = value;
+          node.role = deriveElementRole(node);
           mutations.push({ type: "attribute-set", nodeId, name, value });
         },
         removeAttribute({ nodeId, name }) {
@@ -793,6 +849,7 @@ export function createBubble(): BubbleRuntime {
 
           assertElementNode(node, nodeId, "Attributes");
           delete node.attributes[name];
+          node.role = deriveElementRole(node);
           mutations.push({ type: "attribute-removed", nodeId, name });
         },
         setProperty({ nodeId, name, value }) {
@@ -800,6 +857,7 @@ export function createBubble(): BubbleRuntime {
 
           assertElementNode(node, nodeId, "Properties");
           node.properties[name] = value;
+          node.role = deriveElementRole(node);
           mutations.push({ type: "property-set", nodeId, name, value });
         },
         addEventListener({ nodeId, type, listener, capture = false }) {

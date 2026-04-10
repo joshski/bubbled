@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 29: Basic role derivation](./task-29-basic-role-derivation.md)
+- None
 
 ## Definition of Done
 

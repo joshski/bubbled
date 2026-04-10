@@ -2019,6 +2019,96 @@ describe("createBubble", () => {
     expect(snapshot.query.getByTag("text")).toEqual([]);
   });
 
+  test("derives the button role for button elements", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => tx.createElement({ tag: "button" }));
+    const button = bubble.getNode(buttonId);
+
+    expect(button?.kind).toBe("element");
+
+    if (button?.kind === "element") {
+      expect(button.role).toBe("button");
+    }
+  });
+
+  test("derives the link role for anchors with href", () => {
+    const bubble = createBubble();
+
+    const linkId = bubble.transact((tx) => {
+      const createdLinkId = tx.createElement({ tag: "a" });
+
+      tx.setAttribute({ nodeId: createdLinkId, name: "href", value: "/docs" });
+
+      return createdLinkId;
+    });
+    const link = bubble.snapshot().query.getById(linkId);
+
+    expect(link?.kind).toBe("element");
+
+    if (link?.kind === "element") {
+      expect(link.role).toBe("link");
+    }
+  });
+
+  test("derives the textbox role for text inputs", () => {
+    const bubble = createBubble();
+
+    const inputId = bubble.transact((tx) => tx.createElement({ tag: "input" }));
+    const input = bubble.getNode(inputId);
+
+    expect(input?.kind).toBe("element");
+
+    if (input?.kind === "element") {
+      expect(input.role).toBe("textbox");
+    }
+  });
+
+  test("derives the textbox role for textarea elements", () => {
+    const bubble = createBubble();
+
+    const textareaId = bubble.transact((tx) => tx.createElement({ tag: "textarea" }));
+    const textarea = bubble.getNode(textareaId);
+
+    expect(textarea?.kind).toBe("element");
+
+    if (textarea?.kind === "element") {
+      expect(textarea.role).toBe("textbox");
+    }
+  });
+
+  test("falls back to a null role for unknown elements", () => {
+    const bubble = createBubble();
+
+    const sectionId = bubble.transact((tx) => tx.createElement({ tag: "section" }));
+    const section = bubble.snapshot().query.getById(sectionId);
+
+    expect(section?.kind).toBe("element");
+
+    if (section?.kind === "element") {
+      expect(section.role).toBeNull();
+    }
+  });
+
+  test("falls back to a null role for unsupported input types", () => {
+    const bubble = createBubble();
+
+    const inputId = bubble.transact((tx) => {
+      const createdInputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdInputId, name: "type", value: "checkbox" });
+
+      return createdInputId;
+    });
+    const input = bubble.getNode(inputId);
+
+    expect(input?.kind).toBe("element");
+
+    if (input?.kind === "element") {
+      expect(input.role).toBeNull();
+    }
+  });
+
   test("mutating snapshot data does not mutate runtime state", () => {
     const bubble = createBubble();
 
