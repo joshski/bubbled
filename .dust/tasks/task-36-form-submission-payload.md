@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 35: Label click forwarding](./task-35-label-click-forwarding.md)
+- None
 
 ## Definition of Done
 
