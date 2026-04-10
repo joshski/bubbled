@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 47: Harness event helper](./task-47-harness-event-helper.md)
+- None
 
 ## Definition of Done
 

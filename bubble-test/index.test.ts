@@ -300,6 +300,57 @@ describe("createHarness", () => {
     expect(() => harness.getByRole("button", { name: "Save" })).toThrow('("Cancel")');
   });
 
+  test("click helper dispatches expected event", () => {
+    const bubble = createBubble();
+    const harness = createHarness(bubble);
+    const receivedEvents: Array<Record<string, unknown>> = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          receivedEvents.push(event.data);
+        },
+      });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+
+      return createdButtonId;
+    });
+
+    const result = harness.click(buttonId);
+
+    expect(result).toEqual({ defaultPrevented: false, delivered: true });
+    expect(receivedEvents).toEqual([{}]);
+  });
+
+  test("missing target produces clear failure", () => {
+    const harness = createHarness();
+
+    expect(() => harness.click("missing")).toThrow(
+      'Unable to dispatch "click" event. Unknown node ID: missing',
+    );
+  });
+
+  test("event helper returns dispatch result", () => {
+    const bubble = createBubble();
+    const harness = createHarness(bubble);
+
+    const textId = bubble.transact((tx) => {
+      const createdTextId = tx.createText({ value: "hello" });
+      tx.insertChild({ parentId: bubble.rootId, childId: createdTextId });
+      return createdTextId;
+    });
+
+    expect(harness.click(textId)).toEqual({
+      defaultPrevented: false,
+      delivered: false,
+    });
+  });
+
   test("advances focus forward in tab order", () => {
     const bubble = createBubble();
     const harness = createHarness(bubble);

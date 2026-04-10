@@ -1,5 +1,6 @@
 import {
   createBubble,
+  type BubbleDispatchResult,
   type BubbleNamespace,
   type BubbleNodeId,
   type BubbleRuntime,
@@ -39,6 +40,7 @@ export interface BubbleHarness {
   render(content: BubbleRenderContent | readonly BubbleRenderContent[]): void;
   cleanup(): void;
   getByRole(role: string, options?: { name?: string | RegExp }): string;
+  click(target: BubbleNodeId): BubbleDispatchResult;
   tab(options?: { shift?: boolean }): void;
 }
 
@@ -203,6 +205,14 @@ export function createHarness(bubble: BubbleRuntime = createBubble()): BubbleHar
     return createRenderedNode(tx, parentId, nextContent, index);
   };
 
+  const dispatchEvent = (targetId: BubbleNodeId, type: string): BubbleDispatchResult => {
+    if (currentBubble.getNode(targetId) === null) {
+      throw new Error(`Unable to dispatch ${JSON.stringify(type)} event. Unknown node ID: ${targetId}`);
+    }
+
+    return currentBubble.dispatchEvent({ type, targetId });
+  };
+
   return {
     get bubble() {
       return currentBubble;
@@ -269,6 +279,9 @@ export function createHarness(bubble: BubbleRuntime = createBubble()): BubbleHar
               .join(", ")}`;
 
       throw new Error(`Unable to find a node with ${queryDescription}. ${nodesByRoleDescription}`);
+    },
+    click(target) {
+      return dispatchEvent(target, "click");
     },
     tab(options = {}) {
       const tabOrder = currentBubble.getTabOrder();
