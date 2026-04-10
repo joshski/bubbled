@@ -2,6 +2,7 @@ import {
   createCapabilityRegistry,
   type BubbleCapabilities,
   type BubbleCapabilityName,
+  type BubbleRect,
   type BubbleTimerHandle,
 } from "../bubble-capabilities";
 
@@ -181,6 +182,7 @@ export interface BubbleRuntime {
   setTimeout(callback: () => void, delayMs: number): BubbleTimerHandle;
   clearTimeout(handle: BubbleTimerHandle): void;
   queueMicrotask(task: () => void): void;
+  measureElement(nodeId: BubbleNodeId): BubbleRect;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
@@ -1080,6 +1082,9 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     },
     queueMicrotask(task) {
       capabilityRegistry.resolveCapability("scheduler").queueMicrotask(task);
+    },
+    measureElement(nodeId) {
+      return capabilityRegistry.resolveCapability("layout").measureElement(nodeId);
     },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       if (transactionDepth > 0) {

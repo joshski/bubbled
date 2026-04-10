@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 42: Layout capability as an explicit seam](./task-42-layout-capability-as-an-explicit-seam.md)
+- None
 
 ## Definition of Done
 

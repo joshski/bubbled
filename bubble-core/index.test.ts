@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  type BubbleLayout,
+  type BubbleRect,
   BubbleUnsupportedCapabilityError,
   type BubbleScheduler,
   type BubbleTimerHandle,
@@ -101,6 +103,27 @@ function createFakeScheduler() {
         task();
       }
     },
+  };
+}
+
+function createFakeLayout(measurements: Record<string, BubbleRect>) {
+  const calls: string[] = [];
+
+  return {
+    layout: {
+      measureElement(nodeId: string) {
+        calls.push(nodeId);
+
+        const rect = measurements[nodeId];
+
+        if (rect === undefined) {
+          throw new Error(`No fake layout configured for node ${nodeId}`);
+        }
+
+        return rect;
+      },
+    } satisfies BubbleLayout,
+    calls,
   };
 }
 
@@ -264,6 +287,49 @@ describe("createBubble", () => {
     } finally {
       Date.now = originalDateNow;
     }
+  });
+
+  test("throws when measureElement() is called without a configured layout capability", () => {
+    const bubble = createBubble();
+
+    expect(() => {
+      bubble.measureElement("node:1");
+    }).toThrow(BubbleUnsupportedCapabilityError);
+  });
+
+  test("returns configured geometry from the layout capability", () => {
+    const fakeLayout = createFakeLayout({
+      anchor: { x: 10, y: 20, width: 30, height: 40 },
+    });
+    const bubble = createBubble({
+      capabilities: {
+        layout: fakeLayout.layout,
+      },
+    });
+
+    expect(bubble.measureElement("anchor")).toEqual({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+    });
+  });
+
+  test("captures measureElement() call arguments for assertion", () => {
+    const fakeLayout = createFakeLayout({
+      first: { x: 1, y: 2, width: 3, height: 4 },
+      second: { x: 5, y: 6, width: 7, height: 8 },
+    });
+    const bubble = createBubble({
+      capabilities: {
+        layout: fakeLayout.layout,
+      },
+    });
+
+    bubble.measureElement("first");
+    bubble.measureElement("second");
+
+    expect(fakeLayout.calls).toEqual(["first", "second"]);
   });
 
   test("fires a timer only after time advances to its due time", () => {
