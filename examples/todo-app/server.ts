@@ -1,32 +1,20 @@
-import type { TodoItem } from './todo-store.ts'
-
+import {
+  createTodoApiResponse,
+  handleTodoFallbackRequest,
+  TODO_API_PATH,
+  TODO_APP_PAGE_PATHS,
+  type TodoServerOptions,
+} from './app.ts'
 import todoAppPage from './index.html'
 
-export interface TodoServerOptions {
-  readonly initialTodos?: readonly TodoItem[]
-}
-
-export function createTodoApiResponse(
-  options: TodoServerOptions = {}
-): Response {
-  return Response.json(options.initialTodos ?? [])
-}
-
-export function handleTodoFallbackRequest(request: Request): Response {
-  const url = new URL(request.url)
-
-  if (url.pathname === '/api/todos' && request.method !== 'GET') {
-    return new Response('method not allowed', { status: 405 })
-  }
-
-  return new Response('not found', { status: 404 })
-}
+export { createTodoApiResponse, handleTodoFallbackRequest }
+export type { TodoServerOptions }
 
 export function createTodoRoutes(options: TodoServerOptions = {}) {
   return {
-    '/': todoAppPage,
-    '/index.html': todoAppPage,
-    '/api/todos': {
+    [TODO_APP_PAGE_PATHS[0]]: todoAppPage,
+    [TODO_APP_PAGE_PATHS[1]]: todoAppPage,
+    [TODO_API_PATH]: {
       GET() {
         return createTodoApiResponse(options)
       },

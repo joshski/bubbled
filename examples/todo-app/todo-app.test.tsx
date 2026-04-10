@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 
 import {
   createBubble,
@@ -7,8 +7,18 @@ import {
   type BubbleSerializedNode,
 } from '../../bubble-core'
 import { createSemanticAssertions } from '../../bubble-test'
-import { mountTodoApp } from './mount.tsx'
+import { mountTodoApp, startTodoApp } from './app.ts'
 import { SAMPLE_TODO_LABELS } from './todo-store.ts'
+
+const originalFetch = globalThis.fetch
+const originalConsoleError = console.error
+const originalHTMLElement = globalThis.HTMLElement
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+  console.error = originalConsoleError
+  globalThis.HTMLElement = originalHTMLElement
+})
 
 function collectAttachedElementsByTag(
   node: BubbleSerializedNode,
@@ -60,6 +70,48 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
     collectAttachedElementsByTag(attachedTree(), 'li')
 
   return { app, assertions, attachedLis, attachedTree, click, paragraphId }
+}
+
+class FakeElement {
+  textContent: string | null = ''
+  childElementCount = 0
+
+  appendChild(node: unknown): unknown {
+    if (node instanceof FakeElement) {
+      this.childElementCount += 1
+      this.textContent = `${this.textContent ?? ''}${node.textContent ?? ''}`
+    }
+
+    return node
+  }
+
+  replaceChildren(...nodes: unknown[]): void {
+    this.childElementCount = nodes.length
+    this.textContent = nodes
+      .map(node =>
+        node instanceof FakeElement ? (node.textContent ?? '') : ''
+      )
+      .join('')
+  }
+}
+
+function createFakeDocument(includeApp = true) {
+  const app = includeApp ? new FakeElement() : null
+
+  return {
+    app,
+    document: {
+      createElement() {
+        return new FakeElement()
+      },
+      getElementById(id: string) {
+        return id === 'app' ? app : null
+      },
+    },
+    isMountContainer(value: unknown): value is FakeElement {
+      return value instanceof FakeElement
+    },
+  }
 }
 
 describe('mountTodoApp', () => {
@@ -161,5 +213,135 @@ describe('mountTodoApp', () => {
     } finally {
       app.unmount()
     }
+  })
+})
+
+describe('startTodoApp', () => {
+  test('loads todos into the app container and cleans up on beforeunload', async () => {
+    const mounts: unknown[] = []
+    let unmounted = 0
+    const listeners: Array<() => void> = []
+    const { app, document, isMountContainer } = createFakeDocument()
+
+    const fetchImpl = (async () =>
+      Response.json([
+        { id: 't1', label: 'Alpha', done: false },
+      ])) as unknown as typeof fetch
+
+    await startTodoApp({
+      addEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject
+      ) {
+        if (type === 'beforeunload') {
+          listeners.push(listener as () => void)
+        }
+      },
+      createProjector() {
+        return {
+          mount(container) {
+            mounts.push(container)
+          },
+          unmount() {
+            unmounted += 1
+          },
+        }
+      },
+      document,
+      fetch: fetchImpl,
+      isMountContainer,
+    })
+
+    expect(mounts).toEqual([app])
+    expect(listeners).toHaveLength(1)
+
+    listeners[0]?.()
+    expect(unmounted).toBe(1)
+  })
+
+  test('uses the default HTMLElement container check when no custom predicate is provided', async () => {
+    const mounts: unknown[] = []
+    const listeners: Array<() => void> = []
+    const { app, document } = createFakeDocument()
+    const fetchImpl = (async () => Response.json([])) as unknown as typeof fetch
+
+    globalThis.HTMLElement = FakeElement as unknown as typeof HTMLElement
+
+    await startTodoApp({
+      addEventListener(
+        type: string,
+        listener: EventListenerOrEventListenerObject
+      ) {
+        if (type === 'beforeunload') {
+          listeners.push(listener as () => void)
+        }
+      },
+      createProjector() {
+        return {
+          mount(container) {
+            mounts.push(container)
+          },
+          unmount() {},
+        }
+      },
+      document,
+      fetch: fetchImpl,
+    })
+
+    expect(mounts).toEqual([app])
+    expect(listeners).toHaveLength(1)
+  })
+
+  test('renders a startup error in the app container when loading todos fails', async () => {
+    const { app, document, isMountContainer } = createFakeDocument()
+    const fetchImpl = (async () =>
+      new Response('nope', {
+        status: 503,
+        statusText: 'Service Unavailable',
+      })) as unknown as typeof fetch
+    const logged: unknown[] = []
+    console.error = (value: unknown) => {
+      logged.push(value)
+    }
+
+    await startTodoApp({ document, fetch: fetchImpl, isMountContainer })
+
+    expect(app?.textContent).toContain(
+      'Failed to load todos: 503 Service Unavailable'
+    )
+    expect(logged).toHaveLength(1)
+    expect(logged[0]).toBeInstanceOf(Error)
+  })
+
+  test('falls back to a generic startup error when a non-Error is thrown', async () => {
+    const { app, document, isMountContainer } = createFakeDocument()
+    const fetchImpl = (async () => {
+      throw 'boom'
+    }) as unknown as typeof fetch
+    const logged: unknown[] = []
+    console.error = (value: unknown) => {
+      logged.push(value)
+    }
+
+    await startTodoApp({ document, fetch: fetchImpl, isMountContainer })
+
+    expect(app?.textContent).toContain('Failed to start the todo app.')
+    expect(logged).toEqual(['boom'])
+  })
+
+  test('logs a startup error when the app container is missing', async () => {
+    const { document, isMountContainer } = createFakeDocument(false)
+    const logged: unknown[] = []
+    console.error = (value: unknown) => {
+      logged.push(value)
+    }
+
+    await startTodoApp({ document, isMountContainer })
+
+    expect(logged).toHaveLength(1)
+    expect(logged[0]).toBeInstanceOf(Error)
+    expect((logged[0] as Error).message).toBe(
+      'Expected a root element with id "app".'
+    )
   })
 })
