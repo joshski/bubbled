@@ -8,12 +8,14 @@
     "test:ci": "bun test --coverage-reporter=lcov"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "@joshski/dust": "^0.1.111"
+    "@joshski/dust": "^0.1.111",
+    "react": "^19.2.5"
   }
 }

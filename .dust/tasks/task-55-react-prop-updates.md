@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 54: Minimal React host mount](./task-54-minimal-react-host-mount.md)
+- Task 54: Minimal React host mount
 
 ## Definition of Done
 

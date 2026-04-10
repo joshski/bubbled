@@ -4,7 +4,6 @@ const emptyEntrypoints = [
   "./index",
   "./bubble-capabilities",
   "./bubble-browser",
-  "./bubble-react",
   "./bubble-control",
   "./bubble-cli",
 ] as const;
@@ -41,6 +40,17 @@ describe("public entrypoints", () => {
 
     expect(entrypoint).toEqual({
       createDomProjector: expect.any(Function),
+    });
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
+  });
+
+  test("./bubble-react exposes the React adapter entrypoint", async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+
+    const entrypoint = await import("./bubble-react");
+
+    expect(entrypoint).toEqual({
+      createBubbleReactRoot: expect.any(Function),
     });
     expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
