@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 57: React state updates](./task-57-react-state-updates.md)
+- None.
 
 ## Definition of Done
 
