@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 02: Public entrypoints exist](./task-02-public-entrypoints-exist.md)
+(none)
 
 ## Definition of Done
 
