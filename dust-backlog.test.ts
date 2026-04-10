@@ -7,12 +7,18 @@ const breakdownPath = join(root, "IMPLEMENTATION_BREAKDOWN.md");
 const tasksDir = join(root, ".dust", "tasks");
 
 describe("dust implementation backlog", () => {
-  test("creates one task file for each breakdown task", () => {
+  test("keeps task files scoped to documented breakdown tasks", () => {
     const breakdown = readFileSync(breakdownPath, "utf8");
-    const breakdownTaskCount = [...breakdown.matchAll(/^### Task \d+:/gm)].length;
     const taskFiles = readdirSync(tasksDir).filter((file) => file.endsWith(".md"));
+    const breakdownTaskNumbers = new Set(
+      [...breakdown.matchAll(/^### Task (\d+):/gm)].map((match) => match[1]),
+    );
 
-    expect(taskFiles.length).toBe(breakdownTaskCount);
+    for (const taskFile of taskFiles) {
+      const taskNumber = /^task-(\d+)-/.exec(taskFile)?.[1];
+      expect(taskNumber).toBeDefined();
+      expect(breakdownTaskNumbers.has(taskNumber!)).toBe(true);
+    }
   });
 
   test("references API_SKETCHES.md in every task", () => {

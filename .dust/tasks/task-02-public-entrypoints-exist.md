@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 01: Test runner and coverage gate](./task-01-test-runner-and-coverage-gate.md)
+(none)
 
 ## Definition of Done
 
