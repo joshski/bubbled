@@ -147,6 +147,7 @@ export interface BubbleRuntime {
   snapshot(): BubbleSnapshot;
   dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult;
   focus(id: BubbleNodeId): void;
+  blur(): void;
   getFocusedNodeId(): BubbleNodeId | null;
   subscribe(listener: BubbleRuntimeListener): () => void;
 }
@@ -761,6 +762,9 @@ export function createBubble(): BubbleRuntime {
 
       assertFocusableNode(node, id);
       focusedNodeId = id;
+    },
+    blur() {
+      focusedNodeId = null;
     },
     getFocusedNodeId() {
       return focusedNodeId;

@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 24: Blur](./task-24-blur.md)
+- None
 
 ## Definition of Done
 

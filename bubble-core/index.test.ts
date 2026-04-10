@@ -2072,6 +2072,31 @@ describe("createBubble", () => {
     expect(bubble.getFocusedNodeId()).toBe(secondButtonId);
   });
 
+  test("blur clears focus when one node is active", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+
+      return createdButtonId;
+    });
+
+    bubble.focus(buttonId);
+    bubble.blur();
+
+    expect(bubble.getFocusedNodeId()).toBeNull();
+  });
+
+  test("blur is safe when nothing is focused", () => {
+    const bubble = createBubble();
+
+    bubble.blur();
+
+    expect(bubble.getFocusedNodeId()).toBeNull();
+  });
+
   test("rejects non-focusable targets", () => {
     const bubble = createBubble();
 
