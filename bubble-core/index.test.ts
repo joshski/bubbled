@@ -259,6 +259,151 @@ describe("createBubble", () => {
     });
   });
 
+  test("removes an only child from its parent", () => {
+    const bubble = createBubble();
+
+    const childId = bubble.transact((tx) => {
+      const createdChildId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdChildId });
+      tx.removeChild({ parentId: bubble.rootId, childId: createdChildId });
+
+      return createdChildId;
+    });
+
+    expect(bubble.getRoot()).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [],
+    });
+    expect(bubble.getNode(childId)).toEqual({
+      id: childId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+  });
+
+  test("removes the first, middle, and last child", () => {
+    const bubble = createBubble();
+
+    const childIds = bubble.transact((tx) => {
+      const firstId = tx.createElement({ tag: "header" });
+      const middleId = tx.createElement({ tag: "main" });
+      const lastId = tx.createElement({ tag: "footer" });
+      const remainingId = tx.createElement({ tag: "section" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: firstId });
+      tx.insertChild({ parentId: bubble.rootId, childId: middleId });
+      tx.insertChild({ parentId: bubble.rootId, childId: lastId });
+      tx.insertChild({ parentId: bubble.rootId, childId: remainingId, index: 1 });
+
+      tx.removeChild({ parentId: bubble.rootId, childId: firstId });
+      tx.removeChild({ parentId: bubble.rootId, childId: remainingId });
+      tx.removeChild({ parentId: bubble.rootId, childId: lastId });
+
+      return { firstId, middleId, lastId, remainingId };
+    });
+
+    expect(bubble.getRoot()).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [childIds.middleId],
+    });
+    expect(bubble.getNode(childIds.firstId)).toEqual({
+      id: childIds.firstId,
+      kind: "element",
+      tag: "header",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childIds.remainingId)).toEqual({
+      id: childIds.remainingId,
+      kind: "element",
+      tag: "section",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childIds.lastId)).toEqual({
+      id: childIds.lastId,
+      kind: "element",
+      tag: "footer",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childIds.middleId)).toEqual({
+      id: childIds.middleId,
+      kind: "element",
+      tag: "main",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+  });
+
+  test("detaches a removed node cleanly", () => {
+    const bubble = createBubble();
+
+    const { parentId, childId, grandchildId } = bubble.transact((tx) => {
+      const createdParentId = tx.createElement({ tag: "article" });
+      const createdChildId = tx.createElement({ tag: "section" });
+      const createdGrandchildId = tx.createText({ value: "Hello" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdParentId });
+      tx.insertChild({ parentId: createdParentId, childId: createdChildId });
+      tx.insertChild({ parentId: createdChildId, childId: createdGrandchildId });
+      tx.removeChild({ parentId: createdParentId, childId: createdChildId });
+
+      return {
+        parentId: createdParentId,
+        childId: createdChildId,
+        grandchildId: createdGrandchildId,
+      };
+    });
+
+    expect(bubble.getNode(parentId)).toEqual({
+      id: parentId,
+      kind: "element",
+      tag: "article",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childId)).toEqual({
+      id: childId,
+      kind: "element",
+      tag: "section",
+      namespace: "html",
+      parentId: null,
+      children: [grandchildId],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(grandchildId)).toEqual({
+      id: grandchildId,
+      kind: "text",
+      parentId: childId,
+      value: "Hello",
+    });
+  });
+
   test("allows empty text values", () => {
     const bubble = createBubble();
 
@@ -479,6 +624,24 @@ describe("createBubble", () => {
       expect(() => {
         tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
       }).toThrow("The root node cannot be removed as a child");
+    });
+  });
+
+  test("rejects removing a node that is not a child of the parent", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const parentId = tx.createElement({ tag: "article" });
+      const actualParentId = tx.createElement({ tag: "section" });
+      const childId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: parentId });
+      tx.insertChild({ parentId: bubble.rootId, childId: actualParentId });
+      tx.insertChild({ parentId: actualParentId, childId: childId });
+
+      expect(() => {
+        tx.removeChild({ parentId, childId });
+      }).toThrow(`Node ${childId} is not a child of ${parentId}`);
     });
   });
 });

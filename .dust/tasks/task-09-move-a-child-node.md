@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 08: Remove a child node](./task-08-remove-a-child-node.md)
+(none)
 
 ## Definition of Done
 
