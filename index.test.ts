@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-const entrypoints = [
+const emptyEntrypoints = [
   "./index",
-  "./bubble-core",
   "./bubble-capabilities",
   "./bubble-test",
   "./bubble-browser",
@@ -12,7 +11,18 @@ const entrypoints = [
 ] as const;
 
 describe("public entrypoints", () => {
-  for (const entrypointPath of entrypoints) {
+  test("./bubble-core exposes the bubble runtime entrypoint", async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+
+    const entrypoint = await import("./bubble-core");
+
+    expect(entrypoint).toEqual({
+      createBubble: expect.any(Function),
+    });
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
+  });
+
+  for (const entrypointPath of emptyEntrypoints) {
     test(`${entrypointPath} imports without side effects`, async () => {
       const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
 

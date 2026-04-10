@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 03: Create an empty bubble instance](./task-03-create-an-empty-bubble-instance.md)
+(none)
 
 ## Definition of Done
 
