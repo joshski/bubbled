@@ -55,8 +55,23 @@ describe("public entrypoints", () => {
     expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
 
+  test("./bubble-control exposes the control entrypoint", async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+
+    const entrypoint = await import("./bubble-control");
+
+    expect(entrypoint).toEqual({
+      createController: expect.any(Function),
+    });
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
+  });
+
   for (const entrypointPath of emptyEntrypoints) {
-    if (entrypointPath === "./bubble-capabilities" || entrypointPath === "./bubble-browser") {
+    if (
+      entrypointPath === "./bubble-capabilities" ||
+      entrypointPath === "./bubble-browser" ||
+      entrypointPath === "./bubble-control"
+    ) {
       continue;
     }
 
