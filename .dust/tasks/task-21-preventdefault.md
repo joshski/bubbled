@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 20: `stopPropagation`](./task-20-stoppropagation.md)
+(none)
 
 ## Definition of Done
 

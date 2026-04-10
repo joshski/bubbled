@@ -693,6 +693,9 @@ export function createBubble(): BubbleRuntime {
       const eventData = Object.freeze({ ...data });
       let currentTargetId = targetId;
       let phase: BubbleEventPhase = "target";
+      const defaultPrevented = false;
+      let propagationStopped = false;
+      let propagationStopNodeId: BubbleNodeId | null = null;
 
       const event: BubbleEvent = {
         type,
@@ -704,19 +707,32 @@ export function createBubble(): BubbleRuntime {
           return phase;
         },
         cancelable,
-        defaultPrevented: false,
+        get defaultPrevented() {
+          return defaultPrevented;
+        },
         data: eventData,
         preventDefault() {},
-        stopPropagation() {},
+        stopPropagation() {
+          propagationStopped = true;
+          propagationStopNodeId = currentTargetId;
+        },
       };
 
       for (const queuedListener of deliveryQueue) {
+        if (
+          propagationStopped &&
+          propagationStopNodeId !== null &&
+          queuedListener.nodeId !== propagationStopNodeId
+        ) {
+          break;
+        }
+
         currentTargetId = queuedListener.nodeId;
         phase = queuedListener.phase;
         queuedListener.registration.listener(event);
       }
 
-      return { defaultPrevented: false, delivered: true };
+      return { defaultPrevented, delivered: true };
     },
     subscribe(listener) {
       listeners.add(listener);

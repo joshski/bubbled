@@ -1146,6 +1146,162 @@ describe("createBubble", () => {
     ]);
   });
 
+  test("stops further propagation during capture", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const grandparentId = tx.createElement({ tag: "main" });
+      const parentId = tx.createElement({ tag: "section" });
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: grandparentId });
+      tx.insertChild({ parentId: grandparentId, childId: parentId });
+      tx.insertChild({ parentId, childId: createdButtonId });
+      tx.addEventListener({
+        nodeId: grandparentId,
+        type: "click",
+        capture: true,
+        listener: () => {
+          calls.push("grandparent-capture");
+        },
+      });
+      tx.addEventListener({
+        nodeId: parentId,
+        type: "click",
+        capture: true,
+        listener: (event) => {
+          calls.push("parent-capture");
+          event.stopPropagation();
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("target");
+        },
+      });
+      tx.addEventListener({
+        nodeId: grandparentId,
+        type: "click",
+        listener: () => {
+          calls.push("grandparent-bubble");
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual(["grandparent-capture", "parent-capture"]);
+  });
+
+  test("stops further propagation at the target", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const parentId = tx.createElement({ tag: "section" });
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: parentId });
+      tx.insertChild({ parentId, childId: createdButtonId });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          calls.push("target-first");
+          event.stopPropagation();
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("target-second");
+        },
+      });
+      tx.addEventListener({
+        nodeId: parentId,
+        type: "click",
+        listener: () => {
+          calls.push("parent-bubble");
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual(["target-first", "target-second"]);
+  });
+
+  test("does not rewind listeners that already ran before propagation stops", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const grandparentId = tx.createElement({ tag: "main" });
+      const parentId = tx.createElement({ tag: "section" });
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: grandparentId });
+      tx.insertChild({ parentId: grandparentId, childId: parentId });
+      tx.insertChild({ parentId, childId: createdButtonId });
+      tx.addEventListener({
+        nodeId: grandparentId,
+        type: "click",
+        capture: true,
+        listener: () => {
+          calls.push("grandparent-capture");
+        },
+      });
+      tx.addEventListener({
+        nodeId: parentId,
+        type: "click",
+        capture: true,
+        listener: () => {
+          calls.push("parent-capture-first");
+        },
+      });
+      tx.addEventListener({
+        nodeId: parentId,
+        type: "click",
+        capture: true,
+        listener: (event) => {
+          calls.push("parent-capture-second");
+          event.stopPropagation();
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("target");
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(bubble.dispatchEvent({ type: "click", targetId: buttonId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    });
+    expect(calls).toEqual([
+      "grandparent-capture",
+      "parent-capture-first",
+      "parent-capture-second",
+    ]);
+  });
+
   test("rejects listener registration with invalid targets and event names", () => {
     const bubble = createBubble();
     const textId = bubble.transact((tx) => tx.createText({ value: "hello" }));
