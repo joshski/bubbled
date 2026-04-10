@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 38: Capability registry](./task-38-capability-registry.md)
+- None
 
 ## Definition of Done
 

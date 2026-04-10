@@ -1,3 +1,9 @@
+import {
+  createCapabilityRegistry,
+  type BubbleCapabilities,
+  type BubbleCapabilityName,
+} from "../bubble-capabilities";
+
 export type BubbleNodeId = string;
 
 export type BubbleNamespace = "html" | "svg";
@@ -169,6 +175,7 @@ export interface BubbleQueryApi {
 
 export interface BubbleRuntime {
   readonly rootId: BubbleNodeId;
+  resolveCapability<Name extends BubbleCapabilityName>(name: Name): BubbleCapabilities[Name];
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
@@ -181,6 +188,10 @@ export interface BubbleRuntime {
   getFocusedNodeId(): BubbleNodeId | null;
   getTabOrder(): readonly BubbleNodeId[];
   subscribe(listener: BubbleRuntimeListener): () => void;
+}
+
+export interface CreateBubbleOptions {
+  capabilities?: Partial<BubbleCapabilities>;
 }
 
 export function createBubbleQuery(snapshot: Pick<BubbleSnapshot, "nodes">): BubbleQueryApi {
@@ -539,7 +550,7 @@ function resolveLabelControl(
   return findFirstLabelableDescendant(labelId, nodeLookup);
 }
 
-export function createBubble(): BubbleRuntime {
+export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
     kind: "root",
@@ -554,6 +565,7 @@ export function createBubble(): BubbleRuntime {
   let nextListenerId = 0;
   let transactionDepth = 0;
   let focusedNodeId: BubbleNodeId | null = null;
+  const capabilityRegistry = createCapabilityRegistry(options.capabilities);
   const listeners = new Set<BubbleRuntimeListener>();
   let eventListeners = new Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>();
 
@@ -1049,6 +1061,9 @@ export function createBubble(): BubbleRuntime {
 
   return {
     rootId: root.id,
+    resolveCapability(name) {
+      return capabilityRegistry.resolveCapability(name);
+    },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       if (transactionDepth > 0) {
         throw new Error(NESTED_TRANSACTION_ERROR);

@@ -34,6 +34,10 @@ describe("public entrypoints", () => {
   });
 
   for (const entrypointPath of emptyEntrypoints) {
+    if (entrypointPath === "./bubble-capabilities") {
+      continue;
+    }
+
     test(`${entrypointPath} imports without side effects`, async () => {
       const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
 
@@ -43,4 +47,16 @@ describe("public entrypoints", () => {
       expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
     });
   }
+
+  test("./bubble-capabilities exposes the capability registry entrypoint", async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+
+    const entrypoint = await import("./bubble-capabilities");
+
+    expect(entrypoint).toEqual({
+      BubbleUnsupportedCapabilityError: expect.any(Function),
+      createCapabilityRegistry: expect.any(Function),
+    });
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
+  });
 });

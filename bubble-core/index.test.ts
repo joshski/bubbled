@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { BubbleUnsupportedCapabilityError } from "../bubble-capabilities";
 import { createBubble } from "./index";
 
 describe("createBubble", () => {
@@ -51,6 +52,63 @@ describe("createBubble", () => {
       attributes: {},
       properties: {},
     });
+  });
+
+  test("resolves registered capabilities from explicit createBubble options", () => {
+    const clock = {
+      now: () => 123,
+    };
+    const bubble = createBubble({
+      capabilities: {
+        clock,
+      },
+    });
+
+    expect(bubble.resolveCapability("clock")).toBe(clock);
+  });
+
+  test("throws a named unsupported error when a capability is missing", () => {
+    const bubble = createBubble();
+
+    expect(() => {
+      bubble.resolveCapability("clock");
+    }).toThrow(BubbleUnsupportedCapabilityError);
+  });
+
+  test("keeps capability state isolated between bubble instances", () => {
+    let firstTime = 1;
+    let secondTime = 100;
+    const firstBubble = createBubble({
+      capabilities: {
+        clock: {
+          now: () => {
+            const currentTime = firstTime;
+
+            firstTime += 1;
+
+            return currentTime;
+          },
+        },
+      },
+    });
+    const secondBubble = createBubble({
+      capabilities: {
+        clock: {
+          now: () => {
+            const currentTime = secondTime;
+
+            secondTime += 10;
+
+            return currentTime;
+          },
+        },
+      },
+    });
+
+    expect(firstBubble.resolveCapability("clock").now()).toBe(1);
+    expect(firstBubble.resolveCapability("clock").now()).toBe(2);
+    expect(secondBubble.resolveCapability("clock").now()).toBe(100);
+    expect(secondBubble.resolveCapability("clock").now()).toBe(110);
   });
 
   test("returns read-only root snapshots", () => {
