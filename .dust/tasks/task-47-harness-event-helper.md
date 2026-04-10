@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 46: Harness render helper](./task-46-harness-render-helper.md)
+- None
 
 ## Definition of Done
 
