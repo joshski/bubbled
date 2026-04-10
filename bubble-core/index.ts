@@ -53,10 +53,17 @@ const ROOT_NODE_ID = "root";
 const NODE_ID_PREFIX = "node:";
 
 const ELEMENT_TAG_ERROR = "Element tag must be a non-empty string";
+const TEXT_VALUE_ERROR = "Text value must be a string";
 
 function assertValidElementTag(tag: unknown): asserts tag is string {
   if (typeof tag !== "string" || tag.trim().length === 0) {
     throw new Error(ELEMENT_TAG_ERROR);
+  }
+}
+
+function assertValidTextValue(value: unknown): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(TEXT_VALUE_ERROR);
   }
 }
 
@@ -160,6 +167,8 @@ export function createBubble(): BubbleRuntime {
           return id;
         },
         createText({ value }) {
+          assertValidTextValue(value);
+
           const id = allocateNodeId();
 
           nodes.set(id, {

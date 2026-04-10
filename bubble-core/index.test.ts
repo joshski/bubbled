@@ -152,6 +152,48 @@ describe("createBubble", () => {
     });
   });
 
+  test("creates text nodes with the expected shape", () => {
+    const bubble = createBubble();
+
+    const textId = bubble.transact((tx) => tx.createText({ value: "Save" }));
+
+    expect(bubble.getNode(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: null,
+      value: "Save",
+    });
+  });
+
+  test("allows empty text values", () => {
+    const bubble = createBubble();
+
+    const textId = bubble.transact((tx) => tx.createText({ value: "" }));
+
+    expect(bubble.getNode(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: null,
+      value: "",
+    });
+  });
+
+  test("rejects invalid text values", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      expect(() => {
+        tx.createText({ value: undefined as unknown as string });
+      }).toThrow("Text value must be a string");
+      expect(() => {
+        tx.createText({ value: null as unknown as string });
+      }).toThrow("Text value must be a string");
+      expect(() => {
+        tx.createText({ value: 123 as unknown as string });
+      }).toThrow("Text value must be a string");
+    });
+  });
+
   test("keeps node IDs stable across read operations", () => {
     const bubble = createBubble();
 

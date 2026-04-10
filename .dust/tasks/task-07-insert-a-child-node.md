@@ -23,7 +23,7 @@ implement
 
 ## Blocked By
 
-- [Task 06: Create text nodes](./task-06-create-text-nodes.md)
+(none)
 
 ## Definition of Done
 

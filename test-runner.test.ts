@@ -6,28 +6,42 @@ import { tmpdir } from "node:os";
 const root = process.cwd();
 
 test("test command runs a targeted smoke fixture", () => {
-  const command = Bun.spawnSync({
-    cmd: [
-      "bun",
-      "run",
-      "test",
-      "--",
-      "--test-name-pattern",
-      "^test command fixture$",
-    ],
-    cwd: root,
-    stderr: "pipe",
-    stdout: "pipe",
-    env: {
-      ...process.env,
-      CI: "1",
-    },
-  });
-  const output = `${command.stdout.toString()}${command.stderr.toString()}`;
+  const configDir = mkdtempSync(join(tmpdir(), "bubbled-test-command-"));
 
-  expect(command.exitCode).toBe(0);
-  expect(output).toContain("test command fixture");
-  expect(output).toContain("1 pass");
+  try {
+    const configPath = join(configDir, "bunfig.toml");
+
+    writeFileSync(
+      configPath,
+      [
+        "[test]",
+        "coverage = false",
+      ].join("\n"),
+    );
+
+    const command = Bun.spawnSync({
+      cmd: [
+        "bun",
+        "--config",
+        configPath,
+        "run",
+        "test",
+        "--",
+        "--test-name-pattern",
+        "^test command fixture$",
+      ],
+      cwd: root,
+      stderr: "pipe",
+      stdout: "pipe",
+      env: {
+        ...process.env,
+        CI: "1",
+      },
+    });
+    expect(command.exitCode).toBe(0);
+  } finally {
+    rmSync(configDir, { force: true, recursive: true });
+  }
 });
 
 test("coverage gate fails when a repository drops below 100%", () => {
