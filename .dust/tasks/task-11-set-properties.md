@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 10: Set and remove attributes](./task-10-set-and-remove-attributes.md)
+(none)
 
 ## Definition of Done
 

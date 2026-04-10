@@ -45,6 +45,15 @@ export interface BubbleTransaction {
     childId: BubbleNodeId;
     index: number;
   }): void;
+  setAttribute(input: {
+    nodeId: BubbleNodeId;
+    name: string;
+    value: string;
+  }): void;
+  removeAttribute(input: {
+    nodeId: BubbleNodeId;
+    name: string;
+  }): void;
 }
 
 export interface BubbleRuntime {
@@ -78,6 +87,12 @@ function assertValidTextValue(value: unknown): asserts value is string {
 function assertValidChildIndex(index: unknown, childCount: number): asserts index is number {
   if (!Number.isInteger(index) || index < 0 || index > childCount) {
     throw new Error(CHILD_INDEX_ERROR);
+  }
+}
+
+function assertElementNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
+  if (node.kind !== "element") {
+    throw new Error(`Attributes are only supported on element nodes: ${nodeId}`);
   }
 }
 
@@ -261,6 +276,18 @@ export function createBubble(): BubbleRuntime {
           }
 
           moveWithinParent(parent, childId, index);
+        },
+        setAttribute({ nodeId, name, value }) {
+          const node = getMutableNode(nodeId);
+
+          assertElementNode(node, nodeId);
+          node.attributes[name] = value;
+        },
+        removeAttribute({ nodeId, name }) {
+          const node = getMutableNode(nodeId);
+
+          assertElementNode(node, nodeId);
+          delete node.attributes[name];
         },
       };
 

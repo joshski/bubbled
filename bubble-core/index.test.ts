@@ -505,6 +505,77 @@ describe("createBubble", () => {
     });
   });
 
+  test("sets a new attribute on an element", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+
+      tx.setAttribute({ nodeId: createdElementId, name: "type", value: "button" });
+
+      return createdElementId;
+    });
+
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: { type: "button" },
+      properties: {},
+    });
+  });
+
+  test("updates an existing attribute on an element", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: createdElementId, name: "type", value: "text" });
+      tx.setAttribute({ nodeId: createdElementId, name: "type", value: "email" });
+
+      return createdElementId;
+    });
+
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "input",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: { type: "email" },
+      properties: {},
+    });
+  });
+
+  test("removes an attribute from an element", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+
+      tx.setAttribute({ nodeId: createdElementId, name: "type", value: "button" });
+      tx.removeAttribute({ nodeId: createdElementId, name: "type" });
+
+      return createdElementId;
+    });
+
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: null,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+  });
+
   test("allows empty text values", () => {
     const bubble = createBubble();
 
@@ -744,6 +815,27 @@ describe("createBubble", () => {
       expect(() => {
         tx.removeChild({ parentId: bubble.rootId, childId: bubble.rootId });
       }).toThrow("The root node cannot be removed as a child");
+    });
+  });
+
+  test("rejects attribute mutations on unsupported node types", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const textId = tx.createText({ value: "Save" });
+
+      expect(() => {
+        tx.setAttribute({ nodeId: bubble.rootId, name: "role", value: "application" });
+      }).toThrow(`Attributes are only supported on element nodes: ${bubble.rootId}`);
+      expect(() => {
+        tx.removeAttribute({ nodeId: bubble.rootId, name: "role" });
+      }).toThrow(`Attributes are only supported on element nodes: ${bubble.rootId}`);
+      expect(() => {
+        tx.setAttribute({ nodeId: textId, name: "role", value: "label" });
+      }).toThrow(`Attributes are only supported on element nodes: ${textId}`);
+      expect(() => {
+        tx.removeAttribute({ nodeId: textId, name: "role" });
+      }).toThrow(`Attributes are only supported on element nodes: ${textId}`);
     });
   });
 
