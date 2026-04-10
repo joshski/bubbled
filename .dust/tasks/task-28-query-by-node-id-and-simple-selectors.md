@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 27: Simulated tab navigation](./task-27-simulated-tab-navigation.md)
+- None
 
 ## Definition of Done
 

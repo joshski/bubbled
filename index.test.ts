@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 const emptyEntrypoints = [
   "./index",
   "./bubble-capabilities",
-  "./bubble-test",
   "./bubble-browser",
   "./bubble-react",
   "./bubble-control",
@@ -18,6 +17,17 @@ describe("public entrypoints", () => {
 
     expect(entrypoint).toEqual({
       createBubble: expect.any(Function),
+    });
+    expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
+  });
+
+  test("./bubble-test exposes the test harness entrypoint", async () => {
+    const globalsBeforeImport = Object.getOwnPropertyDescriptors(globalThis);
+
+    const entrypoint = await import("./bubble-test");
+
+    expect(entrypoint).toEqual({
+      createHarness: expect.any(Function),
     });
     expect(Object.getOwnPropertyDescriptors(globalThis)).toEqual(globalsBeforeImport);
   });
