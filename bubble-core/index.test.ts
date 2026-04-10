@@ -29,7 +29,7 @@ describe("createBubble", () => {
     expect(firstRoot).toEqual(secondRoot);
     expect(firstRoot).not.toBe(secondRoot);
     expect(firstRoot.children).not.toBe(secondRoot.children);
-    expect(firstElementId).toBe(secondElementId);
+    expect(firstElementId).not.toBe(secondElementId);
     expect(firstBubble.getNode(firstElementId)).toEqual({
       id: firstElementId,
       kind: "element",
@@ -40,7 +40,8 @@ describe("createBubble", () => {
       attributes: {},
       properties: {},
     });
-    expect(secondBubble.getNode(firstElementId)).toEqual({
+    expect(secondBubble.getNode(firstElementId)).toBeNull();
+    expect(secondBubble.getNode(secondElementId)).toEqual({
       id: secondElementId,
       kind: "element",
       tag: "button",
@@ -162,6 +163,99 @@ describe("createBubble", () => {
       kind: "text",
       parentId: null,
       value: "Save",
+    });
+  });
+
+  test("inserts a child into an empty parent", () => {
+    const bubble = createBubble();
+
+    const elementId = bubble.transact((tx) => {
+      const createdElementId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdElementId, index: 0 });
+
+      return createdElementId;
+    });
+
+    expect(bubble.getRoot()).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [elementId],
+    });
+    expect(bubble.getNode(elementId)).toEqual({
+      id: elementId,
+      kind: "element",
+      tag: "button",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+  });
+
+  test("inserts children at the front, middle, and end", () => {
+    const bubble = createBubble();
+
+    const childIds = bubble.transact((tx) => {
+      const firstId = tx.createElement({ tag: "header" });
+      const secondId = tx.createElement({ tag: "main" });
+      const thirdId = tx.createElement({ tag: "footer" });
+      const frontId = tx.createElement({ tag: "nav" });
+      const middleId = tx.createElement({ tag: "section" });
+      const endId = tx.createElement({ tag: "aside" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: firstId });
+      tx.insertChild({ parentId: bubble.rootId, childId: secondId });
+      tx.insertChild({ parentId: bubble.rootId, childId: thirdId });
+      tx.insertChild({ parentId: bubble.rootId, childId: frontId, index: 0 });
+      tx.insertChild({ parentId: bubble.rootId, childId: middleId, index: 2 });
+      tx.insertChild({ parentId: bubble.rootId, childId: endId, index: 5 });
+
+      return { firstId, secondId, thirdId, frontId, middleId, endId };
+    });
+
+    expect(bubble.getRoot()).toEqual({
+      id: bubble.rootId,
+      kind: "root",
+      children: [
+        childIds.frontId,
+        childIds.firstId,
+        childIds.middleId,
+        childIds.secondId,
+        childIds.thirdId,
+        childIds.endId,
+      ],
+    });
+    expect(bubble.getNode(childIds.frontId)).toEqual({
+      id: childIds.frontId,
+      kind: "element",
+      tag: "nav",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childIds.middleId)).toEqual({
+      id: childIds.middleId,
+      kind: "element",
+      tag: "section",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(childIds.endId)).toEqual({
+      id: childIds.endId,
+      kind: "element",
+      tag: "aside",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [],
+      attributes: {},
+      properties: {},
     });
   });
 
@@ -353,6 +447,9 @@ describe("createBubble", () => {
 
   test("rejects invalid child mutations", () => {
     const bubble = createBubble();
+    const otherBubble = createBubble();
+
+    const otherElementId = otherBubble.transact((tx) => tx.createElement({ tag: "dialog" }));
 
     bubble.transact((tx) => {
       const elementId = tx.createElement({ tag: "button" });
@@ -367,6 +464,12 @@ describe("createBubble", () => {
       expect(() => {
         tx.insertChild({ parentId: bubble.rootId, childId: "missing" });
       }).toThrow("Unknown node ID: missing");
+      expect(() => {
+        tx.insertChild({ parentId: bubble.rootId, childId: otherElementId });
+      }).toThrow(`Unknown node ID: ${otherElementId}`);
+      expect(() => {
+        tx.insertChild({ parentId: bubble.rootId, childId: elementId, index: -1 });
+      }).toThrow("Child index must be an integer within the parent child range");
       expect(() => {
         tx.insertChild({ parentId: bubble.rootId, childId: bubble.rootId });
       }).toThrow("The root node cannot be inserted as a child");

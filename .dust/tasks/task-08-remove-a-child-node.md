@@ -23,7 +23,7 @@ implement
 
 ## Blocked By
 
-- [Task 07: Insert a child node](./task-07-insert-a-child-node.md)
+(none)
 
 ## Definition of Done
 

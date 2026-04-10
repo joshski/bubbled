@@ -58,10 +58,10 @@ test("test command fixture", () => {
     };
   });
 
-  expect(elementId).toBe("node:1");
-  expect(textId).toBe("node:2");
-  expect(svgElementId).toBe("node:3");
-  expect(replacementTextId).toBe("node:4");
+  expect(elementId).toMatch(/^node:\d+:1$/);
+  expect(textId).toMatch(/^node:\d+:2$/);
+  expect(svgElementId).toMatch(/^node:\d+:3$/);
+  expect(replacementTextId).toMatch(/^node:\d+:4$/);
   expect(bubble.getNode(elementId)).toEqual({
     id: elementId,
     kind: "element",

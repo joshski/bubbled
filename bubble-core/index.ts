@@ -54,6 +54,9 @@ const NODE_ID_PREFIX = "node:";
 
 const ELEMENT_TAG_ERROR = "Element tag must be a non-empty string";
 const TEXT_VALUE_ERROR = "Text value must be a string";
+const CHILD_INDEX_ERROR = "Child index must be an integer within the parent child range";
+
+let nextBubbleInstanceId = 0;
 
 function assertValidElementTag(tag: unknown): asserts tag is string {
   if (typeof tag !== "string" || tag.trim().length === 0) {
@@ -67,6 +70,12 @@ function assertValidTextValue(value: unknown): asserts value is string {
   }
 }
 
+function assertValidChildIndex(index: unknown, childCount: number): asserts index is number {
+  if (!Number.isInteger(index) || index < 0 || index > childCount) {
+    throw new Error(CHILD_INDEX_ERROR);
+  }
+}
+
 export function createBubble(): BubbleRuntime {
   const root: BubbleRootNode = {
     id: ROOT_NODE_ID,
@@ -75,12 +84,14 @@ export function createBubble(): BubbleRuntime {
   };
 
   const nodes = new Map<BubbleNodeId, BubbleNode>([[root.id, root]]);
+  nextBubbleInstanceId += 1;
+  const bubbleInstanceId = nextBubbleInstanceId;
   let nextNodeId = 0;
 
   const allocateNodeId = (): BubbleNodeId => {
     nextNodeId += 1;
 
-    return `${NODE_ID_PREFIX}${nextNodeId}`;
+    return `${NODE_ID_PREFIX}${bubbleInstanceId}:${nextNodeId}`;
   };
 
   const getMutableNode = (id: BubbleNodeId): BubbleNode => {
@@ -128,6 +139,7 @@ export function createBubble(): BubbleRuntime {
     childId: BubbleNodeId,
     index: number = parent.children.length,
   ): void => {
+    assertValidChildIndex(index, parent.children.length);
     parent.children.splice(index, 0, childId);
   };
 
