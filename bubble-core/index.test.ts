@@ -1399,6 +1399,109 @@ describe("createBubble", () => {
     ]);
   });
 
+  test("rethrows listener errors from dispatch", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          throw new Error("listener failed");
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(() => {
+      bubble.dispatchEvent({ type: "click", targetId: buttonId });
+    }).toThrow("listener failed");
+  });
+
+  test("stops delivering later listeners after a listener throws", () => {
+    const bubble = createBubble();
+    const calls: string[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("first");
+          throw new Error("listener failed");
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: () => {
+          calls.push("second");
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(() => {
+      bubble.dispatchEvent({ type: "click", targetId: buttonId });
+    }).toThrow("listener failed");
+    expect(calls).toEqual(["first"]);
+  });
+
+  test("leaves the tree unchanged when a listener throws", () => {
+    const bubble = createBubble();
+
+    const { sectionId, buttonId, textId } = bubble.transact((tx) => {
+      const createdSectionId = tx.createElement({ tag: "section" });
+      const createdButtonId = tx.createElement({ tag: "button" });
+      const createdTextId = tx.createText({ value: "Stable" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdSectionId });
+      tx.insertChild({ parentId: createdSectionId, childId: createdButtonId });
+      tx.insertChild({ parentId: createdButtonId, childId: createdTextId });
+      tx.setAttribute({ nodeId: createdSectionId, name: "role", value: "region" });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          throw new Error("listener failed");
+        },
+      });
+
+      return {
+        sectionId: createdSectionId,
+        buttonId: createdButtonId,
+        textId: createdTextId,
+      };
+    });
+
+    const rootBefore = bubble.getRoot();
+    const sectionBefore = bubble.getNode(sectionId);
+    const buttonBefore = bubble.getNode(buttonId);
+    const textBefore = bubble.getNode(textId);
+
+    expect(() => {
+      bubble.dispatchEvent({
+        type: "click",
+        targetId: buttonId,
+        data: { source: "test" },
+        cancelable: true,
+      });
+    }).toThrow("listener failed");
+
+    expect(bubble.getRoot()).toEqual(rootBefore);
+    expect(bubble.getNode(sectionId)).toEqual(sectionBefore);
+    expect(bubble.getNode(buttonId)).toEqual(buttonBefore);
+    expect(bubble.getNode(textId)).toEqual(textBefore);
+  });
+
   test("rejects listener registration with invalid targets and event names", () => {
     const bubble = createBubble();
     const textId = bubble.transact((tx) => tx.createText({ value: "hello" }));

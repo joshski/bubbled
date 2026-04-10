@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 22: Listener error handling](./task-22-listener-error-handling.md)
+- Task 22: Listener error handling (completed)
 
 ## Definition of Done
 
