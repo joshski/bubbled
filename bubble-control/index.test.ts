@@ -3,51 +3,126 @@ import { describe, expect, test } from "bun:test";
 import { createController } from "./index";
 
 describe("createController", () => {
-  test("creates a session with an inspectable bubble instance", async () => {
+  test("creates a session that can be discovered by ID", async () => {
     const controller = await createController();
 
     const session = await controller.createSession();
+    const tree = await session.query({ type: "get-tree" });
 
     expect(session.id).toBe("session-1");
     expect(await controller.getSession(session.id)).toBe(session);
-    expect(session.inspect()).toMatchObject({
-      rootId: "root",
+    expect(tree).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rootId: "root",
+      }),
     });
-    expect(Array.from(session.inspect().nodes.keys())).toEqual(["root"]);
+    expect(await controller.getSession("missing")).toBeNull();
   });
 
-  test("resets a session to a fresh bubble instance", async () => {
+  test("command mutates session state", async () => {
     const controller = await createController();
     const session = await controller.createSession();
-    const snapshotBeforeReset = session.inspect();
+    const destroyResult = await session.command({ type: "destroy" });
 
-    await session.reset();
-
-    const snapshotAfterReset = session.inspect();
-
-    expect(snapshotAfterReset).toMatchObject({
-      rootId: "root",
+    expect(destroyResult).toEqual({ ok: true });
+    await expect(session.query({ type: "get-tree" })).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "session_destroyed",
+        message: `Session ${session.id} has been destroyed.`,
+      },
     });
-    expect(Array.from(snapshotAfterReset.nodes.keys())).toEqual(["root"]);
-    expect(snapshotAfterReset).not.toBe(snapshotBeforeReset);
-    expect(snapshotAfterReset.nodes).not.toBe(snapshotBeforeReset.nodes);
   });
 
-  test("destroys a session and rejects further use", async () => {
+  test("reset command returns an explicit success result", async () => {
+    const controller = await createController();
+    const session = await controller.createSession();
+
+    expect(await session.command({ type: "reset" })).toEqual({ ok: true });
+    await expect(session.query({ type: "get-tree" })).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rootId: "root",
+      }),
+    });
+  });
+
+  test("query reads state without mutation", async () => {
+    const controller = await createController();
+    const session = await controller.createSession();
+
+    const firstResult = await session.query({ type: "get-tree" });
+    const secondResult = await session.query({ type: "get-tree" });
+
+    expect(firstResult).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rootId: "root",
+      }),
+    });
+    expect(secondResult).toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rootId: "root",
+      }),
+    });
+    expect(firstResult).not.toBe(secondResult);
+    if (firstResult.ok && secondResult.ok) {
+      expect(Array.from(firstResult.value.nodes.keys())).toEqual(["root"]);
+      expect(Array.from(secondResult.value.nodes.keys())).toEqual(["root"]);
+      expect(firstResult.value).not.toBe(secondResult.value);
+      expect(firstResult.value.nodes).not.toBe(secondResult.value.nodes);
+    }
+  });
+
+  test("invalid command returns a structured error", async () => {
+    const controller = await createController();
+    const session = await controller.createSession();
+
+    const result = await session.command({ type: "explode" } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "unknown_command",
+        message: "Unknown command: explode",
+        details: {
+          type: "explode",
+        },
+      },
+    });
+  });
+
+  test("invalid query returns a structured error", async () => {
+    const controller = await createController();
+    const session = await controller.createSession();
+
+    const result = await session.query({ type: "explode" } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "unknown_query",
+        message: "Unknown query: explode",
+        details: {
+          type: "explode",
+        },
+      },
+    });
+  });
+
+  test("reset and destroy wrappers forward structured errors after destruction", async () => {
     const controller = await createController();
     const session = await controller.createSession();
 
     await session.destroy();
 
-    expect(() => session.inspect()).toThrow({
+    await expect(session.reset()).rejects.toEqual({
       code: "session_destroyed",
       message: `Session ${session.id} has been destroyed.`,
     });
-    await expect(session.reset()).rejects.toMatchObject({
-      code: "session_destroyed",
-      message: `Session ${session.id} has been destroyed.`,
-    });
-    await expect(session.destroy()).rejects.toMatchObject({
+    await expect(session.destroy()).rejects.toEqual({
       code: "session_destroyed",
       message: `Session ${session.id} has been destroyed.`,
     });

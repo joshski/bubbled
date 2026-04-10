@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 60: Command/query separation](./task-60-commandquery-separation.md)
+- Task 60: Command/query separation
 
 ## Definition of Done
 
