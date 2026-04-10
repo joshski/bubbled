@@ -1,4 +1,11 @@
-import { Children, isValidElement, type ReactNode } from "react";
+import {
+  Children,
+  __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE,
+  isValidElement,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 
 import type {
   BubbleEvent,
@@ -19,6 +26,8 @@ export interface CreateBubbleReactRootOptions {
 
 const UNSUPPORTED_REACT_NODE_TYPE_ERROR =
   "bubble-react only supports host elements and text nodes in this slice";
+const UNSUPPORTED_REACT_HOOK_ERROR =
+  "bubble-react only supports useState in this slice";
 
 const PROPERTY_DEFAULTS = {
   checked: false,
@@ -75,6 +84,27 @@ interface BubbleReactElementPlan {
 
 type BubbleReactPlan = BubbleReactTextPlan | BubbleReactElementPlan;
 
+interface BubbleReactHookState<TValue> {
+  value: TValue;
+  setValue: Dispatch<SetStateAction<TValue>>;
+}
+
+interface BubbleReactComponentState {
+  hooks: BubbleReactHookState<unknown>[];
+}
+
+interface BubbleReactPlanningContext {
+  getComponentState(path: string): BubbleReactComponentState;
+  markComponentAsUsed(path: string): void;
+  scheduleRender(): void;
+}
+
+interface BubbleReactHookDispatcher {
+  useState<TValue>(
+    initialState: TValue | (() => TValue),
+  ): [TValue, Dispatch<SetStateAction<TValue>>];
+}
+
 function normalizeAttributeName(name: string): string {
   if (name === "className") {
     return "class";
@@ -119,10 +149,94 @@ function planReactProps(
   return { attributes, properties, eventHandlers };
 }
 
-function planReactNode(node: ReactNode): readonly BubbleReactPlan[] {
+function createUnsupportedHook(): () => never {
+  return () => {
+    throw new Error(UNSUPPORTED_REACT_HOOK_ERROR);
+  };
+}
+
+function planFunctionComponent(
+  componentPath: string,
+  component: (props: Record<string, unknown>) => ReactNode,
+  props: Record<string, unknown>,
+  context: BubbleReactPlanningContext,
+): readonly BubbleReactPlan[] {
+  const componentState = context.getComponentState(componentPath);
+  let hookIndex = 0;
+
+  const dispatcher: BubbleReactHookDispatcher & Record<string, unknown> = {
+    useState<TValue>(
+      initialState: TValue | (() => TValue),
+    ): [TValue, Dispatch<SetStateAction<TValue>>] {
+      const existingState = componentState.hooks[hookIndex] as BubbleReactHookState<TValue> | undefined;
+
+      if (existingState !== undefined) {
+        hookIndex += 1;
+        return [existingState.value, existingState.setValue];
+      }
+
+      const stateIndex = hookIndex;
+      const initialValue =
+        typeof initialState === "function" ? (initialState as () => TValue)() : initialState;
+      const hookState: BubbleReactHookState<TValue> = {
+        value: initialValue,
+        setValue(nextValue) {
+          const resolvedValue =
+            typeof nextValue === "function"
+              ? (nextValue as (value: TValue) => TValue)(hookState.value)
+              : nextValue;
+
+          if (Object.is(hookState.value, resolvedValue)) {
+            return;
+          }
+
+          hookState.value = resolvedValue;
+          context.scheduleRender();
+        },
+      };
+
+      componentState.hooks[stateIndex] = hookState;
+      hookIndex += 1;
+      return [hookState.value, hookState.setValue];
+    },
+    useCallback: createUnsupportedHook(),
+    useContext: createUnsupportedHook(),
+    useDebugValue: createUnsupportedHook(),
+    useDeferredValue: createUnsupportedHook(),
+    useEffect: createUnsupportedHook(),
+    useId: createUnsupportedHook(),
+    useImperativeHandle: createUnsupportedHook(),
+    useInsertionEffect: createUnsupportedHook(),
+    useLayoutEffect: createUnsupportedHook(),
+    useMemo: createUnsupportedHook(),
+    useOptimistic: createUnsupportedHook(),
+    useReducer: createUnsupportedHook(),
+    useRef: createUnsupportedHook(),
+    useSyncExternalStore: createUnsupportedHook(),
+    useTransition: createUnsupportedHook(),
+  };
+  const previousDispatcher = __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H;
+
+  __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H = dispatcher;
+
+  try {
+    context.markComponentAsUsed(componentPath);
+    return planReactNode(component(props), context, componentPath);
+  } finally {
+    __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE.H = previousDispatcher;
+  }
+}
+
+function planReactNode(
+  node: ReactNode,
+  context: BubbleReactPlanningContext,
+  parentPath = "root",
+): readonly BubbleReactPlan[] {
   const plans: BubbleReactPlan[] = [];
 
-  for (const child of Children.toArray(node)) {
+  for (const [index, child] of Children.toArray(node).entries()) {
+    const childPath = `${parentPath}.${index}`;
+
     if (typeof child === "string" || typeof child === "number") {
       plans.push({
         kind: "text",
@@ -131,11 +245,21 @@ function planReactNode(node: ReactNode): readonly BubbleReactPlan[] {
       continue;
     }
 
-    if (!isValidElement(child) || typeof child.type !== "string") {
+    if (!isValidElement(child)) {
       throw new Error(UNSUPPORTED_REACT_NODE_TYPE_ERROR);
     }
 
     const props = child.props as Record<string, unknown>;
+
+    if (typeof child.type === "function") {
+      plans.push(...planFunctionComponent(childPath, child.type, props, context));
+      continue;
+    }
+
+    if (typeof child.type !== "string") {
+      throw new Error(UNSUPPORTED_REACT_NODE_TYPE_ERROR);
+    }
+
     const { attributes, properties, eventHandlers } = planReactProps(props);
 
     plans.push({
@@ -144,7 +268,7 @@ function planReactNode(node: ReactNode): readonly BubbleReactPlan[] {
       attributes,
       properties,
       eventHandlers,
-      children: [...planReactNode(props.children as ReactNode)],
+      children: [...planReactNode(props.children as ReactNode, context, childPath)],
     });
   }
 
@@ -386,21 +510,80 @@ function reconcileChildren(input: {
 
 export function createBubbleReactRoot(options: CreateBubbleReactRootOptions): BubbleReactRoot {
   let currentChildren: BubbleReactNode[] = [];
+  let currentNode: ReactNode = null;
+  const componentStateByPath = new Map<string, BubbleReactComponentState>();
+  let isRendering = false;
+  let rerenderRequested = false;
+
+  const getComponentState = (path: string): BubbleReactComponentState => {
+    const existingState = componentStateByPath.get(path);
+
+    if (existingState !== undefined) {
+      return existingState;
+    }
+
+    const nextState: BubbleReactComponentState = {
+      hooks: [],
+    };
+
+    componentStateByPath.set(path, nextState);
+    return nextState;
+  };
+
+  const scheduleRender = (): void => {
+    rerenderRequested = true;
+
+    if (!isRendering) {
+      renderCurrentNode();
+    }
+  };
+
+  const renderCurrentNode = (): void => {
+    if (isRendering) {
+      rerenderRequested = true;
+      return;
+    }
+
+    isRendering = true;
+
+    try {
+      do {
+        rerenderRequested = false;
+        const usedComponentPaths = new Set<string>();
+        const nextPlans = planReactNode(currentNode, {
+          getComponentState,
+          markComponentAsUsed(path) {
+            usedComponentPaths.add(path);
+          },
+          scheduleRender,
+        });
+        let nextChildren: BubbleReactNode[] = [];
+
+        options.bubble.transact((tx) => {
+          nextChildren = reconcileChildren({
+            parentId: options.bubble.rootId,
+            currentChildren,
+            nextPlans,
+            tx,
+          });
+        });
+
+        currentChildren = nextChildren;
+
+        for (const path of componentStateByPath.keys()) {
+          if (!usedComponentPaths.has(path)) {
+            componentStateByPath.delete(path);
+          }
+        }
+      } while (rerenderRequested);
+    } finally {
+      isRendering = false;
+    }
+  };
 
   const render = (node: ReactNode): void => {
-    const nextPlans = planReactNode(node);
-    let nextChildren: BubbleReactNode[] = [];
-
-    options.bubble.transact((tx) => {
-      nextChildren = reconcileChildren({
-        parentId: options.bubble.rootId,
-        currentChildren,
-        nextPlans,
-        tx,
-      });
-    });
-
-    currentChildren = nextChildren;
+    currentNode = node;
+    renderCurrentNode();
   };
 
   return {

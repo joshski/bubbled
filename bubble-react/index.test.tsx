@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { createBubble, serializeBubbleSnapshot } from "../bubble-core";
 import { createBubbleReactRoot } from "./index";
@@ -469,6 +470,254 @@ describe("createBubbleReactRoot", () => {
     expect(callCount).toBe(1);
   });
 
+  test("state change updates text", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    function Counter() {
+      const [count, setCount] = useState(0);
+
+      return (
+        <button
+          onClick={() => {
+            setCount((value) => value + 1);
+          }}
+        >
+          Count: {count}
+        </button>
+      );
+    }
+
+    root.render(<Counter />);
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "button",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "Count: ",
+            },
+            {
+              kind: "text",
+              value: "0",
+            },
+          ],
+        },
+      ],
+    });
+
+    bubble.dispatchEvent({ type: "click", targetId: buttonId });
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "button",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "Count: ",
+            },
+            {
+              kind: "text",
+              value: "1",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("multiple state updates settle deterministically", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    function Counter() {
+      const [count, setCount] = useState(0);
+
+      return (
+        <button
+          onClick={() => {
+            setCount((value) => value + 1);
+            setCount((value) => value + 1);
+          }}
+        >
+          Count: {count}
+        </button>
+      );
+    }
+
+    root.render(<Counter />);
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    bubble.dispatchEvent({ type: "click", targetId: buttonId });
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "button",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "Count: ",
+            },
+            {
+              kind: "text",
+              value: "2",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("ignores state updates that resolve to the current value", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    let commitCount = 0;
+
+    bubble.subscribe((event) => {
+      if (event.type === "transaction-committed") {
+        commitCount += 1;
+      }
+    });
+
+    function Counter() {
+      const [count, setCount] = useState(0);
+
+      return (
+        <button
+          onClick={() => {
+            setCount(0);
+          }}
+        >
+          Count: {count}
+        </button>
+      );
+    }
+
+    root.render(<Counter />);
+
+    const buttonId = bubble.getRoot().children[0]!;
+
+    bubble.dispatchEvent({ type: "click", targetId: buttonId });
+
+    expect(commitCount).toBe(1);
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "button",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "Count: ",
+            },
+            {
+              kind: "text",
+              value: "0",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("settles render-phase state updates deterministically", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    function Counter() {
+      const [count, setCount] = useState(0);
+
+      if (count === 0) {
+        setCount(1);
+      }
+
+      return <span>{count}</span>;
+    }
+
+    root.render(<Counter />);
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "span",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "1",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  test("settles re-entrant root renders deterministically", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+    let hasReRendered = false;
+
+    function ReentrantRender() {
+      if (!hasReRendered) {
+        hasReRendered = true;
+        root.render(<span>Second</span>);
+      }
+
+      return <span>First</span>;
+    }
+
+    root.render(<ReentrantRender />);
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [
+        {
+          kind: "element",
+          tag: "span",
+          namespace: "html",
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: "text",
+              value: "Second",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   test("cleans up click handlers when a handled node is replaced", () => {
     const bubble = createBubble();
     const root = createBubbleReactRoot({ bubble });
@@ -495,16 +744,46 @@ describe("createBubbleReactRoot", () => {
     expect(callCount).toBe(0);
   });
 
-  test("throws for unsupported React component types without mutating the bubble", () => {
+  test("throws for unsupported non-element React nodes without mutating the bubble", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    expect(() => root.render(1n as unknown as ReactNode)).toThrow(
+      "bubble-react only supports host elements and text nodes in this slice",
+    );
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [],
+    });
+  });
+
+  test("throws for unsupported fragment elements without mutating the bubble", () => {
+    const bubble = createBubble();
+    const root = createBubbleReactRoot({ bubble });
+
+    expect(() =>
+      root.render(
+        <>
+          <button />
+        </>,
+      )).toThrow("bubble-react only supports host elements and text nodes in this slice");
+    expect(readSnapshot(bubble)).toEqual({
+      kind: "root",
+      children: [],
+    });
+  });
+
+  test("throws for unsupported React hooks without mutating the bubble", () => {
     const bubble = createBubble();
     const root = createBubbleReactRoot({ bubble });
 
     function Button() {
+      useEffect(() => {});
       return <button />;
     }
 
     expect(() => root.render(<Button />)).toThrow(
-      "bubble-react only supports host elements and text nodes in this slice",
+      "bubble-react only supports useState in this slice",
     );
     expect(readSnapshot(bubble)).toEqual({
       kind: "root",
