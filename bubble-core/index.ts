@@ -693,7 +693,7 @@ export function createBubble(): BubbleRuntime {
       const eventData = Object.freeze({ ...data });
       let currentTargetId = targetId;
       let phase: BubbleEventPhase = "target";
-      const defaultPrevented = false;
+      let defaultPrevented = false;
       let propagationStopped = false;
       let propagationStopNodeId: BubbleNodeId | null = null;
 
@@ -711,7 +711,11 @@ export function createBubble(): BubbleRuntime {
           return defaultPrevented;
         },
         data: eventData,
-        preventDefault() {},
+        preventDefault() {
+          if (cancelable) {
+            defaultPrevented = true;
+          }
+        },
         stopPropagation() {
           propagationStopped = true;
           propagationStopNodeId = currentTargetId;

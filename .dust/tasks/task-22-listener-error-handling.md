@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 21: `preventDefault`](./task-21-preventdefault.md)
+- Task 21: `preventDefault` (completed)
 
 ## Definition of Done
 

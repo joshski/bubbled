@@ -870,7 +870,7 @@ describe("createBubble", () => {
         data: { source: "test" },
         cancelable: true,
       }),
-    ).toEqual({ defaultPrevented: false, delivered: true });
+    ).toEqual({ defaultPrevented: true, delivered: true });
     expect(receivedEvents).toEqual([
       {
         type: "click",
@@ -878,12 +878,109 @@ describe("createBubble", () => {
         currentTargetId: buttonId,
         phase: "target",
         cancelable: true,
-        defaultPrevented: false,
+        defaultPrevented: true,
         data: { source: "test" },
         preventDefault: expect.any(Function),
         stopPropagation: expect.any(Function),
       },
     ]);
+  });
+
+  test("makes default prevented state visible to later listeners", () => {
+    const bubble = createBubble();
+    const observedStates: boolean[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          event.preventDefault();
+          observedStates.push(event.defaultPrevented);
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          observedStates.push(event.defaultPrevented);
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(
+      bubble.dispatchEvent({
+        type: "click",
+        targetId: buttonId,
+        cancelable: true,
+      }),
+    ).toEqual({ defaultPrevented: true, delivered: true });
+    expect(observedStates).toEqual([true, true]);
+  });
+
+  test("reports cancellation from dispatch", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          event.preventDefault();
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(
+      bubble.dispatchEvent({
+        type: "click",
+        targetId: buttonId,
+        cancelable: true,
+      }),
+    ).toEqual({ defaultPrevented: true, delivered: true });
+  });
+
+  test("does not cancel non-cancelable events", () => {
+    const bubble = createBubble();
+    const observedStates: boolean[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          event.preventDefault();
+          observedStates.push(event.defaultPrevented);
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "click",
+        listener: (event) => {
+          observedStates.push(event.defaultPrevented);
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    expect(
+      bubble.dispatchEvent({
+        type: "click",
+        targetId: buttonId,
+      }),
+    ).toEqual({ defaultPrevented: false, delivered: true });
+    expect(observedStates).toEqual([false, false]);
   });
 
   test("removes a listener so it no longer fires", () => {
