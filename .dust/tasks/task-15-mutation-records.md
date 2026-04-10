@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 14: Roll back failed transactions](./task-14-roll-back-failed-transactions.md)
+(none)
 
 ## Definition of Done
 

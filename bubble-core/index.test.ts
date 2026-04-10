@@ -618,6 +618,108 @@ describe("createBubble", () => {
     }).toThrow("Nested transactions are not supported");
   });
 
+  test("leaves the tree unchanged when a transaction throws during mutation application", () => {
+    const bubble = createBubble();
+    let committedEvents = 0;
+
+    bubble.subscribe(() => {
+      committedEvents += 1;
+    });
+
+    const initialTree = bubble.transact((tx) => {
+      const sectionId = tx.createElement({ tag: "section" });
+      const titleId = tx.createElement({ tag: "h1" });
+      const textId = tx.createText({ value: "Stable" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: sectionId });
+      tx.insertChild({ parentId: sectionId, childId: titleId });
+      tx.insertChild({ parentId: titleId, childId: textId });
+      tx.setAttribute({ nodeId: sectionId, name: "role", value: "region" });
+
+      return { sectionId, titleId, textId };
+    });
+
+    const rootBefore = bubble.getRoot();
+    const sectionBefore = bubble.getNode(initialTree.sectionId);
+    const titleBefore = bubble.getNode(initialTree.titleId);
+    const textBefore = bubble.getNode(initialTree.textId);
+    let failedChildId: string | null = null;
+
+    expect(() => {
+      bubble.transact((tx) => {
+        failedChildId = tx.createElement({ tag: "aside" });
+        tx.setAttribute({
+          nodeId: initialTree.sectionId,
+          name: "data-state",
+          value: "dirty",
+        });
+        tx.insertChild({ parentId: initialTree.sectionId, childId: failedChildId, index: 0 });
+        tx.setText({ nodeId: initialTree.textId, value: "Leaked" });
+
+        throw new Error("boom");
+      });
+    }).toThrow("boom");
+
+    expect(committedEvents).toBe(1);
+    expect(bubble.getRoot()).toEqual(rootBefore);
+    expect(bubble.getNode(initialTree.sectionId)).toEqual(sectionBefore);
+    expect(bubble.getNode(initialTree.titleId)).toEqual(titleBefore);
+    expect(bubble.getNode(initialTree.textId)).toEqual(textBefore);
+    expect(failedChildId).not.toBeNull();
+    expect(bubble.getNode(failedChildId as string)).toBeNull();
+  });
+
+  test("preserves node identities and child order after rolling back a failed reorder", () => {
+    const bubble = createBubble();
+
+    const tree = bubble.transact((tx) => {
+      const parentId = tx.createElement({ tag: "ul" });
+      const firstId = tx.createElement({ tag: "li" });
+      const secondId = tx.createElement({ tag: "li" });
+      const thirdId = tx.createElement({ tag: "li" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: parentId });
+      tx.insertChild({ parentId, childId: firstId });
+      tx.insertChild({ parentId, childId: secondId });
+      tx.insertChild({ parentId, childId: thirdId });
+
+      return { parentId, firstId, secondId, thirdId };
+    });
+
+    const parentBefore = bubble.getNode(tree.parentId);
+    const firstBefore = bubble.getNode(tree.firstId);
+    const secondBefore = bubble.getNode(tree.secondId);
+    const thirdBefore = bubble.getNode(tree.thirdId);
+
+    expect(() => {
+      bubble.transact((tx) => {
+        tx.moveChild({ parentId: tree.parentId, childId: tree.thirdId, index: 0 });
+        tx.removeChild({ parentId: tree.parentId, childId: tree.secondId });
+        tx.insertChild({ parentId: tree.parentId, childId: tree.secondId, index: 2 });
+
+        throw new Error("rollback");
+      });
+    }).toThrow("rollback");
+
+    expect(bubble.getNode(tree.parentId)).toEqual(parentBefore);
+    expect(bubble.getNode(tree.firstId)).toEqual(firstBefore);
+    expect(bubble.getNode(tree.secondId)).toEqual(secondBefore);
+    expect(bubble.getNode(tree.thirdId)).toEqual(thirdBefore);
+    expect(bubble.getNode(tree.parentId)).toEqual({
+      id: tree.parentId,
+      kind: "element",
+      tag: "ul",
+      namespace: "html",
+      parentId: bubble.rootId,
+      children: [tree.firstId, tree.secondId, tree.thirdId],
+      attributes: {},
+      properties: {},
+    });
+    expect(bubble.getNode(tree.firstId)?.id).toBe(tree.firstId);
+    expect(bubble.getNode(tree.secondId)?.id).toBe(tree.secondId);
+    expect(bubble.getNode(tree.thirdId)?.id).toBe(tree.thirdId);
+  });
+
   test("stops notifying listeners after unsubscribe", () => {
     const bubble = createBubble();
     const listener = () => {
