@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 12: Update text node content](./task-12-update-text-node-content.md)
+(none)
 
 ## Definition of Done
 

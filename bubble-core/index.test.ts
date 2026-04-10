@@ -166,6 +166,36 @@ describe("createBubble", () => {
     });
   });
 
+  test("updates text nodes in place while preserving node identity", () => {
+    const bubble = createBubble();
+
+    const { textId, textBeforeUpdate } = bubble.transact((tx) => {
+      const createdTextId = tx.createText({ value: "Save" });
+      const createdText = bubble.getNode(createdTextId);
+
+      tx.setText({ nodeId: createdTextId, value: "Saved" });
+
+      return {
+        textId: createdTextId,
+        textBeforeUpdate: createdText,
+      };
+    });
+
+    expect(textBeforeUpdate).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: null,
+      value: "Save",
+    });
+    expect(bubble.getNode(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: null,
+      value: "Saved",
+    });
+    expect(bubble.getNode(textId)?.id).toBe(textId);
+  });
+
   test("inserts a child into an empty parent", () => {
     const bubble = createBubble();
 
@@ -637,6 +667,25 @@ describe("createBubble", () => {
     });
   });
 
+  test("allows updating text nodes to an empty string", () => {
+    const bubble = createBubble();
+
+    const textId = bubble.transact((tx) => {
+      const createdTextId = tx.createText({ value: "Save" });
+
+      tx.setText({ nodeId: createdTextId, value: "" });
+
+      return createdTextId;
+    });
+
+    expect(bubble.getNode(textId)).toEqual({
+      id: textId,
+      kind: "text",
+      parentId: null,
+      value: "",
+    });
+  });
+
   test("rejects invalid text values", () => {
     const bubble = createBubble();
 
@@ -650,6 +699,29 @@ describe("createBubble", () => {
       expect(() => {
         tx.createText({ value: 123 as unknown as string });
       }).toThrow("Text value must be a string");
+      const textId = tx.createText({ value: "Save" });
+
+      expect(() => {
+        tx.setText({ nodeId: textId, value: undefined as unknown as string });
+      }).toThrow("Text value must be a string");
+      expect(() => {
+        tx.setText({ nodeId: textId, value: null as unknown as string });
+      }).toThrow("Text value must be a string");
+      expect(() => {
+        tx.setText({ nodeId: textId, value: 123 as unknown as string });
+      }).toThrow("Text value must be a string");
+    });
+  });
+
+  test("rejects text updates on element nodes", () => {
+    const bubble = createBubble();
+
+    bubble.transact((tx) => {
+      const elementId = tx.createElement({ tag: "button" });
+
+      expect(() => {
+        tx.setText({ nodeId: elementId, value: "Save" });
+      }).toThrow(`Text content can only be updated on text nodes: ${elementId}`);
     });
   });
 

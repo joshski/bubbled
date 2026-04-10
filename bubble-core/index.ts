@@ -31,6 +31,10 @@ export type BubbleNode = BubbleRootNode | BubbleElementNode | BubbleTextNode;
 export interface BubbleTransaction {
   createElement(input: { tag: string; namespace?: BubbleNamespace }): BubbleNodeId;
   createText(input: { value: string }): BubbleNodeId;
+  setText(input: {
+    nodeId: BubbleNodeId;
+    value: string;
+  }): void;
   insertChild(input: {
     parentId: BubbleNodeId;
     childId: BubbleNodeId;
@@ -102,6 +106,12 @@ function assertElementNode(
 ): asserts node is BubbleElementNode {
   if (node.kind !== "element") {
     throw new Error(`${target} are only supported on element nodes: ${nodeId}`);
+  }
+}
+
+function assertTextNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleTextNode {
+  if (node.kind !== "text") {
+    throw new Error(`Text content can only be updated on text nodes: ${nodeId}`);
   }
 }
 
@@ -237,6 +247,13 @@ export function createBubble(): BubbleRuntime {
           });
 
           return id;
+        },
+        setText({ nodeId, value }) {
+          const node = getMutableNode(nodeId);
+
+          assertValidTextValue(value);
+          assertTextNode(node, nodeId);
+          node.value = value;
         },
         insertChild({ parentId, childId, index }) {
           const parent = getMutableNode(parentId);
