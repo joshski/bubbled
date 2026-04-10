@@ -21,7 +21,7 @@ implement
 
 ## Blocked By
 
-- [Task 62: CLI wrapper](./task-62-cli-wrapper.md)
+- None
 
 ## Definition of Done
 
