@@ -124,6 +124,13 @@ export interface BubbleDispatchResult {
   readonly delivered: boolean;
 }
 
+export interface BubbleFormEntry {
+  readonly name: string;
+  readonly value: string;
+}
+
+export type BubbleFormPayload = readonly BubbleFormEntry[];
+
 export interface BubbleListenerHandle {
   readonly nodeId: BubbleNodeId;
   readonly type: string;
@@ -158,6 +165,7 @@ export interface BubbleRuntime {
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
   snapshot(): BubbleSnapshot;
+  serializeForm(formId: BubbleNodeId): BubbleFormPayload;
   dispatchEvent(input: BubbleDispatchInput): BubbleDispatchResult;
   focus(id: BubbleNodeId): void;
   blur(): void;
@@ -316,6 +324,12 @@ function assertFocusableNode(node: BubbleNode, nodeId: BubbleNodeId): asserts no
   }
 }
 
+function assertFormNode(node: BubbleNode, nodeId: BubbleNodeId): asserts node is BubbleElementNode {
+  if (node.kind !== "element" || node.namespace !== "html" || node.tag !== "form") {
+    throw new Error(`Only html form elements can be serialized: ${nodeId}`);
+  }
+}
+
 function getTabIndexValue(node: BubbleElementNode): number | null {
   const propertyValue = node.properties.tabIndex;
 
@@ -352,6 +366,36 @@ function getStringProperty(node: BubbleElementNode, name: string): string | null
   const propertyValue = node.properties[name];
 
   return typeof propertyValue === "string" ? propertyValue : null;
+}
+
+function getFormControlName(node: BubbleElementNode): string | null {
+  return node.attributes.name ?? getStringProperty(node, "name");
+}
+
+function getCheckboxSubmissionValue(node: BubbleElementNode): string {
+  return node.attributes.value ?? "on";
+}
+
+function getFormEntriesForControl(node: BubbleElementNode): BubbleFormEntry[] {
+  if (node.namespace !== "html" || isDisabledElement(node)) {
+    return [];
+  }
+
+  const name = getFormControlName(node);
+
+  if (name === null) {
+    return [];
+  }
+
+  if (isTextInputElement(node)) {
+    return [{ name, value: node.value ?? "" }];
+  }
+
+  if (isCheckboxInputElement(node) && node.checked === true) {
+    return [{ name, value: getCheckboxSubmissionValue(node) }];
+  }
+
+  return [];
 }
 
 function getExplicitRole(node: BubbleElementNode): string | null {
@@ -919,6 +963,33 @@ export function createBubble(): BubbleRuntime {
     ]);
   };
 
+  const serializeForm = (formId: BubbleNodeId): BubbleFormPayload => {
+    const formNode = nodes.get(formId);
+
+    if (formNode === undefined) {
+      throw new Error(`Unknown node ID: ${formId}`);
+    }
+
+    assertFormNode(formNode, formId);
+
+    const entries: BubbleFormEntry[] = [];
+    const pendingNodeIds = [...formNode.children];
+
+    while (pendingNodeIds.length > 0) {
+      const nodeId = pendingNodeIds.shift() as BubbleNodeId;
+      const node = nodes.get(nodeId) as BubbleNode;
+
+      if (node.kind !== "element") {
+        continue;
+      }
+
+      entries.push(...getFormEntriesForControl(node));
+      pendingNodeIds.unshift(...node.children);
+    }
+
+    return Object.freeze(entries.map((entry) => Object.freeze({ ...entry })));
+  };
+
   const refreshDerivedElementMetadata = (
     nodeLookup: Map<BubbleNodeId, BubbleNode>,
   ): void => {
@@ -1191,6 +1262,9 @@ export function createBubble(): BubbleRuntime {
     },
     snapshot() {
       return createSnapshot();
+    },
+    serializeForm(formId) {
+      return serializeForm(formId);
     },
     dispatchEvent({ type, targetId, data = {}, cancelable = false }) {
       return dispatchEventToTarget({ type, targetId, data, cancelable });

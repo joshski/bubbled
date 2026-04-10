@@ -1899,6 +1899,100 @@ describe("createBubble", () => {
     expect(uncheckedInput.properties).toEqual({ checked: false });
   });
 
+  test("serializes text inputs into a deterministic form payload", () => {
+    const bubble = createBubble();
+
+    const formId = bubble.transact((tx) => {
+      const createdFormId = tx.createElement({ tag: "form" });
+      const firstInputId = tx.createElement({ tag: "input" });
+      const fieldsetId = tx.createElement({ tag: "fieldset" });
+      const secondInputId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: firstInputId, name: "name", value: "email" });
+      tx.setProperty({ nodeId: firstInputId, name: "value", value: "first@example.com" });
+      tx.setAttribute({ nodeId: secondInputId, name: "name", value: "backupEmail" });
+      tx.setProperty({ nodeId: secondInputId, name: "value", value: "second@example.com" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFormId });
+      tx.insertChild({ parentId: createdFormId, childId: firstInputId });
+      tx.insertChild({ parentId: createdFormId, childId: fieldsetId });
+      tx.insertChild({ parentId: fieldsetId, childId: secondInputId });
+
+      return createdFormId;
+    });
+
+    expect(bubble.serializeForm(formId)).toEqual([
+      { name: "email", value: "first@example.com" },
+      { name: "backupEmail", value: "second@example.com" },
+    ]);
+  });
+
+  test("includes only checked checkbox controls in form payloads", () => {
+    const bubble = createBubble();
+
+    const formId = bubble.transact((tx) => {
+      const createdFormId = tx.createElement({ tag: "form" });
+      const uncheckedCheckboxId = tx.createElement({ tag: "input" });
+      const checkedCheckboxId = tx.createElement({ tag: "input" });
+      const defaultValueCheckboxId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: uncheckedCheckboxId, name: "type", value: "checkbox" });
+      tx.setAttribute({ nodeId: uncheckedCheckboxId, name: "name", value: "newsletter" });
+
+      tx.setAttribute({ nodeId: checkedCheckboxId, name: "type", value: "checkbox" });
+      tx.setAttribute({ nodeId: checkedCheckboxId, name: "name", value: "alerts" });
+      tx.setAttribute({ nodeId: checkedCheckboxId, name: "value", value: "daily" });
+      tx.setProperty({ nodeId: checkedCheckboxId, name: "checked", value: true });
+
+      tx.setAttribute({ nodeId: defaultValueCheckboxId, name: "type", value: "checkbox" });
+      tx.setAttribute({ nodeId: defaultValueCheckboxId, name: "name", value: "tos" });
+      tx.setProperty({ nodeId: defaultValueCheckboxId, name: "checked", value: true });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFormId });
+      tx.insertChild({ parentId: createdFormId, childId: uncheckedCheckboxId });
+      tx.insertChild({ parentId: createdFormId, childId: checkedCheckboxId });
+      tx.insertChild({ parentId: createdFormId, childId: defaultValueCheckboxId });
+
+      return createdFormId;
+    });
+
+    expect(bubble.serializeForm(formId)).toEqual([
+      { name: "alerts", value: "daily" },
+      { name: "tos", value: "on" },
+    ]);
+  });
+
+  test("excludes disabled controls from form payloads", () => {
+    const bubble = createBubble();
+
+    const formId = bubble.transact((tx) => {
+      const createdFormId = tx.createElement({ tag: "form" });
+      const enabledInputId = tx.createElement({ tag: "input" });
+      const disabledByPropertyId = tx.createElement({ tag: "input" });
+      const disabledByAttributeId = tx.createElement({ tag: "input" });
+
+      tx.setAttribute({ nodeId: enabledInputId, name: "name", value: "enabled" });
+      tx.setProperty({ nodeId: enabledInputId, name: "value", value: "included" });
+
+      tx.setAttribute({ nodeId: disabledByPropertyId, name: "name", value: "propertyDisabled" });
+      tx.setProperty({ nodeId: disabledByPropertyId, name: "value", value: "excluded" });
+      tx.setProperty({ nodeId: disabledByPropertyId, name: "disabled", value: true });
+
+      tx.setAttribute({ nodeId: disabledByAttributeId, name: "name", value: "attributeDisabled" });
+      tx.setProperty({ nodeId: disabledByAttributeId, name: "value", value: "excluded" });
+      tx.setAttribute({ nodeId: disabledByAttributeId, name: "disabled", value: "" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFormId });
+      tx.insertChild({ parentId: createdFormId, childId: enabledInputId });
+      tx.insertChild({ parentId: createdFormId, childId: disabledByPropertyId });
+      tx.insertChild({ parentId: createdFormId, childId: disabledByAttributeId });
+
+      return createdFormId;
+    });
+
+    expect(bubble.serializeForm(formId)).toEqual([{ name: "enabled", value: "included" }]);
+  });
+
   test("stores attributes and properties independently", () => {
     const bubble = createBubble();
 
@@ -3095,6 +3189,24 @@ describe("createBubble", () => {
         tx.setProperty({ nodeId: checkboxId, name: "checked", value: "yes" });
       }).toThrow("Checked value must be a boolean");
     });
+  });
+
+  test("rejects serializing non-form nodes", () => {
+    const bubble = createBubble();
+
+    const buttonId = bubble.transact((tx) => tx.createElement({ tag: "button" }));
+
+    expect(() => {
+      bubble.serializeForm(buttonId);
+    }).toThrow(`Only html form elements can be serialized: ${buttonId}`);
+  });
+
+  test("rejects serializing unknown form nodes", () => {
+    const bubble = createBubble();
+
+    expect(() => {
+      bubble.serializeForm("missing");
+    }).toThrow("Unknown node ID: missing");
   });
 
   test("rejects removing a node that is not a child of the parent", () => {
