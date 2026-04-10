@@ -2,6 +2,8 @@ import {
   createCapabilityRegistry,
   type BubbleCapabilities,
   type BubbleCapabilityName,
+  type BubbleNetworkRequest,
+  type BubbleNetworkResponse,
   type BubbleRect,
   type BubbleTimerHandle,
   type BubbleViewportListener,
@@ -187,6 +189,7 @@ export interface BubbleRuntime {
   measureElement(nodeId: BubbleNodeId): BubbleRect;
   getViewportState(): BubbleViewportState;
   subscribeToViewport(listener: BubbleViewportListener): () => void;
+  fetch(request: BubbleNetworkRequest): Promise<BubbleNetworkResponse>;
   transact<T>(fn: (tx: BubbleTransaction) => T): T;
   getNode(id: BubbleNodeId): Readonly<BubbleNode> | null;
   getRoot(): Readonly<BubbleRootNode>;
@@ -1140,6 +1143,9 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       return viewport.subscribe((state) => {
         listener(snapshotViewportState(state));
       });
+    },
+    async fetch(request) {
+      return capabilityRegistry.resolveCapability("network").fetch(request);
     },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
       if (transactionDepth > 0) {

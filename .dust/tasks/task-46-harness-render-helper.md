@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 45: Network capability](./task-45-network-capability.md)
+- None
 
 ## Definition of Done
 

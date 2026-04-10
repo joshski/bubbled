@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   type BubbleLayout,
+  type BubbleNetwork,
+  type BubbleNetworkRequest,
+  type BubbleNetworkResponse,
   type BubbleRect,
   BubbleUnsupportedCapabilityError,
   type BubbleScheduler,
@@ -153,6 +156,50 @@ function createFakeViewport(initialState: BubbleViewportState) {
         listener({ ...state });
       }
     },
+  };
+}
+
+function createScriptedNetwork(
+  scripts: Array<{
+    request: BubbleNetworkRequest;
+    response?: BubbleNetworkResponse;
+    error?: Error;
+  }>,
+) {
+  const pendingScripts = [...scripts];
+  const requests: BubbleNetworkRequest[] = [];
+
+  return {
+    network: {
+      async fetch(request) {
+        requests.push({
+          ...request,
+          headers: request.headers === undefined ? undefined : { ...request.headers },
+        });
+
+        const nextScript = pendingScripts.shift();
+
+        if (nextScript === undefined) {
+          throw new Error(`Unexpected network request: ${JSON.stringify(request)}`);
+        }
+
+        expect(request).toEqual(nextScript.request);
+
+        if (nextScript.error !== undefined) {
+          throw nextScript.error;
+        }
+
+        if (nextScript.response === undefined) {
+          throw new Error("Scripted network response is missing");
+        }
+
+        return {
+          ...nextScript.response,
+          headers: { ...nextScript.response.headers },
+        };
+      },
+    } satisfies BubbleNetwork,
+    requests,
   };
 }
 
@@ -475,6 +522,111 @@ describe("createBubble", () => {
 
     expect(firstBubble.resolveCapability("storage").getItem("token")).toBe("first");
     expect(secondBubble.resolveCapability("storage").getItem("token")).toBeNull();
+  });
+
+  test("returns successful responses from the injected network capability", async () => {
+    const fakeNetwork = createScriptedNetwork([
+      {
+        request: {
+          method: "POST",
+          url: "https://example.test/messages",
+          headers: { "content-type": "application/json" },
+          body: '{"message":"hello"}',
+        },
+        response: {
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: '{"ok":true}',
+        },
+      },
+    ]);
+    const bubble = createBubble({
+      capabilities: {
+        network: fakeNetwork.network,
+      },
+    });
+
+    await expect(
+      bubble.fetch({
+        method: "POST",
+        url: "https://example.test/messages",
+        headers: { "content-type": "application/json" },
+        body: '{"message":"hello"}',
+      }),
+    ).resolves.toEqual({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: '{"ok":true}',
+    });
+    expect(fakeNetwork.requests).toEqual([
+      {
+        method: "POST",
+        url: "https://example.test/messages",
+        headers: { "content-type": "application/json" },
+        body: '{"message":"hello"}',
+      },
+    ]);
+  });
+
+  test("returns error responses from the injected network capability", async () => {
+    const fakeNetwork = createScriptedNetwork([
+      {
+        request: {
+          method: "GET",
+          url: "https://example.test/fail",
+        },
+        response: {
+          status: 503,
+          headers: { "retry-after": "30" },
+          body: "temporarily unavailable",
+        },
+      },
+    ]);
+    const bubble = createBubble({
+      capabilities: {
+        network: fakeNetwork.network,
+      },
+    });
+
+    await expect(
+      bubble.fetch({
+        method: "GET",
+        url: "https://example.test/fail",
+      }),
+    ).resolves.toEqual({
+      status: 503,
+      headers: { "retry-after": "30" },
+      body: "temporarily unavailable",
+    });
+  });
+
+  test("throws when fetch() is called without a configured network capability", async () => {
+    const bubble = createBubble();
+
+    await expect(
+      bubble.fetch({
+        method: "GET",
+        url: "https://example.test/missing",
+      }),
+    ).rejects.toThrow(BubbleUnsupportedCapabilityError);
+  });
+
+  test("fails loudly for unscripted network requests", async () => {
+    const fakeNetwork = createScriptedNetwork([]);
+    const bubble = createBubble({
+      capabilities: {
+        network: fakeNetwork.network,
+      },
+    });
+
+    await expect(
+      bubble.fetch({
+        method: "DELETE",
+        url: "https://example.test/unexpected",
+      }),
+    ).rejects.toThrow(
+      'Unexpected network request: {"method":"DELETE","url":"https://example.test/unexpected"}',
+    );
   });
 
   test("fires a timer only after time advances to its due time", () => {
