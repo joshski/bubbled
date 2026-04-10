@@ -133,6 +133,7 @@ interface BubbleRegisteredListener {
 }
 
 type BubbleEventPhase = BubbleEvent["phase"];
+type BubbleEventDispatchMode = "propagating" | "target-only";
 
 export interface BubbleSnapshot {
   readonly rootId: BubbleNodeId;
@@ -421,6 +422,121 @@ export function createBubble(): BubbleRuntime {
     return path;
   };
 
+  const dispatchEventToTarget = ({
+    type,
+    targetId,
+    data = {},
+    cancelable = false,
+    mode = "propagating",
+  }: BubbleDispatchInput & { mode?: BubbleEventDispatchMode }): BubbleDispatchResult => {
+    assertValidEventType(type);
+    const target = nodes.get(targetId);
+
+    if (target === undefined) {
+      throw new Error(`Unknown node ID: ${targetId}`);
+    }
+
+    if (target.kind !== "element") {
+      return { defaultPrevented: false, delivered: false };
+    }
+
+    const targetQueue = (eventListeners.get(targetId)?.get(type) ?? []).slice();
+    const deliveryQueue =
+      mode === "target-only"
+        ? targetQueue.map((registration) => ({
+            nodeId: registration.handle.nodeId,
+            phase: "target" as BubbleEventPhase,
+            registration,
+          }))
+        : (() => {
+            const path = getEventPath(targetId);
+            const ancestorPath = path.slice(1);
+            const captureQueue = ancestorPath
+              .slice()
+              .reverse()
+              .flatMap((nodeId) =>
+                (eventListeners.get(nodeId)?.get(type) ?? []).filter(
+                  (registration) => registration.handle.capture,
+                ),
+              );
+            const bubbleQueue = ancestorPath.flatMap((nodeId) =>
+              (eventListeners.get(nodeId)?.get(type) ?? []).filter(
+                (registration) => !registration.handle.capture,
+              ),
+            );
+
+            return [
+              ...captureQueue.map((registration) => ({
+                nodeId: registration.handle.nodeId,
+                phase: "capture" as BubbleEventPhase,
+                registration,
+              })),
+              ...targetQueue.map((registration) => ({
+                nodeId: registration.handle.nodeId,
+                phase: "target" as BubbleEventPhase,
+                registration,
+              })),
+              ...bubbleQueue.map((registration) => ({
+                nodeId: registration.handle.nodeId,
+                phase: "bubble" as BubbleEventPhase,
+                registration,
+              })),
+            ];
+          })();
+
+    if (deliveryQueue.length === 0) {
+      return { defaultPrevented: false, delivered: false };
+    }
+
+    const eventData = Object.freeze({ ...data });
+    let currentTargetId = targetId;
+    let phase: BubbleEventPhase = "target";
+    let defaultPrevented = false;
+    let propagationStopped = false;
+    let propagationStopNodeId: BubbleNodeId | null = null;
+
+    const event: BubbleEvent = {
+      type,
+      targetId,
+      get currentTargetId() {
+        return currentTargetId;
+      },
+      get phase() {
+        return phase;
+      },
+      cancelable,
+      get defaultPrevented() {
+        return defaultPrevented;
+      },
+      data: eventData,
+      preventDefault() {
+        if (cancelable) {
+          defaultPrevented = true;
+        }
+      },
+      stopPropagation() {
+        propagationStopped = true;
+        propagationStopNodeId = currentTargetId;
+      },
+    };
+
+    for (const queuedListener of deliveryQueue) {
+      if (
+        propagationStopped &&
+        propagationStopNodeId !== null &&
+        queuedListener.nodeId !== propagationStopNodeId
+      ) {
+        break;
+      }
+
+      currentTargetId = queuedListener.nodeId;
+      phase = queuedListener.phase;
+      queuedListener.registration.listener(event);
+    }
+
+    return { defaultPrevented, delivered: true };
+  };
+
   return {
     rootId: root.id,
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
@@ -660,98 +776,7 @@ export function createBubble(): BubbleRuntime {
       return createSnapshot();
     },
     dispatchEvent({ type, targetId, data = {}, cancelable = false }) {
-      assertValidEventType(type);
-      const target = nodes.get(targetId);
-
-      if (target === undefined) {
-        throw new Error(`Unknown node ID: ${targetId}`);
-      }
-
-      if (target.kind !== "element") {
-        return { defaultPrevented: false, delivered: false };
-      }
-
-      const path = getEventPath(targetId);
-      const ancestorPath = path.slice(1);
-      const captureQueue = ancestorPath
-        .slice()
-        .reverse()
-        .flatMap((nodeId) =>
-          (eventListeners.get(nodeId)?.get(type) ?? []).filter((registration) => registration.handle.capture),
-        );
-      const targetQueue = (eventListeners.get(targetId)?.get(type) ?? []).slice();
-      const bubbleQueue = ancestorPath.flatMap((nodeId) =>
-        (eventListeners.get(nodeId)?.get(type) ?? []).filter((registration) => !registration.handle.capture),
-      );
-      const deliveryQueue = [
-        ...captureQueue.map((registration) => ({
-          nodeId: registration.handle.nodeId,
-          phase: "capture" as BubbleEventPhase,
-          registration,
-        })),
-        ...targetQueue.map((registration) => ({
-          nodeId: registration.handle.nodeId,
-          phase: "target" as BubbleEventPhase,
-          registration,
-        })),
-        ...bubbleQueue.map((registration) => ({
-          nodeId: registration.handle.nodeId,
-          phase: "bubble" as BubbleEventPhase,
-          registration,
-        })),
-      ];
-
-      if (deliveryQueue.length === 0) {
-        return { defaultPrevented: false, delivered: false };
-      }
-
-      const eventData = Object.freeze({ ...data });
-      let currentTargetId = targetId;
-      let phase: BubbleEventPhase = "target";
-      let defaultPrevented = false;
-      let propagationStopped = false;
-      let propagationStopNodeId: BubbleNodeId | null = null;
-
-      const event: BubbleEvent = {
-        type,
-        targetId,
-        get currentTargetId() {
-          return currentTargetId;
-        },
-        get phase() {
-          return phase;
-        },
-        cancelable,
-        get defaultPrevented() {
-          return defaultPrevented;
-        },
-        data: eventData,
-        preventDefault() {
-          if (cancelable) {
-            defaultPrevented = true;
-          }
-        },
-        stopPropagation() {
-          propagationStopped = true;
-          propagationStopNodeId = currentTargetId;
-        },
-      };
-
-      for (const queuedListener of deliveryQueue) {
-        if (
-          propagationStopped &&
-          propagationStopNodeId !== null &&
-          queuedListener.nodeId !== propagationStopNodeId
-        ) {
-          break;
-        }
-
-        currentTargetId = queuedListener.nodeId;
-        phase = queuedListener.phase;
-        queuedListener.registration.listener(event);
-      }
-
-      return { defaultPrevented, delivered: true };
+      return dispatchEventToTarget({ type, targetId, data, cancelable });
     },
     focus(id) {
       const node = nodes.get(id);
@@ -761,10 +786,25 @@ export function createBubble(): BubbleRuntime {
       }
 
       assertFocusableNode(node, id);
+      if (focusedNodeId === id) {
+        return;
+      }
+
+      if (focusedNodeId !== null) {
+        dispatchEventToTarget({ type: "blur", targetId: focusedNodeId, mode: "target-only" });
+      }
+
       focusedNodeId = id;
+      dispatchEventToTarget({ type: "focus", targetId: id, mode: "target-only" });
     },
     blur() {
+      if (focusedNodeId === null) {
+        return;
+      }
+
+      const previouslyFocusedNodeId = focusedNodeId;
       focusedNodeId = null;
+      dispatchEventToTarget({ type: "blur", targetId: previouslyFocusedNodeId, mode: "target-only" });
     },
     getFocusedNodeId() {
       return focusedNodeId;

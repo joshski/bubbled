@@ -2097,6 +2097,165 @@ describe("createBubble", () => {
     expect(bubble.getFocusedNodeId()).toBeNull();
   });
 
+  test("focus event fires on the focus target", () => {
+    const bubble = createBubble();
+    const observedEvents: Array<{
+      type: string;
+      targetId: string;
+      currentTargetId: string;
+      phase: string;
+    }> = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "focus",
+        listener: (event) => {
+          observedEvents.push({
+            type: event.type,
+            targetId: event.targetId,
+            currentTargetId: event.currentTargetId,
+            phase: event.phase,
+          });
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    bubble.focus(buttonId);
+
+    expect(observedEvents).toEqual([
+      {
+        type: "focus",
+        targetId: buttonId,
+        currentTargetId: buttonId,
+        phase: "target",
+      },
+    ]);
+  });
+
+  test("blur event fires on the previous focus target", () => {
+    const bubble = createBubble();
+    const observedEvents: string[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "blur",
+        listener: (event) => {
+          observedEvents.push(`${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    bubble.focus(buttonId);
+    bubble.blur();
+
+    expect(observedEvents).toEqual([`blur:${buttonId}:${buttonId}:target`]);
+  });
+
+  test("switching focus emits blur before focus", () => {
+    const bubble = createBubble();
+    const observedEvents: string[] = [];
+
+    const { firstButtonId, secondButtonId, parentId } = bubble.transact((tx) => {
+      const createdParentId = tx.createElement({ tag: "section" });
+      const createdFirstButtonId = tx.createElement({ tag: "button" });
+      const createdSecondButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdParentId });
+      tx.insertChild({ parentId: createdParentId, childId: createdFirstButtonId });
+      tx.insertChild({ parentId: createdParentId, childId: createdSecondButtonId });
+      tx.addEventListener({
+        nodeId: createdFirstButtonId,
+        type: "blur",
+        listener: (event) => {
+          observedEvents.push(`${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdSecondButtonId,
+        type: "focus",
+        listener: (event) => {
+          observedEvents.push(`${event.type}:${event.targetId}:${event.currentTargetId}:${event.phase}`);
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdParentId,
+        type: "focus",
+        listener: () => {
+          observedEvents.push("parent-focus");
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdParentId,
+        type: "blur",
+        listener: () => {
+          observedEvents.push("parent-blur");
+        },
+      });
+
+      return {
+        firstButtonId: createdFirstButtonId,
+        secondButtonId: createdSecondButtonId,
+        parentId: createdParentId,
+      };
+    });
+
+    bubble.focus(firstButtonId);
+    observedEvents.length = 0;
+
+    bubble.focus(secondButtonId);
+
+    expect(parentId).toBeDefined();
+    expect(observedEvents).toEqual([
+      `blur:${firstButtonId}:${firstButtonId}:target`,
+      `focus:${secondButtonId}:${secondButtonId}:target`,
+    ]);
+  });
+
+  test("focusing the already focused node is a no-op", () => {
+    const bubble = createBubble();
+    const observedEvents: string[] = [];
+
+    const buttonId = bubble.transact((tx) => {
+      const createdButtonId = tx.createElement({ tag: "button" });
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdButtonId });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "focus",
+        listener: (event) => {
+          observedEvents.push(`${event.type}:${event.targetId}`);
+        },
+      });
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: "blur",
+        listener: (event) => {
+          observedEvents.push(`${event.type}:${event.targetId}`);
+        },
+      });
+
+      return createdButtonId;
+    });
+
+    bubble.focus(buttonId);
+    bubble.focus(buttonId);
+
+    expect(bubble.getFocusedNodeId()).toBe(buttonId);
+    expect(observedEvents).toEqual([`focus:${buttonId}`]);
+  });
+
   test("rejects non-focusable targets", () => {
     const bubble = createBubble();
 

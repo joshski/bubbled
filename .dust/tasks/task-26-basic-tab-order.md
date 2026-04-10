@@ -22,7 +22,7 @@ implement
 
 ## Blocked By
 
-- [Task 25: Focus and blur events](./task-25-focus-and-blur-events.md)
+- None
 
 ## Definition of Done
 
