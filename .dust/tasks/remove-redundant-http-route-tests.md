@@ -10,7 +10,7 @@ Only the test `serves the bundled client asset referenced by the HTML page` exer
 
 ## Task Type
 
-implementation
+implement
 
 ## Blocked By
 

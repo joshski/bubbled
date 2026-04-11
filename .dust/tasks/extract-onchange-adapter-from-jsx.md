@@ -14,7 +14,7 @@ This adapter casts a Bubble event to extract a string value. Extracting it to a 
 
 ## Task Type
 
-implementation
+implement
 
 ## Blocked By
 

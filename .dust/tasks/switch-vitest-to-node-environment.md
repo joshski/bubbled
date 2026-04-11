@@ -12,7 +12,7 @@ Switch `vitest.config.ts` from `environment: 'jsdom'` to `environment: 'node'`. 
 
 ## Task Type
 
-implementation
+implement
 
 ## Blocked By
 
