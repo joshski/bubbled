@@ -6,6 +6,8 @@ import {
   type BubbleRuntime,
   type BubbleTransaction,
 } from '../bubble-core'
+import { createSemanticContext } from './semantic-context'
+import { createInternalSemanticQueries } from './semantic-queries'
 
 export interface BubbleRenderElement {
   readonly tag: string
@@ -68,104 +70,6 @@ function isRenderContentArray(
   value: BubbleRenderContent | readonly BubbleRenderContent[]
 ): value is readonly BubbleRenderContent[] {
   return Array.isArray(value)
-}
-
-function formatNameMatcher(name: string | RegExp): string {
-  return typeof name === 'string' ? JSON.stringify(name) : name.toString()
-}
-
-function formatNodeName(name: string | null): string {
-  return name === null ? '<unnamed>' : JSON.stringify(name)
-}
-
-function formatTextMatcher(text: string | RegExp): string {
-  return typeof text === 'string' ? JSON.stringify(text) : text.toString()
-}
-
-function createSemanticContext(target: BubbleHarnessContext) {
-  const getNodeOrThrow = (targetId: BubbleNodeId) => {
-    const node = target.bubble.getNode(targetId)
-
-    if (node === null) {
-      throw new Error(`Unknown node ID: ${targetId}`)
-    }
-
-    return node
-  }
-
-  const getTextContent = (targetId: BubbleNodeId): string => {
-    const node = getNodeOrThrow(targetId)
-
-    if (node.kind === 'text') {
-      return node.value
-    }
-
-    return node.children.map(childId => getTextContent(childId)).join('')
-  }
-
-  const describeNode = (targetId: BubbleNodeId): string => {
-    const node = getNodeOrThrow(targetId)
-
-    if (node.kind === 'root') {
-      return `${node.id} <root>`
-    }
-
-    if (node.kind === 'text') {
-      return `${node.id} <text ${JSON.stringify(node.value)}>`
-    }
-
-    const details = [
-      `tag=${JSON.stringify(node.tag)}`,
-      `role=${node.role === null ? 'null' : JSON.stringify(node.role)}`,
-      `name=${node.name === null ? 'null' : JSON.stringify(node.name)}`,
-      `text=${JSON.stringify(getTextContent(node.id))}`,
-      `focused=${target.bubble.getFocusedNodeId() === node.id}`,
-    ]
-
-    if (node.value !== null) {
-      details.push(`value=${JSON.stringify(node.value)}`)
-    }
-
-    if (node.checked !== null) {
-      details.push(`checked=${node.checked}`)
-    }
-
-    return `${node.id} <${node.tag} ${details.join(' ')}>`
-  }
-
-  const expectElementNode = (targetId: BubbleNodeId) => {
-    const node = getNodeOrThrow(targetId)
-
-    if (node.kind !== 'element') {
-      throw new Error(
-        `Expected an element node for ${targetId}. Received ${describeNode(targetId)}.`
-      )
-    }
-
-    return node
-  }
-
-  const assertEqual = (
-    label: string,
-    targetId: BubbleNodeId,
-    expected: string,
-    actual: string
-  ): void => {
-    if (actual !== expected) {
-      throw new Error(
-        `Expected ${label} for ${targetId} to be ${JSON.stringify(expected)}. Received ${JSON.stringify(actual)}. ${describeNode(
-          targetId
-        )}`
-      )
-    }
-  }
-
-  return {
-    assertEqual,
-    describeNode,
-    expectElementNode,
-    getTextContent,
-  }
 }
 
 export function createRenderHarness(
@@ -446,67 +350,7 @@ export function createRenderHarness(
 export function createSemanticQueries(
   target: BubbleHarnessContext
 ): BubbleSemanticQueries {
-  const { getTextContent } = createSemanticContext(target)
-
-  return {
-    getByRole(role, options) {
-      const snapshot = target.bubble.snapshot()
-      const nodesByRole = snapshot.query.getByRole(role)
-      const matchingNode = nodesByRole.find(node => {
-        if (options?.name === undefined) {
-          return true
-        }
-
-        if (typeof options.name === 'string') {
-          return node.name === options.name
-        }
-
-        return node.name !== null && options.name.test(node.name)
-      })
-
-      if (matchingNode !== undefined) {
-        return matchingNode.id
-      }
-
-      const queryDescription =
-        options?.name === undefined
-          ? `role ${JSON.stringify(role)}`
-          : `role ${JSON.stringify(role)} and name ${formatNameMatcher(options.name)}`
-      const nodesByRoleDescription =
-        nodesByRole.length === 0
-          ? 'No nodes with that role exist in the current bubble snapshot.'
-          : `Nodes with role ${JSON.stringify(role)}: ${nodesByRole
-              .map(node => `${node.id} (${formatNodeName(node.name)})`)
-              .join(', ')}`
-
-      throw new Error(
-        `Unable to find a node with ${queryDescription}. ${nodesByRoleDescription}`
-      )
-    },
-    getByText(text) {
-      const snapshot = target.bubble.snapshot()
-      const matchingNodes = Array.from(snapshot.nodes.values()).filter(node => {
-        const textContent = getTextContent(node.id)
-
-        if (typeof text === 'string') {
-          return textContent === text
-        }
-
-        return text.test(textContent)
-      })
-      const elementOrTextNode = matchingNodes.find(node => node.kind !== 'root')
-
-      if (elementOrTextNode !== undefined) {
-        return elementOrTextNode.id
-      }
-
-      throw new Error(
-        `Unable to find a node with text ${formatTextMatcher(text)}. Current root text content is ${JSON.stringify(
-          getTextContent(snapshot.rootId)
-        )}.`
-      )
-    },
-  }
+  return createInternalSemanticQueries(target)
 }
 
 export function createSemanticAssertions(

@@ -110,7 +110,7 @@ implement
 
 ## Blocked By
 
-- [Extract Bubble Test Semantic Query Modules](./extract-bubble-test-semantic-query-modules.md)
+(none)
 
 ## Decomposed From
 
