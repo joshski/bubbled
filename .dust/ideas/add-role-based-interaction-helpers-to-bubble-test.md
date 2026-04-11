@@ -25,26 +25,16 @@ const changeTextbox = (name: string, value: string): void => {
 
 Every app test that dispatches events will reconstruct similar helpers. The higher-level `getByRole`/`getByText` queries already live in `bubble-test` as `BubbleSemanticQueries`. Adding matching *interaction* helpers (click by role+name, change textbox by role+name) closes that gap.
 
-`BubbleRenderHarness` already has `click(target: BubbleNodeId)` — the role-based version would complement it, not replace it.
+`BubbleRenderHarness` already has `click(target: BubbleNodeId)` — the role-based version would complement it, not replace it. These helpers belong in a new `BubbleSemanticInteractions` interface (parallel to `BubbleSemanticQueries`/`BubbleSemanticAssertions`), keeping semantic and low-level concerns cleanly separated, and merged into `BubbleHarness`.
 
 ## Open Questions
 
-### Should these helpers go on BubbleRenderHarness or be a separate interface?
-
-#### Option
-
-Add them to `BubbleRenderHarness` alongside the existing `click(targetId)` — fewest moving parts, single interface.
-
-#### Option
-
-Introduce a `BubbleSemanticInteractions` interface (parallel to `BubbleSemanticQueries`/`BubbleSemanticAssertions`) and merge it into `BubbleHarness` — keeps semantic and low-level concerns cleanly separated.
-
 ### What should the API surface look like?
 
-#### Option
+#### Named helpers per interaction type
 
-Ship only `clickByName(role, name)` and `changeTextbox(name, value)` to match the exact todo app usage — two known use cases; defer generalization until a second app surfaces more patterns.
+Ship `clickByRole(role, name)` and `changeByRole(role, name, value)` mirroring `getByRole` — concrete, discoverable, and matches the two known use cases; defer further methods until a second app surfaces new patterns.
 
-#### Option
+#### One general `interact` helper
 
-Design a more general `interact(role, name, event, data?)` that covers arbitrary event dispatch by role and name — avoids adding new methods for every event type.
+Design `interact(role, name, event, data?)` that covers arbitrary event dispatch by role and name — avoids adding new methods for every event type but is less discoverable and more abstract.
