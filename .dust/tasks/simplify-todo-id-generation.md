@@ -16,7 +16,7 @@ In `examples/todo-app/todo-store.test.ts`, the test `'toggle, remove, and add pe
 
 ## Task Type
 
-task
+implement
 
 ## Blocked By
 
