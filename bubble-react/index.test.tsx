@@ -1228,7 +1228,7 @@ describe('createBubbleReactRoot', () => {
     })
   })
 
-  test('throws for unsupported React hooks without mutating the bubble', () => {
+  test('throws for unsupported React hooks without mutating the existing bubble tree', () => {
     const bubble = createBubble()
     const root = createBubbleReactRoot({ bubble })
 
@@ -1237,12 +1237,28 @@ describe('createBubbleReactRoot', () => {
       return <button />
     }
 
+    root.render(<span>Ready</span>)
+
     expect(() => root.render(<Button />)).toThrow(
       'bubble-react only supports useState in this slice'
     )
     expect(readSnapshot(bubble)).toEqual({
       kind: 'root',
-      children: [],
+      children: [
+        {
+          kind: 'element',
+          tag: 'span',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: 'text',
+              value: 'Ready',
+            },
+          ],
+        },
+      ],
     })
   })
 

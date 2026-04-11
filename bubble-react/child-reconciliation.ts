@@ -1,27 +1,17 @@
 import type {
-  BubbleEvent,
   BubbleListenerHandle,
   BubbleNodeId,
   BubbleTransaction,
 } from '../bubble-core'
+import type { BubbleReactElementPlan, BubbleReactPlan } from './planner'
 
-export const PROPERTY_DEFAULTS = {
-  checked: false,
-  disabled: false,
-  tabIndex: null,
-  value: '',
-} satisfies Record<string, unknown>
-
-export type BubbleReactPropertyName = keyof typeof PROPERTY_DEFAULTS
-export type BubbleReactEventHandler = (event: BubbleEvent) => void
-
-export const EVENT_TYPE_BY_HANDLER_NAME = {
-  onClick: 'click',
-  onChange: 'change',
-} as const
-
-export type BubbleReactEventHandlerName =
-  keyof typeof EVENT_TYPE_BY_HANDLER_NAME
+import {
+  EVENT_TYPE_BY_HANDLER_NAME,
+  PROPERTY_DEFAULTS,
+  type BubbleReactEventHandler,
+  type BubbleReactEventHandlerName,
+  type BubbleReactPropertyName,
+} from './react-dom-bindings'
 
 interface BubbleReactRegisteredEventHandler {
   handle: BubbleListenerHandle
@@ -49,26 +39,6 @@ interface BubbleReactElementNode {
 }
 
 export type BubbleReactNode = BubbleReactTextNode | BubbleReactElementNode
-
-interface BubbleReactTextPlan {
-  kind: 'text'
-  key: string | null
-  value: string
-}
-
-interface BubbleReactElementPlan {
-  kind: 'element'
-  key: string | null
-  tag: string
-  attributes: Record<string, string>
-  properties: Partial<Record<BubbleReactPropertyName, unknown>>
-  eventHandlers: Partial<
-    Record<BubbleReactEventHandlerName, BubbleReactEventHandler>
-  >
-  children: BubbleReactPlan[]
-}
-
-export type BubbleReactPlan = BubbleReactTextPlan | BubbleReactElementPlan
 
 function canReuseNode(
   currentNode: BubbleReactNode,
