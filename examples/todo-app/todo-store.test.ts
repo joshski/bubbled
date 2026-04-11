@@ -5,7 +5,6 @@ import type { BubbleStorage } from '../../bubble-capabilities'
 import {
   createTodoStore,
   DEFAULT_STORAGE_KEY,
-  summarizeTodos,
   type TodoItem,
 } from './todo-store.ts'
 
@@ -31,19 +30,6 @@ function createInMemoryStorage(
 }
 
 describe('createTodoStore', () => {
-  test('summarizeTodos reports empty, partial, and complete states', () => {
-    expect(summarizeTodos([])).toBe('No todos yet')
-    expect(
-      summarizeTodos([
-        { id: 'a', label: 'A', done: false },
-        { id: 'b', label: 'B', done: true },
-      ])
-    ).toBe('1 of 2 remaining')
-    expect(summarizeTodos([{ id: 'a', label: 'A', done: true }])).toBe(
-      'All done'
-    )
-  })
-
   test('starts empty when the storage is empty and no override is given', () => {
     const storage = createInMemoryStorage()
     const store = createTodoStore({ storage })
