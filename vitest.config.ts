@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config'
 
-const testEnvironment = 'jsdom'
+const testEnvironment = 'node'
 
 const coverageTestExclude = [
   'node_modules/**',

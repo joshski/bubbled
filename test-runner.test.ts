@@ -16,7 +16,7 @@ async function loadConfig(path: string) {
 test('single vitest configuration uses the expected reporter and exclusions', async () => {
   const vitestConfig = await loadConfig('vitest.config.ts')
 
-  expect(vitestConfig.test.environment).toBe('jsdom')
+  expect(vitestConfig.test.environment).toBe('node')
   expect(vitestConfig.test.coverage.provider).toBe('istanbul')
   expect(vitestConfig.test.coverage.reporter).toEqual(['text', 'lcov'])
   expect(vitestConfig.test.coverage.exclude).toContain(
