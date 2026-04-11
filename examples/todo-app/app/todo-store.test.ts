@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest'
 
 import type { TodoItem } from '../domain/todos.ts'
-import { createInMemoryStorage } from '../../../bubble-test'
 
+import { createInMemoryStorage } from '../../../bubble-test'
 import { createTodoStore, DEFAULT_STORAGE_KEY } from './todo-store.ts'
 
 describe('createTodoStore', () => {

@@ -1,3 +1,4 @@
+import type { BubbleStorage } from '../bubble-capabilities'
 import type {
   BubbleHarness,
   BubbleHarnessContext,
@@ -5,7 +6,6 @@ import type {
   BubbleSemanticQueries,
 } from './types'
 
-import type { BubbleStorage } from '../bubble-capabilities'
 import { createBubble, type BubbleRuntime } from '../bubble-core'
 import { createRenderHarness } from './render-harness'
 import { createInternalSemanticAssertions } from './semantic-assertions'
@@ -38,10 +38,18 @@ export function createInMemoryStorage(
 ): BubbleStorage {
   const entries = new Map<string, string>(Object.entries(seed))
   return {
-    getItem(key) { return entries.get(key) ?? null },
-    setItem(key, value) { entries.set(key, value) },
-    removeItem(key) { entries.delete(key) },
-    clear() { entries.clear() },
+    getItem(key) {
+      return entries.get(key) ?? null
+    },
+    setItem(key, value) {
+      entries.set(key, value)
+    },
+    removeItem(key) {
+      entries.delete(key)
+    },
+    clear() {
+      entries.clear()
+    },
   }
 }
 
