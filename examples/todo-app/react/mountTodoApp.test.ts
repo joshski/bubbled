@@ -6,7 +6,10 @@ import {
   type BubbleSerializedElementNode,
   type BubbleSerializedNode,
 } from '../../../bubble-core'
-import { createSemanticAssertions, createSemanticInteractions } from '../../../bubble-test'
+import {
+  createSemanticAssertions,
+  createSemanticInteractions,
+} from '../../../bubble-test'
 import { mountTodoApp } from './mountTodoApp.ts'
 
 function collectAttachedElementsByTag(
