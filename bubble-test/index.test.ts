@@ -5,6 +5,7 @@ import {
   createHarness,
   createRenderHarness,
   createSemanticAssertions,
+  createSemanticInteractions,
   createSemanticQueries,
 } from './index'
 
@@ -817,5 +818,146 @@ describe('createHarness', () => {
 
     harness.expectRole(buttonId, 'button')
     harness.expectText(buttonId, 'Save')
+  })
+
+  test('includes clickByRole and changeByRole in the composed harness', () => {
+    const harness = createHarness()
+    const receivedEvents: Array<{
+      type: string
+      data: Record<string, unknown>
+    }> = []
+
+    harness.render({
+      tag: 'form',
+      children: [
+        {
+          tag: 'input',
+          attributes: { type: 'text', 'aria-label': 'Email' },
+          properties: { value: '' },
+        },
+        { tag: 'button', children: ['Submit'] },
+      ],
+    })
+
+    const textboxId = harness.getByRole('textbox', { name: 'Email' })
+    const buttonId = harness.getByRole('button', { name: 'Submit' })
+
+    harness.bubble.transact(tx => {
+      tx.addEventListener({
+        nodeId: textboxId,
+        type: 'change',
+        listener: event => {
+          receivedEvents.push({
+            type: 'change',
+            data: event.data as Record<string, unknown>,
+          })
+        },
+      })
+      tx.addEventListener({
+        nodeId: buttonId,
+        type: 'click',
+        listener: () => {
+          receivedEvents.push({ type: 'click', data: {} })
+        },
+      })
+    })
+
+    harness.changeByRole('textbox', { name: 'Email' }, 'test@example.com')
+    harness.clickByRole('button', { name: 'Submit' })
+
+    expect(receivedEvents).toEqual([
+      { type: 'change', data: { value: 'test@example.com' } },
+      { type: 'click', data: {} },
+    ])
+  })
+})
+
+describe('semantic interactions', () => {
+  test('clickByRole dispatches a click event to the matching node', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+    const receivedEvents: Array<Record<string, unknown>> = []
+
+    renderHarness.render({ tag: 'button', children: ['Save'] })
+
+    const buttonId = bubble.transact(tx => {
+      const id = bubble.snapshot().query.getByRole('button')[0]!.id
+      tx.addEventListener({
+        nodeId: id,
+        type: 'click',
+        listener: event => {
+          receivedEvents.push(event.data)
+        },
+      })
+      return id
+    })
+
+    const result = interactions.clickByRole('button', { name: 'Save' })
+
+    expect(result).toEqual({ defaultPrevented: false, delivered: true })
+    expect(receivedEvents).toEqual([{}])
+    expect(buttonId).toBeDefined()
+  })
+
+  test('changeByRole dispatches a change event with the given value', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+    const receivedValues: Array<unknown> = []
+
+    renderHarness.render({
+      tag: 'input',
+      attributes: { type: 'text', 'aria-label': 'Username' },
+      properties: { value: '' },
+    })
+
+    bubble.transact(tx => {
+      const textboxId = bubble.snapshot().query.getByRole('textbox')[0]!.id
+      tx.addEventListener({
+        nodeId: textboxId,
+        type: 'change',
+        listener: event => {
+          receivedValues.push((event.data as Record<string, unknown>).value)
+        },
+      })
+    })
+
+    const result = interactions.changeByRole(
+      'textbox',
+      { name: 'Username' },
+      'alice'
+    )
+
+    expect(result).toEqual({ defaultPrevented: false, delivered: true })
+    expect(receivedValues).toEqual(['alice'])
+  })
+
+  test('clickByRole throws when the role is not found', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+
+    renderHarness.render({ tag: 'button', children: ['Cancel'] })
+
+    expect(() => interactions.clickByRole('button', { name: 'Save' })).toThrow(
+      'Unable to find a node with role "button" and name "Save". Nodes with role "button":'
+    )
+  })
+
+  test('changeByRole throws when the role is not found', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+
+    expect(() =>
+      interactions.changeByRole(
+        'textbox',
+        { name: 'Email' },
+        'test@example.com'
+      )
+    ).toThrow(
+      'Unable to find a node with role "textbox" and name "Email". No nodes with that role exist in the current bubble snapshot.'
+    )
   })
 })

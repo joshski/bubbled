@@ -3,12 +3,14 @@ import type {
   BubbleHarness,
   BubbleHarnessContext,
   BubbleSemanticAssertions,
+  BubbleSemanticInteractions,
   BubbleSemanticQueries,
 } from './types'
 
 import { createBubble, type BubbleRuntime } from '../bubble-core'
 import { createRenderHarness } from './render-harness'
 import { createInternalSemanticAssertions } from './semantic-assertions'
+import { createInternalSemanticInteractions } from './semantic-interactions'
 import { createInternalSemanticQueries } from './semantic-queries'
 export { createRenderHarness } from './render-harness'
 export type {
@@ -18,6 +20,7 @@ export type {
   BubbleRenderElement,
   BubbleRenderHarness,
   BubbleSemanticAssertions,
+  BubbleSemanticInteractions,
   BubbleSemanticQueries,
 } from './types'
 
@@ -31,6 +34,12 @@ export function createSemanticAssertions(
   target: BubbleHarnessContext
 ): BubbleSemanticAssertions {
   return createInternalSemanticAssertions(target)
+}
+
+export function createSemanticInteractions(
+  target: BubbleHarnessContext
+): BubbleSemanticInteractions {
+  return createInternalSemanticInteractions(target)
 }
 
 export function createInMemoryStorage(
@@ -60,6 +69,7 @@ export function createHarness(
   return Object.assign(
     renderHarness,
     createSemanticQueries(renderHarness),
-    createSemanticAssertions(renderHarness)
+    createSemanticAssertions(renderHarness),
+    createSemanticInteractions(renderHarness)
   )
 }

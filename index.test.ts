@@ -60,6 +60,7 @@ describe('public entrypoints', () => {
       'createInMemoryStorage',
       'createRenderHarness',
       'createSemanticAssertions',
+      'createSemanticInteractions',
       'createSemanticQueries',
     ])
     expect(entrypoint).toMatchObject({
@@ -67,6 +68,7 @@ describe('public entrypoints', () => {
       createInMemoryStorage: expect.any(Function),
       createRenderHarness: expect.any(Function),
       createSemanticAssertions: expect.any(Function),
+      createSemanticInteractions: expect.any(Function),
       createSemanticQueries: expect.any(Function),
     })
     expectNoNewGlobals(globalsBeforeImport)

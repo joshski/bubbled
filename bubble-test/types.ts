@@ -40,6 +40,19 @@ export interface BubbleSemanticAssertions {
   expectChecked(target: BubbleNodeId, checked: boolean): void
 }
 
+export interface BubbleSemanticInteractions {
+  clickByRole(
+    role: string,
+    options?: { name?: string | RegExp }
+  ): BubbleDispatchResult
+  changeByRole(
+    role: string,
+    options: { name?: string | RegExp },
+    value: string
+  ): BubbleDispatchResult
+}
+
 export type BubbleHarness = BubbleRenderHarness &
   BubbleSemanticQueries &
-  BubbleSemanticAssertions
+  BubbleSemanticAssertions &
+  BubbleSemanticInteractions
