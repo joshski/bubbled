@@ -1,5 +1,7 @@
 import { createElement, useState } from 'react'
 
+import type { TodoItem } from '../domain/todos.ts'
+
 import { createBubble, type BubbleRuntime } from '../../../bubble-core'
 import {
   createBubbleReactRoot,
@@ -12,7 +14,6 @@ import {
   type TodoStore,
 } from '../app/todo-store.ts'
 import { TodoAppView } from './TodoAppView.tsx'
-import type { TodoItem } from '../domain/todos.ts'
 
 export interface MountTodoAppOptions {
   readonly bubble?: BubbleRuntime
