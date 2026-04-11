@@ -41,11 +41,9 @@ Introduce a `BubbleSemanticInteractions` interface (parallel to `BubbleSemanticQ
 
 ### What should the API surface look like?
 
-Two known use cases: click a button by name, change a textbox by name. It is unclear whether the todo app is the right scope to drive the full API or if more examples are needed first.
-
 #### Option
 
-Ship only `clickByName(role, name)` and `changeTextbox(name, value)` to match the exact todo app usage — defer generalization until a second app surfaces more patterns.
+Ship only `clickByName(role, name)` and `changeTextbox(name, value)` to match the exact todo app usage — two known use cases; defer generalization until a second app surfaces more patterns.
 
 #### Option
 

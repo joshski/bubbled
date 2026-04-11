@@ -26,11 +26,9 @@ This is a complete, generic implementation with no todo-specific logic. A `seed`
 
 ### Should the exported name be `createInMemoryStorage` or something that signals it is for testing?
 
-Moving it verbatim keeps the name simple and consistent with the existing API style in `bubble-test`.
-
 #### Option
 
-Keep `createInMemoryStorage` — consistent with `createBubble`, `createHarness`, etc.
+Keep `createInMemoryStorage` — consistent with `createBubble`, `createHarness`, etc. Moving it verbatim keeps the name simple.
 
 #### Option
 
@@ -38,12 +36,10 @@ Name it `createFakeStorage` or `createStorageStub` — explicitly signals test-o
 
 ### Where in bubble-test should it live?
 
-`bubble-test` currently exports render and semantic utilities. Storage stubs are a different concern.
-
 #### Option
 
 Add it directly to `bubble-test/index.ts` — simple, no new files.
 
 #### Option
 
-Add a dedicated `bubble-test/storage-stub.ts` file and export from the index — consistent with the existing pattern of one-concern-per-file.
+Add a dedicated `bubble-test/storage-stub.ts` file and export from the index — `bubble-test` currently exports render and semantic utilities; a separate file keeps storage stubs as their own concern, consistent with the existing pattern of one-concern-per-file.
