@@ -19,6 +19,7 @@ import {
   type DomTextNode,
   type DomValueElementNode,
 } from './internal/dom'
+import { createDomFocusSync, type DomFocusSync } from './internal/focus-sync'
 import {
   createDomLayout,
   measureAndPlacePopover,
@@ -110,40 +111,14 @@ export function createDomProjector(
   let unsubscribe: (() => void) | null = null
   let removeDomEventBridges: (() => void) | null = null
   const projectionState = createDomProjectionState()
-  let isSyncingFocusFromBubble = false
-  let isSyncingFocusFromDom = false
-
-  const syncDomFocus = (nodeId: BubbleNodeId | null): void => {
-    const activeElement = (mountedContainer as DomContainer).ownerDocument
-      .activeElement
-
-    if (nodeId === null) {
-      if (
-        activeElement !== null &&
-        projectionState.getBubbleNodeId(activeElement) !== undefined
-      ) {
-        isSyncingFocusFromBubble = true
-        activeElement.blur()
-        isSyncingFocusFromBubble = false
-      }
-
-      return
-    }
-
-    const projectedNode = projectionState.getProjectedNode(nodeId)
-
-    if (projectedNode === undefined || !isDomElementNode(projectedNode)) {
-      return
-    }
-
-    if (activeElement === projectedNode) {
-      return
-    }
-
-    isSyncingFocusFromBubble = true
-    projectedNode.focus()
-    isSyncingFocusFromBubble = false
-  }
+  const focusSync: DomFocusSync | null =
+    options.syncFocus === true
+      ? createDomFocusSync({
+          getContainer: () => mountedContainer as DomContainer,
+          projectionState,
+          bubble: options.bubble,
+        })
+      : null
 
   const ensureProjectedNode = (
     nodeId: BubbleNodeId,
@@ -172,31 +147,8 @@ export function createDomProjector(
 
     projectionState.registerProjectedNode(nodeId, element)
 
-    if (options.syncFocus === true) {
-      element.addEventListener('focus', event => {
-        if (isSyncingFocusFromBubble || isSyncingFocusFromDom) {
-          return
-        }
-
-        const targetNode = event.target
-
-        if (targetNode === null) {
-          return
-        }
-
-        const targetId = projectionState.getBubbleNodeId(targetNode)
-
-        if (
-          targetId === undefined ||
-          options.bubble.getFocusedNodeId() === targetId
-        ) {
-          return
-        }
-
-        isSyncingFocusFromDom = true
-        options.bubble.focus(targetId)
-        isSyncingFocusFromDom = false
-      })
+    if (focusSync !== null) {
+      element.addEventListener('focus', focusSync.handleDomFocusEvent)
     }
 
     for (const [name, value] of Object.entries(node.attributes)) {
@@ -313,9 +265,7 @@ export function createDomProjector(
       return
     }
 
-    if (options.syncFocus === true) {
-      syncDomFocus(event.nodeId)
-    }
+    focusSync?.syncBubbleFocusToDom(event.nodeId)
   }
 
   const bridgeClickEvent = (event: DomEvent): void => {
@@ -416,9 +366,7 @@ export function createDomProjector(
         }
       }
 
-      if (options.syncFocus === true) {
-        syncDomFocus(options.bubble.getFocusedNodeId())
-      }
+      focusSync?.syncBubbleFocusToDom(options.bubble.getFocusedNodeId())
     },
     unmount() {
       if (mountedContainer === null) {
