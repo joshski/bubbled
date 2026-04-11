@@ -6,7 +6,7 @@ import {
   serializeBubbleSnapshot,
   type BubbleEvent,
 } from '../bubble-core'
-import { createBubbleReactRoot } from './index'
+import { createBubbleReactRoot, valueChangeHandler } from './index'
 import { readReactClientInternals } from './react-client-internals'
 
 function readSnapshot(bubble: ReturnType<typeof createBubble>) {
@@ -875,7 +875,7 @@ describe('createBubbleReactRoot', () => {
     })
   })
 
-  test('change events can drive controlled input state', () => {
+  test('valueChangeHandler drives controlled input state from bubble change events', () => {
     const bubble = createBubble()
     const root = createBubbleReactRoot({ bubble })
 
@@ -887,10 +887,7 @@ describe('createBubbleReactRoot', () => {
           type="text"
           aria-label="Title"
           value={value}
-          onChange={event => {
-            const bubbleEvent = event as unknown as BubbleEvent
-            setValue(String(bubbleEvent.data['value'] ?? ''))
-          }}
+          onChange={valueChangeHandler(setValue)}
         />
       )
     }
@@ -912,6 +909,33 @@ describe('createBubbleReactRoot', () => {
     })[0]!
 
     expect(textbox.value).toBe('Published')
+  })
+
+  test('valueChangeHandler normalizes missing, null, undefined, and non-string values', () => {
+    const received: string[] = []
+    const handler = valueChangeHandler(value => {
+      received.push(value)
+    }) as unknown as (event: BubbleEvent) => void
+
+    const make = (data: Record<string, unknown>): BubbleEvent => ({
+      type: 'change',
+      targetId: 'node',
+      currentTargetId: 'node',
+      phase: 'target',
+      cancelable: false,
+      defaultPrevented: false,
+      data,
+      preventDefault() {},
+      stopPropagation() {},
+    })
+
+    handler(make({ value: 'hello' }))
+    handler(make({ value: 42 }))
+    handler(make({ value: null }))
+    handler(make({ value: undefined }))
+    handler(make({}))
+
+    expect(received).toEqual(['hello', '42', '', '', ''])
   })
 
   test('multiple state updates settle deterministically', () => {

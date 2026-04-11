@@ -95,9 +95,13 @@ describe('public entrypoints', () => {
 
     const entrypoint = await import('./bubble-react')
 
-    expect(Object.keys(entrypoint)).toEqual(['createBubbleReactRoot'])
+    expect(Object.keys(entrypoint).sort()).toEqual([
+      'createBubbleReactRoot',
+      'valueChangeHandler',
+    ])
     expect(entrypoint).toMatchObject({
       createBubbleReactRoot: expect.any(Function),
+      valueChangeHandler: expect.any(Function),
     })
     expectNoNewGlobals(globalsBeforeImport)
   })

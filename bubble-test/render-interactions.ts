@@ -20,7 +20,7 @@ export function dispatchHarnessEvent(
 
 export function moveFocusInTabOrder(
   bubble: BubbleRuntime,
-  options: { shift?: boolean } = {}
+  options: { shift?: boolean }
 ): void {
   const tabOrder = bubble.getTabOrder()
 

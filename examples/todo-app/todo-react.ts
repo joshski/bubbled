@@ -1,11 +1,11 @@
 import { createElement, useState } from 'react'
 
+import { createBubble, type BubbleRuntime } from '../../bubble-core'
 import {
-  createBubble,
-  type BubbleEvent,
-  type BubbleRuntime,
-} from '../../bubble-core'
-import { createBubbleReactRoot, type BubbleReactRoot } from '../../bubble-react'
+  createBubbleReactRoot,
+  valueChangeHandler,
+  type BubbleReactRoot,
+} from '../../bubble-react'
 import { TodoAppView } from './todo-app.tsx'
 import {
   createTodoAppSnapshot,
@@ -14,10 +14,6 @@ import {
   type TodoItem,
   type TodoStore,
 } from './todo-store.ts'
-
-export function bubbleEventStringValue(event: BubbleEvent): string {
-  return String(event.data['value'] ?? '')
-}
 
 export interface MountTodoAppOptions {
   readonly bubble?: BubbleRuntime
@@ -41,11 +37,9 @@ function TodoAppRoot(props: TodoAppRootProps) {
   const [draft, setDraft] = useState('')
 
   return createElement(TodoAppView, {
-    snapshot: createTodoAppSnapshot(props.store.get()),
+    snapshot: createTodoAppSnapshot(props.store.get(), draft),
     draft,
-    onDraftChange(nextDraft: string) {
-      setDraft(nextDraft)
-    },
+    onDraftChange: valueChangeHandler(setDraft),
     onToggle(id: string) {
       props.store.toggle(id)
     },

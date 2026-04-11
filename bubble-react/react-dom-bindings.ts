@@ -1,3 +1,5 @@
+import type { ChangeEventHandler } from 'react'
+
 import type { BubbleEvent } from '../bubble-core'
 
 export const PROPERTY_DEFAULTS = {
@@ -17,3 +19,13 @@ export const EVENT_TYPE_BY_HANDLER_NAME = {
 
 export type BubbleReactEventHandlerName =
   keyof typeof EVENT_TYPE_BY_HANDLER_NAME
+
+export function valueChangeHandler(
+  handler: (value: string) => void
+): ChangeEventHandler<HTMLInputElement> {
+  const bubbleHandler: BubbleReactEventHandler = event => {
+    handler(String(event.data['value'] ?? ''))
+  }
+
+  return bubbleHandler as unknown as ChangeEventHandler<HTMLInputElement>
+}

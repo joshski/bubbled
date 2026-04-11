@@ -89,17 +89,20 @@ export interface TodoAppSnapshot {
   readonly summary: string
   readonly addButtonLabel: string
   readonly newTodoLabel: string
+  readonly canAdd: boolean
   readonly todos: readonly TodoViewItem[]
 }
 
 export function createTodoAppSnapshot(
-  todos: readonly TodoItem[]
+  todos: readonly TodoItem[],
+  draft: string
 ): TodoAppSnapshot {
   return {
     heading: 'Bubbled Todos',
     summary: summarizeTodos(todos),
     addButtonLabel: 'Add todo',
     newTodoLabel: 'New todo',
+    canAdd: normalizeTodoLabel(draft).length > 0,
     todos: todos.map(todo => ({
       id: todo.id,
       label: todo.label,
