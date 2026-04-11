@@ -6,7 +6,7 @@ import {
   type BubbleSerializedElementNode,
   type BubbleSerializedNode,
 } from '../../../bubble-core'
-import { createSemanticAssertions } from '../../../bubble-test'
+import { createSemanticAssertions, createSemanticInteractions } from '../../../bubble-test'
 import { mountTodoApp } from './mountTodoApp.ts'
 
 function collectAttachedElementsByTag(
@@ -45,23 +45,14 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
       serializeBubbleSnapshot(app.bubble.snapshot())
     ) as BubbleSerializedNode
 
-  const findButton = (name: string): string =>
-    app.bubble.snapshot().query.getByRole('button', { name })[0]!.id
+  const interactions = createSemanticInteractions({ bubble: app.bubble })
 
   const click = (name: string): void => {
-    app.bubble.dispatchEvent({ type: 'click', targetId: findButton(name) })
+    interactions.clickByRole('button', { name })
   }
 
   const changeTextbox = (name: string, value: string): void => {
-    const textboxId = app.bubble
-      .snapshot()
-      .query.getByRole('textbox', { name })[0]!.id
-
-    app.bubble.dispatchEvent({
-      type: 'change',
-      targetId: textboxId,
-      data: { value },
-    })
+    interactions.changeByRole('textbox', { name }, value)
   }
 
   const paragraphId = (): string =>
