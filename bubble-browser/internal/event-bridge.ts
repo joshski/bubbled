@@ -1,8 +1,6 @@
-import type {
-  BubbleElementNode,
-  BubbleNodeId,
-  BubbleRuntime,
-} from '../../bubble-core'
+import type { BubbleElementNode, BubbleRuntime } from '../../bubble-core'
+import type { DomProjectionState } from './projection-state'
+
 import {
   isDomElementNode,
   type DomCheckedElementNode,
@@ -11,7 +9,6 @@ import {
   type DomEvent,
   type DomValueElementNode,
 } from './dom'
-import type { DomProjectionState } from './projection-state'
 
 function readDomChangeEventData(
   targetNode: DomElementNode,

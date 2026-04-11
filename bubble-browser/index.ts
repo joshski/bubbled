@@ -7,14 +7,14 @@ import type {
   BubbleRuntime,
   BubbleRuntimeEvent,
 } from '../bubble-core'
-
-import {
-  type DomChildNode,
-  type DomContainer,
-  type DomDocument,
-  type DomElementNode,
-  type DomTextNode,
+import type {
+  DomChildNode,
+  DomContainer,
+  DomDocument,
+  DomElementNode,
+  DomTextNode,
 } from './internal/dom'
+
 import { createDomEventBridge } from './internal/event-bridge'
 import { createDomFocusSync, type DomFocusSync } from './internal/focus-sync'
 import {
