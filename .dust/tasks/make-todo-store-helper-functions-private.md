@@ -12,7 +12,7 @@ No file outside `todo-store.ts` imports any of these four functions.
 
 ## Task Type
 
-task
+implement
 
 ## Blocked By
 
