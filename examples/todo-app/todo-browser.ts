@@ -2,7 +2,7 @@ import type { TodoItem } from './todo-store.ts'
 
 import { createDomProjector } from '../../bubble-browser'
 import { createBubble } from '../../bubble-core'
-import { TODO_API_PATH } from './todo-http.ts'
+const TODO_API_PATH = '/api/todos'
 import { mountTodoApp } from './todo-react.ts'
 
 interface TodoAppTextNodeLike {

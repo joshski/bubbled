@@ -5,7 +5,7 @@ export {
   TODO_APP_INDEX_PATH,
   TODO_APP_ROOT_PATH,
   type TodoServerOptions,
-} from './todo-http.ts'
+} from './server.ts'
 export {
   mountTodoApp,
   type MountedTodoApp,
