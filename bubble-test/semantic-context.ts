@@ -1,5 +1,5 @@
 import type { BubbleNodeId } from '../bubble-core'
-import type { BubbleHarnessContext } from './index'
+import type { BubbleHarnessContext } from './types'
 
 export function createSemanticContext(target: BubbleHarnessContext) {
   const getNodeOrThrow = (targetId: BubbleNodeId) => {

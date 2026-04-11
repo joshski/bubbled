@@ -1,4 +1,4 @@
-import type { BubbleHarnessContext, BubbleSemanticQueries } from './index'
+import type { BubbleHarnessContext, BubbleSemanticQueries } from './types'
 
 import { createSemanticContext } from './semantic-context'
 
