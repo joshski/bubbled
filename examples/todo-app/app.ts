@@ -11,4 +11,4 @@ export {
   type MountedTodoApp,
   type MountTodoAppOptions,
 } from './todo-react.ts'
-export { startTodoApp, type StartTodoAppOptions } from './todo-browser.ts'
+export { startTodoApp } from './todo-browser.ts'
