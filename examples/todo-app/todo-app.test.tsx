@@ -187,6 +187,29 @@ describe('mountTodoApp', () => {
     expect(textboxValue('New todo')).toBe('')
   })
 
+  test('ignores blank add requests and keeps the draft empty', () => {
+    const { app, attachedLis, click, paragraphId, textboxValue } =
+      createHarness({
+        initialTodos: [],
+      })
+
+    click('Add todo')
+
+    expect(app.store.get()).toEqual([])
+    expect(attachedLis()).toHaveLength(0)
+    expect(textboxValue('New todo')).toBe('')
+    expect(
+      app.bubble.snapshot().query.getByRole('button', { name: 'Add todo' })[0]!
+        .properties
+    ).toEqual({
+      disabled: true,
+    })
+    createSemanticAssertions({ bubble: app.bubble }).expectText(
+      paragraphId(),
+      'No todos yet'
+    )
+  })
+
   test('clicks flow through React props into the store, which re-renders the view', () => {
     const { app, attachedLis, assertions, click, paragraphId } = createHarness({
       initialTodos: [
@@ -210,6 +233,28 @@ describe('mountTodoApp', () => {
     click('Remove Alpha')
     expect(attachedLis()).toHaveLength(0)
     assertions.expectText(paragraphId(), 'No todos yet')
+  })
+
+  test('missing change payloads normalize the draft back to an empty string', () => {
+    const { app, textboxValue } = createHarness({
+      initialTodos: [],
+    })
+    const textboxId = app.bubble.snapshot().query.getByRole('textbox', {
+      name: 'New todo',
+    })[0]!.id
+
+    app.bubble.dispatchEvent({
+      type: 'change',
+      targetId: textboxId,
+      data: { value: 'Draft' },
+    })
+    app.bubble.dispatchEvent({
+      type: 'change',
+      targetId: textboxId,
+      data: {},
+    })
+
+    expect(textboxValue('New todo')).toBe('')
   })
 
   test('mutating the store from outside also re-renders the view', () => {

@@ -1363,19 +1363,20 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     assertFormNode(formNode, formId)
 
     const entries: BubbleFormEntry[] = []
-    const pendingNodeIds = [...formNode.children]
+    const getElementChildNodeIds = (
+      childNodeIds: readonly BubbleNodeId[]
+    ): BubbleNodeId[] =>
+      childNodeIds.filter(
+        childNodeId => nodes.get(childNodeId)?.kind === 'element'
+      )
+    const pendingNodeIds = getElementChildNodeIds(formNode.children)
 
     while (pendingNodeIds.length > 0) {
       const nodeId = pendingNodeIds.shift() as BubbleNodeId
-      const node = nodes.get(nodeId) as BubbleNode
-
-      /* istanbul ignore next -- form traversal skips text nodes defensively. */
-      if (node.kind !== 'element') {
-        continue
-      }
+      const node = nodes.get(nodeId) as BubbleElementNode
 
       entries.push(...getFormEntriesForControl(node))
-      pendingNodeIds.unshift(...node.children)
+      pendingNodeIds.unshift(...getElementChildNodeIds(node.children))
     }
 
     return Object.freeze(entries.map(entry => Object.freeze({ ...entry })))
@@ -1635,7 +1636,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
           const nodeListeners = draftEventListeners.get(handle.nodeId)
           const registrations = nodeListeners?.get(handle.type)
 
-          if (registrations === undefined) {
+          if (nodeListeners === undefined || registrations === undefined) {
             return
           }
 
@@ -1648,17 +1649,16 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
           }
 
           if (nextRegistrations.length === 0) {
-            nodeListeners?.delete(handle.type)
+            nodeListeners.delete(handle.type)
 
-            /* istanbul ignore next -- empty listener maps are cleaned up defensively. */
-            if (nodeListeners?.size === 0) {
+            if (nodeListeners.size === 0) {
               draftEventListeners.delete(handle.nodeId)
             }
 
             return
           }
 
-          nodeListeners?.set(handle.type, nextRegistrations)
+          nodeListeners.set(handle.type, nextRegistrations)
         },
       }
 

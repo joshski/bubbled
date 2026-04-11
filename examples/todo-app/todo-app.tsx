@@ -24,7 +24,6 @@ export function TodoAppView(props: TodoAppViewProps): ReactNode {
           value={props.draft}
           onChange={event => {
             const bubbleEvent = event as unknown as BubbleEvent
-            /* istanbul ignore next -- missing event payloads normalize to an empty draft. */
             props.onDraftChange(String(bubbleEvent.data['value'] ?? ''))
           }}
         />

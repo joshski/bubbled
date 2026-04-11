@@ -71,6 +71,19 @@ describe('createController', () => {
     })
   })
 
+  test('reset wrapper completes successfully for an active session', async () => {
+    const controller = await createController()
+    const session = await controller.createSession()
+
+    await expect(session.reset()).resolves.toBeUndefined()
+    await expect(session.query({ type: 'get-tree' })).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rootId: 'root',
+      }),
+    })
+  })
+
   test('query reads state without mutation', async () => {
     const controller = await createController()
     const session = await controller.createSession()

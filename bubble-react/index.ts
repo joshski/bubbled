@@ -163,7 +163,6 @@ function planReactProps(
       properties[name] = name === 'value' ? String(value) : value
     } else {
       attributes[normalizeAttributeName(name)] =
-        /* istanbul ignore next -- boolean host attributes serialize to empty strings. */
         value === true ? '' : String(value)
     }
   }
@@ -201,7 +200,6 @@ function planFunctionComponent(
 
       const stateIndex = hookIndex
       const initialValue =
-        /* istanbul ignore next -- lazy initializers are equivalent to eager values here. */
         typeof initialState === 'function'
           ? (initialState as () => TValue)()
           : initialState
@@ -441,11 +439,10 @@ function removeEventHandlersFromSubtree(
     return
   }
 
-  for (const registration of Object.values(node.eventHandlers)) {
-    /* istanbul ignore next -- partial handler maps may contain cleared entries during teardown. */
-    if (registration !== undefined) {
-      tx.removeEventListener(registration.handle)
-    }
+  for (const name of Object.keys(
+    node.eventHandlers
+  ) as BubbleReactEventHandlerName[]) {
+    tx.removeEventListener(node.eventHandlers[name]!.handle)
   }
 
   for (const child of node.children) {

@@ -425,22 +425,12 @@ export function createRenderHarness(
           return
         }
 
-        const previousTabStop = tabOrder[currentIndex - 1]
-
-        /* istanbul ignore next -- array lookups are guarded by the current index checks above. */
-        if (previousTabStop !== undefined) {
-          currentBubble.focus(previousTabStop)
-        }
+        currentBubble.focus(tabOrder[currentIndex - 1]!)
         return
       }
 
       if (currentIndex === -1) {
-        const firstTabStop = tabOrder[0]
-
-        /* istanbul ignore next -- array lookups are guarded by the empty-order return above. */
-        if (firstTabStop !== undefined) {
-          currentBubble.focus(firstTabStop)
-        }
+        currentBubble.focus(tabOrder[0]!)
         return
       }
 
@@ -448,12 +438,7 @@ export function createRenderHarness(
         return
       }
 
-      const nextTabStop = tabOrder[currentIndex + 1]
-
-      /* istanbul ignore next -- array lookups are guarded by the end-of-order return above. */
-      if (nextTabStop !== undefined) {
-        currentBubble.focus(nextTabStop)
-      }
+      currentBubble.focus(tabOrder[currentIndex + 1]!)
     },
   }
 }
@@ -548,11 +533,10 @@ export function createSemanticAssertions(
       const actualName = node.name
 
       if (actualName !== name) {
-        /* istanbul ignore next -- null diagnostics are a presentation detail. */
         throw new Error(
-          `Expected accessible name for ${targetId} to be ${
-            name === null ? 'null' : JSON.stringify(name)
-          }. Received ${actualName === null ? 'null' : JSON.stringify(actualName)}. ${describeNode(targetId)}`
+          `Expected accessible name for ${targetId} to be ${JSON.stringify(
+            name
+          )}. Received ${JSON.stringify(actualName)}. ${describeNode(targetId)}`
         )
       }
     },
@@ -573,11 +557,8 @@ export function createSemanticAssertions(
       const actualValue = node.value
 
       if (actualValue !== value) {
-        /* istanbul ignore next -- null diagnostics are a presentation detail. */
         throw new Error(
-          `Expected value for ${targetId} to be ${JSON.stringify(value)}. Received ${
-            actualValue === null ? 'null' : JSON.stringify(actualValue)
-          }. ${describeNode(targetId)}`
+          `Expected value for ${targetId} to be ${JSON.stringify(value)}. Received ${JSON.stringify(actualValue)}. ${describeNode(targetId)}`
         )
       }
     },
@@ -586,11 +567,8 @@ export function createSemanticAssertions(
       const actualChecked = node.checked
 
       if (actualChecked !== checked) {
-        /* istanbul ignore next -- null diagnostics are a presentation detail. */
         throw new Error(
-          `Expected checked state for ${targetId} to be ${checked}. Received ${
-            actualChecked === null ? 'null' : actualChecked
-          }. ${describeNode(targetId)}`
+          `Expected checked state for ${targetId} to be ${checked}. Received ${JSON.stringify(actualChecked)}. ${describeNode(targetId)}`
         )
       }
     },

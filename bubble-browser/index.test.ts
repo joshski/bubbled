@@ -1026,6 +1026,36 @@ describe('createDomProjector', () => {
     expect(calls).toEqual([{ checked: true }])
   })
 
+  test('bridged DOM input events on elements without tracked form state yield empty data', () => {
+    const bubble = createBubble()
+    const calls: Array<Record<string, unknown>> = []
+
+    bubble.transact(tx => {
+      const buttonId = tx.createElement({ tag: 'button' })
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId })
+      tx.addEventListener({
+        nodeId: buttonId,
+        type: 'change',
+        listener: event => {
+          calls.push(event.data)
+        },
+      })
+    })
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true })
+    const { container } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    container.dispatchEvent({
+      type: 'input',
+      target: container.childNodes[0] as FakeDomElement,
+      preventDefault() {},
+    })
+
+    expect(calls).toEqual([{}])
+  })
+
   test('bridged DOM input events ignore null targets', () => {
     const bubble = createBubble()
     const projector = createDomProjector({ bubble, bridgeEvents: true })
@@ -1065,6 +1095,72 @@ describe('createDomProjector', () => {
       container.dispatchEvent({
         type: 'input',
         target: textNode,
+        preventDefault() {},
+      })
+    }).not.toThrow()
+  })
+
+  test('bridged DOM input events ignore targets whose runtime node is no longer an element', () => {
+    let currentNode: BubbleElementNode | BubbleTextNode = {
+      id: 'node:1',
+      kind: 'element',
+      tag: 'input',
+      namespace: 'html',
+      parentId: 'root',
+      children: [],
+      attributes: {},
+      properties: {},
+      value: '',
+      checked: null,
+      role: 'textbox',
+      name: null,
+    }
+    const bubble = createProjectorTestBubble({
+      getNode(nodeId) {
+        return nodeId === 'node:1' ? currentNode : null
+      },
+      snapshot() {
+        return {
+          rootId: 'root',
+          nodes: new Map<
+            string,
+            BubbleRootNode | BubbleElementNode | BubbleTextNode
+          >([
+            ['root', { id: 'root', kind: 'root', children: ['node:1'] }],
+            ['node:1', currentNode],
+          ]),
+          query: {
+            getById() {
+              return null
+            },
+            getByTag() {
+              return []
+            },
+            getByRole() {
+              return []
+            },
+            getControlForLabel() {
+              return null
+            },
+          },
+        }
+      },
+    })
+    const projector = createDomProjector({ bubble, bridgeEvents: true })
+    const { container } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+    currentNode = {
+      id: 'node:1',
+      kind: 'text',
+      parentId: 'root',
+      value: 'oops',
+    }
+
+    expect(() => {
+      container.dispatchEvent({
+        type: 'input',
+        target: container.childNodes[0] as FakeDomElement,
         preventDefault() {},
       })
     }).not.toThrow()
@@ -1294,6 +1390,88 @@ describe('createDomProjector', () => {
       })
     }).not.toThrow()
     expect(bubble.getFocusedNodeId()).toBeNull()
+  })
+
+  test('runtime focus events are ignored when focus sync is disabled', () => {
+    let runtimeListener: BubbleRuntimeListener | null = null
+    const bubble = createProjectorTestBubble({
+      subscribe(listener: BubbleRuntimeListener) {
+        runtimeListener = listener
+        return () => {
+          runtimeListener = null
+        }
+      },
+    })
+    const projector = createDomProjector({ bubble })
+    const { container } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    if (runtimeListener === null) {
+      throw new Error(
+        'Expected the projector to subscribe to bubble runtime events.'
+      )
+    }
+    const deliverRuntimeEvent = runtimeListener as BubbleRuntimeListener
+
+    expect(() =>
+      deliverRuntimeEvent({
+        type: 'focus-changed',
+        nodeId: 'node:missing',
+      })
+    ).not.toThrow()
+    expect(container.ownerDocument.activeElement).toBeNull()
+  })
+
+  test('incremental inserts ignore stale projected siblings that were detached externally', () => {
+    const bubble = createBubble()
+    let firstButtonId = ''
+
+    bubble.transact(tx => {
+      firstButtonId = tx.createElement({ tag: 'button' })
+      const trailingButtonId = tx.createElement({ tag: 'button' })
+
+      tx.insertChild({ parentId: bubble.rootId, childId: firstButtonId })
+      tx.insertChild({ parentId: bubble.rootId, childId: trailingButtonId })
+    })
+
+    const projector = createDomProjector({ bubble })
+    const { container, markup } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+    container.removeChild(container.childNodes[1]!)
+
+    bubble.transact(tx => {
+      const insertedButtonId = tx.createElement({ tag: 'button' })
+
+      tx.insertChild({
+        parentId: bubble.rootId,
+        childId: insertedButtonId,
+        index: 1,
+      })
+    })
+
+    expect(firstButtonId).not.toBe('')
+    expect(markup()).toBe('<button></button><button></button>')
+  })
+
+  test('unmount tolerates roots whose current children were never projected', () => {
+    const bubble = createProjectorTestBubble({
+      getRoot() {
+        return {
+          id: 'root',
+          kind: 'root',
+          children: ['missing'],
+        }
+      },
+    })
+    const projector = createDomProjector({ bubble })
+    const { container, markup } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    expect(() => projector.unmount()).not.toThrow()
+    expect(markup()).toBe('')
   })
 
   test('mount fails clearly when the bubble snapshot references an unknown node', () => {

@@ -1,16 +1,16 @@
 import { defineConfig } from 'vitest/config'
 
 import {
+  coverageTestExclude,
   coverageExclude,
   coverageThresholds,
-  defaultTestExclude,
   testEnvironment,
 } from './vitest.shared'
 
 export default defineConfig({
   test: {
     environment: testEnvironment,
-    exclude: defaultTestExclude,
+    exclude: coverageTestExclude,
     coverage: {
       provider: 'istanbul',
       include: ['**/*.ts', '**/*.tsx'],

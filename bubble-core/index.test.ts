@@ -2003,6 +2003,53 @@ describe('createBubble', () => {
     expect(calls).toEqual(['registered'])
   })
 
+  test('retains other listener groups on the same node when removing the final listener for one type', () => {
+    const bubble = createBubble()
+    const calls: string[] = []
+
+    const { buttonId, clickHandle } = bubble.transact(tx => {
+      const createdButtonId = tx.createElement({ tag: 'button' })
+      const createdClickHandle = tx.addEventListener({
+        nodeId: createdButtonId,
+        type: 'click',
+        listener: () => {
+          calls.push('click')
+        },
+      })
+
+      tx.addEventListener({
+        nodeId: createdButtonId,
+        type: 'focus',
+        listener: () => {
+          calls.push('focus')
+        },
+      })
+
+      return {
+        buttonId: createdButtonId,
+        clickHandle: createdClickHandle,
+      }
+    })
+
+    bubble.transact(tx => {
+      tx.removeEventListener(clickHandle)
+    })
+
+    expect(bubble.dispatchEvent({ type: 'click', targetId: buttonId })).toEqual(
+      {
+        defaultPrevented: false,
+        delivered: false,
+      }
+    )
+    expect(bubble.dispatchEvent({ type: 'focus', targetId: buttonId })).toEqual(
+      {
+        defaultPrevented: false,
+        delivered: true,
+      }
+    )
+    expect(calls).toEqual(['focus'])
+  })
+
   test('fires multiple listeners on the same node in registration order', () => {
     const bubble = createBubble()
     const calls: string[] = []
@@ -3011,6 +3058,37 @@ describe('createBubble', () => {
     })
 
     expect(bubble.serializeForm(formId)).toEqual([{ name: 'email', value: '' }])
+  })
+
+  test('skips text nodes while traversing nested form controls', () => {
+    const bubble = createBubble()
+
+    const formId = bubble.transact(tx => {
+      const createdFormId = tx.createElement({ tag: 'form' })
+      const introTextId = tx.createText({ value: 'Intro' })
+      const fieldsetId = tx.createElement({ tag: 'fieldset' })
+      const nestedTextId = tx.createText({ value: 'Nested' })
+      const inputId = tx.createElement({ tag: 'input' })
+
+      tx.setAttribute({ nodeId: inputId, name: 'name', value: 'email' })
+      tx.setProperty({
+        nodeId: inputId,
+        name: 'value',
+        value: 'person@example.com',
+      })
+
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFormId })
+      tx.insertChild({ parentId: createdFormId, childId: introTextId })
+      tx.insertChild({ parentId: createdFormId, childId: fieldsetId })
+      tx.insertChild({ parentId: fieldsetId, childId: nestedTextId })
+      tx.insertChild({ parentId: fieldsetId, childId: inputId })
+
+      return createdFormId
+    })
+
+    expect(bubble.serializeForm(formId)).toEqual([
+      { name: 'email', value: 'person@example.com' },
+    ])
   })
 
   test('includes only checked checkbox controls in form payloads', () => {

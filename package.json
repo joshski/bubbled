@@ -8,7 +8,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "test": "bun test",
-    "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
+    "test:coverage": "vitest run --coverage",
     "test:ci": "bun run test && bun run test:coverage"
   },
   "dependencies": {

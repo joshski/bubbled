@@ -67,21 +67,15 @@ function renderStartupError(
   console.error(error)
 }
 
-export async function startTodoApp(
-  options: StartTodoAppOptions = {}
-): Promise<void> {
-  /* istanbul ignore next -- browser entrypoints exercise the default document wiring. */
-  const documentRef = options.document ?? globalThis.document
-  /* istanbul ignore next -- browser entrypoints exercise the default fetch wiring. */
-  const fetchImpl = options.fetch ?? globalThis.fetch
-  /* istanbul ignore next -- browser entrypoints exercise the default event wiring. */
-  const addEventListenerImpl =
-    options.addEventListener ?? globalThis.addEventListener.bind(globalThis)
-  /* istanbul ignore next -- browser entrypoints exercise the default projector wiring. */
-  const createProjector = options.createProjector ?? createDomProjector
-  /* istanbul ignore next -- browser entrypoints exercise the default mount predicate. */
-  const isMountContainer = options.isMountContainer ?? isDefaultMountContainer
-
+export async function startTodoApp({
+  document: documentRef = globalThis.document,
+  fetch: fetchImpl = globalThis.fetch,
+  addEventListener: addEventListenerImpl = globalThis.addEventListener.bind(
+    globalThis
+  ),
+  createProjector = createDomProjector,
+  isMountContainer = isDefaultMountContainer,
+}: StartTodoAppOptions = {}): Promise<void> {
   try {
     const container = documentRef.getElementById('app')
 

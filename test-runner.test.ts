@@ -50,25 +50,20 @@ test('test command runs a targeted smoke fixture', () => {
   }
 })
 
-test('unit coverage configuration uses the expected reporter and exclusions', async () => {
-  const vitestConfig = await loadConfig('vitest.coverage.config.ts')
+test('single vitest configuration uses the expected reporter and exclusions', async () => {
+  const vitestConfig = await loadConfig('vitest.config.ts')
 
   expect(vitestConfig.test.environment).toBe('jsdom')
   expect(vitestConfig.test.coverage.provider).toBe('istanbul')
   expect(vitestConfig.test.coverage.reporter).toEqual(['text', 'lcov'])
+  expect(vitestConfig.test.coverage.exclude).toContain(
+    '.tmp-browser-verification-*/**'
+  )
   expect(vitestConfig.test.exclude).toContain(
     'bubble-browser/browser-verification.test.ts'
   )
   expect(vitestConfig.test.exclude).toContain('**/*.e2e.test.ts')
-})
-
-test('default vitest configuration still includes the end-to-end browser suite', async () => {
-  const vitestConfig = await loadConfig('vitest.config.ts')
-
-  expect(vitestConfig.test.environment).toBe('jsdom')
-  expect(vitestConfig.test.exclude).not.toContain(
-    'bubble-browser/browser-verification.test.ts'
-  )
+  expect(vitestConfig.test.coverage.thresholds.branches).toBe(100)
 })
 
 test('bun configuration leaves coverage reporting disabled', () => {
@@ -89,12 +84,10 @@ test('ci runs the bun pass and the coverage-gated vitest pass', () => {
   expect(workflow).toContain('bun run test:coverage')
 })
 
-test('coverage script uses the unit-only vitest configuration', () => {
+test('coverage script uses the single vitest configuration', () => {
   const packageJson = JSON.parse(
     readFileSync(join(root, 'package.json'), 'utf8')
   )
 
-  expect(packageJson.scripts['test:coverage']).toBe(
-    'vitest run --config vitest.coverage.config.ts --coverage'
-  )
+  expect(packageJson.scripts['test:coverage']).toBe('vitest run --coverage')
 })

@@ -72,6 +72,14 @@ interface DomElementNode extends DomChildNode, DomParentNode {
   removeAttribute(name: string): void
 }
 
+interface DomValueElementNode extends DomElementNode {
+  value: unknown
+}
+
+interface DomCheckedElementNode extends DomElementNode {
+  checked: unknown
+}
+
 interface DomEvent {
   readonly type: string
   readonly target: DomChildNode | null
@@ -115,24 +123,23 @@ function setDomProperty(
   ;(node as unknown as Record<string, unknown>)[name] = value
 }
 
-function readDomEventData(targetNode: DomChildNode): Record<string, unknown> {
-  if (!isDomElementNode(targetNode)) {
-    return {}
+function readDomChangeEventData(
+  targetNode: DomElementNode,
+  target: Readonly<BubbleElementNode>
+): Record<string, unknown> {
+  if (target.checked !== null) {
+    return {
+      checked: (targetNode as DomCheckedElementNode).checked,
+    }
   }
 
-  const properties = targetNode as unknown as Record<string, unknown>
-  const data: Record<string, unknown> = {}
-
-  /* istanbul ignore next -- DOM event targets may omit value entirely. */
-  if ('value' in properties) {
-    data['value'] = properties['value']
+  if (target.value !== null) {
+    return {
+      value: (targetNode as DomValueElementNode).value,
+    }
   }
 
-  if ('checked' in properties) {
-    data['checked'] = properties['checked']
-  }
-
-  return data
+  return {}
 }
 
 export function placePopover(input: PlacementInput): PlacementOutput {
@@ -367,7 +374,6 @@ export function createDomProjector(
     for (const siblingId of parent.children.slice(index + 1)) {
       const siblingNode = nodeLookup.get(siblingId)
 
-      /* istanbul ignore next -- stale projected siblings are a defensive adapter case. */
       if (siblingNode !== undefined && siblingNode.parentNode === parentNode)
         return siblingNode
     }
@@ -447,7 +453,6 @@ export function createDomProjector(
       return
     }
 
-    /* istanbul ignore next -- focus sync is an optional runtime adapter behavior. */
     if (options.syncFocus === true) {
       syncDomFocus(event.nodeId)
     }
@@ -492,7 +497,7 @@ export function createDomProjector(
   const bridgeChangeEvent = (event: DomEvent): void => {
     const targetNode = event.target
 
-    if (targetNode === null) {
+    if (targetNode === null || !isDomElementNode(targetNode)) {
       return
     }
 
@@ -502,10 +507,16 @@ export function createDomProjector(
       return
     }
 
+    const target = getBubbleNode(options.bubble, targetId)
+
+    if (target.kind !== 'element') {
+      return
+    }
+
     options.bubble.dispatchEvent({
       type: 'change',
       targetId,
-      data: readDomEventData(targetNode),
+      data: readDomChangeEventData(targetNode, target),
     })
   }
 
@@ -563,7 +574,6 @@ export function createDomProjector(
         const projectedNode = nodeLookup.get(childId)
 
         projectedNode?.remove()
-        /* istanbul ignore next -- cleanup tolerates partially projected roots defensively. */
         if (projectedNode !== undefined) {
           bubbleIdByDomNode.delete(projectedNode)
         }
