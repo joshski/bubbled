@@ -5,9 +5,9 @@ import {
   serializeBubbleSnapshot,
   type BubbleSerializedElementNode,
   type BubbleSerializedNode,
-} from '../../bubble-core'
-import { createSemanticAssertions } from '../../bubble-test'
-import { mountTodoApp } from './todo-react.ts'
+} from '../../../bubble-core'
+import { createSemanticAssertions } from '../../../bubble-test'
+import { mountTodoApp } from './mountTodoApp.ts'
 
 function collectAttachedElementsByTag(
   node: BubbleSerializedNode,

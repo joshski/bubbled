@@ -1,4 +1,4 @@
-import type { TodoItem } from './todo-store.ts'
+import type { TodoItem } from '../domain/todos.ts'
 
 const TODO_API_PATH = '/api/todos'
 

@@ -1,52 +1,14 @@
-import type { BubbleStorage } from '../../bubble-capabilities'
+import type { BubbleStorage } from '../../../bubble-capabilities'
+import {
+  appendTodo,
+  removeTodo,
+  toggleTodo,
+  type TodoItem,
+} from '../domain/todos.ts'
 
-export interface TodoItem {
-  readonly id: string
-  readonly label: string
-  readonly done: boolean
-}
+export type { TodoItem } from '../domain/todos.ts'
 
 export const DEFAULT_STORAGE_KEY = 'bubbled-todos'
-
-function toggleTodo(
-  todos: readonly TodoItem[],
-  id: string
-): readonly TodoItem[] {
-  return todos.map(todo =>
-    todo.id === id ? { ...todo, done: !todo.done } : todo
-  )
-}
-
-function removeTodo(
-  todos: readonly TodoItem[],
-  id: string
-): readonly TodoItem[] {
-  return todos.filter(todo => todo.id !== id)
-}
-
-function normalizeTodoLabel(label: string): string {
-  return label.trim().replace(/\s+/g, ' ')
-}
-
-function appendTodo(
-  todos: readonly TodoItem[],
-  label: string
-): readonly TodoItem[] {
-  const normalizedLabel = normalizeTodoLabel(label)
-
-  if (normalizedLabel.length === 0) {
-    return todos
-  }
-
-  return [
-    ...todos,
-    {
-      id: `t${todos.length + 1}`,
-      label: normalizedLabel,
-      done: false,
-    },
-  ]
-}
 
 export interface TodoStore {
   get(): readonly TodoItem[]

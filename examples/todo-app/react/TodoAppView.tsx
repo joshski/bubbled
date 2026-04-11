@@ -1,21 +1,10 @@
 import type { ChangeEventHandler, ReactNode } from 'react'
 
-import type { TodoItem } from './todo-store.ts'
-
-function summarizeTodos(todos: readonly TodoItem[]): string {
-  const remaining = todos.filter(todo => !todo.done).length
-  if (todos.length === 0) {
-    return 'No todos yet'
-  }
-  if (remaining === 0) {
-    return 'All done'
-  }
-  return `${remaining} of ${todos.length} remaining`
-}
-
-function normalizeTodoLabel(label: string): string {
-  return label.trim().replace(/\s+/g, ' ')
-}
+import {
+  normalizeTodoLabel,
+  summarizeTodos,
+  type TodoItem,
+} from '../domain/todos.ts'
 
 export interface TodoAppViewProps {
   readonly todos: readonly TodoItem[]

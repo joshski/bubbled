@@ -8,16 +8,16 @@ const coverageTestExclude = [
   '**/*.e2e.test.ts',
   '**/*.e2e.test.tsx',
   'bubble-browser/browser-verification.test.ts',
-  'examples/todo-app/server.test.ts',
+  'examples/todo-app/bun/server.test.ts',
 ]
 
 const coverageExclude = [
   '**/*.test.ts',
   '**/*.test.tsx',
   '.tmp-browser-verification-*/**',
-  'examples/todo-app/client.ts',
-  'examples/todo-app/main.ts',
-  'examples/todo-app/server.ts',
+  'examples/todo-app/browser/client.ts',
+  'examples/todo-app/bun/main.ts',
+  'examples/todo-app/bun/server.ts',
   'node_modules/**',
   'coverage/**',
   'vitest.config.ts',

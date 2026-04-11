@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import type { TodoItem } from './todo-store.ts'
+import type { TodoItem } from '../domain/todos.ts'
 
 import {
   startTodoApp,
@@ -8,7 +8,7 @@ import {
   type TodoAppTextNode,
   type TodoBrowserHost,
   type TodoFetchResponse,
-} from './todo-browser.ts'
+} from './start-todo-app.ts'
 
 function createFakeContainer(): TodoAppContainer & {
   children: TodoAppTextNode[]

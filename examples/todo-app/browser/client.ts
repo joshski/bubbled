@@ -1,14 +1,14 @@
-import { createDomProjector } from '../../bubble-browser'
-import { createBubble } from '../../bubble-core'
+import { createDomProjector } from '../../../bubble-browser'
+import { createBubble } from '../../../bubble-core'
 import {
   startTodoApp,
   type TodoAppContainer,
   type TodoAppTextNode,
   type TodoBrowserHost,
   type TodoFetchResponse,
-} from './todo-browser.ts'
-import { mountTodoApp } from './todo-react.ts'
-import { createTodoStore } from './todo-store.ts'
+} from '../app/start-todo-app.ts'
+import { createTodoStore } from '../app/todo-store.ts'
+import { mountTodoApp } from '../react/mountTodoApp.ts'
 
 const host: TodoBrowserHost = {
   getAppContainer(): TodoAppContainer | null {

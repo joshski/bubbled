@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'vitest'
 
-import type { BubbleStorage } from '../../bubble-capabilities'
+import type { BubbleStorage } from '../../../bubble-capabilities'
 
 import {
   createTodoStore,
   DEFAULT_STORAGE_KEY,
-  type TodoItem,
 } from './todo-store.ts'
+import type { TodoItem } from '../domain/todos.ts'
 
 function createInMemoryStorage(
   seed: Record<string, string> = {}
