@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest'
 
-import { bubbleEventStringValue } from './todo-react.ts'
 import type { BubbleEvent } from '../../bubble-core'
+
+import { bubbleEventStringValue } from './todo-react.ts'
 
 function makeBubbleEvent(data: Record<string, unknown>): BubbleEvent {
   return {
@@ -19,7 +20,9 @@ function makeBubbleEvent(data: Record<string, unknown>): BubbleEvent {
 
 describe('bubbleEventStringValue', () => {
   test('returns the string value from event data', () => {
-    expect(bubbleEventStringValue(makeBubbleEvent({ value: 'hello' }))).toBe('hello')
+    expect(bubbleEventStringValue(makeBubbleEvent({ value: 'hello' }))).toBe(
+      'hello'
+    )
   })
 
   test('coerces non-string values to string', () => {
@@ -31,7 +34,9 @@ describe('bubbleEventStringValue', () => {
   })
 
   test('returns empty string when value is undefined', () => {
-    expect(bubbleEventStringValue(makeBubbleEvent({ value: undefined }))).toBe('')
+    expect(bubbleEventStringValue(makeBubbleEvent({ value: undefined }))).toBe(
+      ''
+    )
   })
 
   test('returns empty string when value key is absent', () => {

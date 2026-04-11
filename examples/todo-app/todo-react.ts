@@ -1,6 +1,10 @@
 import { createElement, useState } from 'react'
 
-import { createBubble, type BubbleEvent, type BubbleRuntime } from '../../bubble-core'
+import {
+  createBubble,
+  type BubbleEvent,
+  type BubbleRuntime,
+} from '../../bubble-core'
 import { createBubbleReactRoot, type BubbleReactRoot } from '../../bubble-react'
 import { TodoAppView } from './todo-app.tsx'
 import {

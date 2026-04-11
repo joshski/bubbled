@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 
 import type { BubbleEvent } from '../../bubble-core'
-import { bubbleEventStringValue } from './todo-react.ts'
 import type { TodoAppSnapshot } from './todo-store.ts'
+
+import { bubbleEventStringValue } from './todo-react.ts'
 
 export interface TodoAppViewProps {
   readonly snapshot: TodoAppSnapshot
@@ -24,7 +25,9 @@ export function TodoAppView(props: TodoAppViewProps): ReactNode {
           aria-label={props.snapshot.newTodoLabel}
           value={props.draft}
           onChange={event => {
-            props.onDraftChange(bubbleEventStringValue(event as unknown as BubbleEvent))
+            props.onDraftChange(
+              bubbleEventStringValue(event as unknown as BubbleEvent)
+            )
           }}
         />
         <button
