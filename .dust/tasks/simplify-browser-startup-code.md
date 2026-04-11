@@ -22,8 +22,8 @@ All meaningful behavior is tested elsewhere. The startup function is thin wiring
 
 ## Principles
 
-- [Functional Core, Imperative Shell](../principles/functional-core-imperative-shell.md)
-- [Reasonably DRY](../principles/reasonably-dry.md)
+- Functional Core, Imperative Shell (core)
+- Reasonably DRY (core)
 - [Build Thin Tested Slices](../principles/build-thin-tested-slices.md)
 
 ## Guidance
