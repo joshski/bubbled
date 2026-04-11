@@ -54,7 +54,8 @@ const originalFetch = globalThis.fetch
 const originalConsoleError = console.error
 const originalDocument = (globalThis as { document?: unknown }).document
 const originalAddEventListener = globalThis.addEventListener
-const originalHTMLElement = (globalThis as { HTMLElement?: unknown }).HTMLElement
+const originalHTMLElement = (globalThis as { HTMLElement?: unknown })
+  .HTMLElement
 
 beforeEach(() => {
   // startTodoApp eagerly binds globalThis.addEventListener as a default
@@ -124,7 +125,9 @@ describe('startTodoApp', () => {
     const { app, document } = createFakeDocument()
     const fetchImpl = (async () => Response.json([])) as unknown as typeof fetch
 
-    class FakeHTMLElement {}
+    class FakeHTMLElement {
+      readonly isFakeHtmlElement = true
+    }
     Object.setPrototypeOf(app as object, FakeHTMLElement.prototype)
     ;(globalThis as { HTMLElement?: unknown }).HTMLElement = FakeHTMLElement
 
