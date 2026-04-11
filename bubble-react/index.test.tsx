@@ -1119,6 +1119,43 @@ describe('createBubbleReactRoot', () => {
     expect(callCount).toBe(0)
   })
 
+  test('cleans up nested click handlers when a subtree is removed', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+    let callCount = 0
+
+    root.render(
+      <section>
+        <button
+          onClick={() => {
+            callCount += 1
+          }}
+        >
+          Save
+        </button>
+      </section>
+    )
+
+    const sectionId = bubble.getRoot().children[0]!
+    const sectionNode = bubble.getNode(sectionId)
+
+    if (sectionNode === null || sectionNode.kind !== 'element') {
+      throw new Error('Expected a rendered section element')
+    }
+
+    const buttonId = sectionNode.children[0]!
+
+    root.render(<section />)
+
+    expect(bubble.dispatchEvent({ type: 'click', targetId: buttonId })).toEqual(
+      {
+        defaultPrevented: false,
+        delivered: false,
+      }
+    )
+    expect(callCount).toBe(0)
+  })
+
   test('replaces keyed nodes when their keys change', () => {
     const bubble = createBubble()
     const root = createBubbleReactRoot({ bubble })

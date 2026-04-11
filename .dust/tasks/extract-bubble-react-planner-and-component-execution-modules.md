@@ -113,7 +113,7 @@ implement
 
 ## Blocked By
 
-- [Extract Bubble React Child Reconciliation Module](./extract-bubble-react-child-reconciliation-module.md)
+(none)
 
 ## Decomposed From
 
