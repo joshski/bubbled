@@ -75,6 +75,42 @@ export function summarizeTodos(todos: readonly TodoItem[]): string {
   return `${remaining} of ${todos.length} remaining`
 }
 
+export interface TodoViewItem {
+  readonly id: string
+  readonly label: string
+  readonly done: boolean
+  readonly toggleLabel: string
+  readonly toggleText: string
+  readonly removeLabel: string
+}
+
+export interface TodoAppSnapshot {
+  readonly heading: string
+  readonly summary: string
+  readonly addButtonLabel: string
+  readonly newTodoLabel: string
+  readonly todos: readonly TodoViewItem[]
+}
+
+export function createTodoAppSnapshot(
+  todos: readonly TodoItem[]
+): TodoAppSnapshot {
+  return {
+    heading: 'Bubbled Todos',
+    summary: summarizeTodos(todos),
+    addButtonLabel: 'Add todo',
+    newTodoLabel: 'New todo',
+    todos: todos.map(todo => ({
+      id: todo.id,
+      label: todo.label,
+      done: todo.done,
+      toggleLabel: `${todo.done ? 'Undo' : 'Complete'} ${todo.label}`,
+      toggleText: todo.done ? 'Undo' : 'Done',
+      removeLabel: `Remove ${todo.label}`,
+    })),
+  }
+}
+
 export interface TodoStore {
   get(): readonly TodoItem[]
   subscribe(listener: () => void): () => void

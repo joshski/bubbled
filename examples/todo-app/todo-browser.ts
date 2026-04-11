@@ -1,9 +1,9 @@
-import type { TodoItem } from './todo-store.ts'
-
 import { createDomProjector } from '../../bubble-browser'
 import { createBubble } from '../../bubble-core'
-const TODO_API_PATH = '/api/todos'
 import { mountTodoApp } from './todo-react.ts'
+import { createTodoStore, type TodoItem } from './todo-store.ts'
+
+const TODO_API_PATH = '/api/todos'
 
 interface TodoAppTextNodeLike {
   textContent: string | null
@@ -85,7 +85,11 @@ export async function startTodoApp({
 
     const bubble = createBubble()
     const initialTodos = await loadInitialTodos(fetchImpl)
-    const mountedApp = mountTodoApp({ bubble, initialTodos })
+    const store = createTodoStore({
+      storage: bubble.resolveCapability('storage'),
+      initialTodos,
+    })
+    const mountedApp = mountTodoApp({ bubble, store })
     const projector = createProjector({
       bubble,
       bridgeEvents: true,

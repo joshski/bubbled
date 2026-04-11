@@ -4,10 +4,7 @@ import { createBubble, type BubbleRuntime } from '../../bubble-core'
 import { createBubbleReactRoot, type BubbleReactRoot } from '../../bubble-react'
 import { TodoAppView } from './todo-app.tsx'
 import {
-  createTodoAppController,
-  type TodoAppController,
-} from './todo-controller.ts'
-import {
+  createTodoAppSnapshot,
   createTodoStore,
   type CreateTodoStoreOptions,
   type TodoItem,
@@ -23,29 +20,32 @@ export interface MountTodoAppOptions {
 
 export interface MountedTodoApp {
   readonly bubble: BubbleRuntime
-  readonly controller: TodoAppController
   readonly store: TodoStore
   readonly root: BubbleReactRoot
   unmount(): void
 }
 
 interface TodoAppRootProps {
-  readonly controller: TodoAppController
+  readonly store: TodoStore
 }
 
 function TodoAppRoot(props: TodoAppRootProps) {
   const [draft, setDraft] = useState('')
 
   return createElement(TodoAppView, {
-    snapshot: props.controller.getSnapshot(),
+    snapshot: createTodoAppSnapshot(props.store.get()),
     draft,
     onDraftChange(nextDraft: string) {
       setDraft(nextDraft)
     },
-    onToggle: props.controller.toggle,
-    onRemove: props.controller.remove,
+    onToggle(id: string) {
+      props.store.toggle(id)
+    },
+    onRemove(id: string) {
+      props.store.remove(id)
+    },
     onAdd() {
-      if (props.controller.add(draft)) {
+      if (props.store.add(draft)) {
         setDraft('')
       }
     },
@@ -63,19 +63,17 @@ export function mountTodoApp(
       initialTodos: options.initialTodos,
       storageKey: options.storageKey,
     })
-  const controller = createTodoAppController(store)
   const root = createBubbleReactRoot({ bubble })
 
   const render = (): void => {
-    root.render(createElement(TodoAppRoot, { controller }))
+    root.render(createElement(TodoAppRoot, { store }))
   }
 
-  const unsubscribe = controller.subscribe(render)
+  const unsubscribe = store.subscribe(render)
   render()
 
   return {
     bubble,
-    controller,
     store,
     root,
     unmount(): void {

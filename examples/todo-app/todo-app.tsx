@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 import type { BubbleEvent } from '../../bubble-core'
-import type { TodoAppSnapshot } from './todo-controller.ts'
+import type { TodoAppSnapshot } from './todo-store.ts'
 
 export interface TodoAppViewProps {
   readonly snapshot: TodoAppSnapshot
