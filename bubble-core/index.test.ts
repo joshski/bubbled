@@ -2638,6 +2638,36 @@ describe('createBubble', () => {
     expect(calls).toEqual(['label'])
   })
 
+  test('clicking a label reports delivery when only the forwarded control handles the event', () => {
+    const bubble = createBubble()
+    const calls: string[] = []
+
+    const labelId = bubble.transact(tx => {
+      const createdLabelId = tx.createElement({ tag: 'label' })
+      const inputId = tx.createElement({ tag: 'input' })
+
+      tx.setAttribute({ nodeId: createdLabelId, name: 'for', value: 'email' })
+      tx.setAttribute({ nodeId: inputId, name: 'id', value: 'email' })
+      tx.addEventListener({
+        nodeId: inputId,
+        type: 'click',
+        listener: () => {
+          calls.push('input')
+        },
+      })
+      tx.insertChild({ parentId: bubble.rootId, childId: createdLabelId })
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId })
+
+      return createdLabelId
+    })
+
+    expect(bubble.dispatchEvent({ type: 'click', targetId: labelId })).toEqual({
+      defaultPrevented: false,
+      delivered: true,
+    })
+    expect(calls).toEqual(['input'])
+  })
+
   test('sets a new attribute on an element', () => {
     const bubble = createBubble()
 
@@ -2964,6 +2994,23 @@ describe('createBubble', () => {
       { name: 'email', value: 'first@example.com' },
       { name: 'backupEmail', value: 'second@example.com' },
     ])
+  })
+
+  test('serializes text inputs without explicit values as empty strings', () => {
+    const bubble = createBubble()
+
+    const formId = bubble.transact(tx => {
+      const createdFormId = tx.createElement({ tag: 'form' })
+      const inputId = tx.createElement({ tag: 'input' })
+
+      tx.setAttribute({ nodeId: inputId, name: 'name', value: 'email' })
+      tx.insertChild({ parentId: bubble.rootId, childId: createdFormId })
+      tx.insertChild({ parentId: createdFormId, childId: inputId })
+
+      return createdFormId
+    })
+
+    expect(bubble.serializeForm(formId)).toEqual([{ name: 'email', value: '' }])
   })
 
   test('includes only checked checkbox controls in form payloads', () => {
@@ -3656,6 +3703,25 @@ describe('createBubble', () => {
     }
   })
 
+  test('derives the link role for anchors with href properties', () => {
+    const bubble = createBubble()
+
+    const linkId = bubble.transact(tx => {
+      const createdLinkId = tx.createElement({ tag: 'a' })
+
+      tx.setProperty({ nodeId: createdLinkId, name: 'href', value: '/docs' })
+
+      return createdLinkId
+    })
+    const link = bubble.snapshot().query.getById(linkId)
+
+    expect(link?.kind).toBe('element')
+
+    if (link?.kind === 'element') {
+      expect(link.role).toBe('link')
+    }
+  })
+
   test('derives the textbox role for text inputs', () => {
     const bubble = createBubble()
 
@@ -3719,6 +3785,34 @@ describe('createBubble', () => {
 
     if (input?.kind === 'element') {
       expect(input.role).toBeNull()
+    }
+  })
+
+  test('falls back to a null role for anchors without a string href', () => {
+    const bubble = createBubble()
+
+    const nodeIds = bubble.transact(tx => {
+      const bareAnchorId = tx.createElement({ tag: 'a' })
+      const numericHrefAnchorId = tx.createElement({ tag: 'a' })
+
+      tx.setProperty({ nodeId: numericHrefAnchorId, name: 'href', value: 1 })
+
+      return { bareAnchorId, numericHrefAnchorId }
+    })
+    const bareAnchor = bubble.snapshot().query.getById(nodeIds.bareAnchorId)
+    const numericHrefAnchor = bubble
+      .snapshot()
+      .query.getById(nodeIds.numericHrefAnchorId)
+
+    expect(bareAnchor?.kind).toBe('element')
+    expect(numericHrefAnchor?.kind).toBe('element')
+
+    if (bareAnchor?.kind === 'element') {
+      expect(bareAnchor.role).toBeNull()
+    }
+
+    if (numericHrefAnchor?.kind === 'element') {
+      expect(numericHrefAnchor.role).toBeNull()
     }
   })
 
@@ -4598,6 +4692,49 @@ describe('createBubble', () => {
       firstButtonId,
       secondButtonId,
       naturalButtonId,
+    ])
+  })
+
+  test('treats invalid tabIndex values as natural tab order', () => {
+    const bubble = createBubble()
+
+    const { invalidTabIndexButtonId, explicitTabIndexInputId } =
+      bubble.transact(tx => {
+        const createdInvalidTabIndexButtonId = tx.createElement({
+          tag: 'button',
+        })
+        const createdExplicitTabIndexInputId = tx.createElement({
+          tag: 'input',
+        })
+
+        tx.setAttribute({
+          nodeId: createdInvalidTabIndexButtonId,
+          name: 'tabindex',
+          value: 'not-a-number',
+        })
+        tx.setProperty({
+          nodeId: createdExplicitTabIndexInputId,
+          name: 'tabIndex',
+          value: 1,
+        })
+        tx.insertChild({
+          parentId: bubble.rootId,
+          childId: createdInvalidTabIndexButtonId,
+        })
+        tx.insertChild({
+          parentId: bubble.rootId,
+          childId: createdExplicitTabIndexInputId,
+        })
+
+        return {
+          invalidTabIndexButtonId: createdInvalidTabIndexButtonId,
+          explicitTabIndexInputId: createdExplicitTabIndexInputId,
+        }
+      })
+
+    expect(bubble.getTabOrder()).toEqual([
+      explicitTabIndexInputId,
+      invalidTabIndexButtonId,
     ])
   })
 

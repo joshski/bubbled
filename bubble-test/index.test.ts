@@ -215,6 +215,31 @@ describe('createRenderHarness', () => {
           attributes: { type: 'button' },
           children: ['Publish'],
         },
+        {
+          tag: 'input',
+          attributes: { type: 'text', 'aria-label': 'Title' },
+          properties: { value: 'Published' },
+        },
+      ],
+    })
+
+    expect(harness.getByRole('textbox', { name: 'Title' })).toBe(textboxId)
+    const unchangedTextbox = harness.bubble.getNode(textboxId)
+
+    expect(unchangedTextbox?.id).toBe(textboxId)
+    expect(unchangedTextbox?.kind).toBe('element')
+    if (unchangedTextbox?.kind === 'element') {
+      expect(unchangedTextbox.properties).toEqual({ value: 'Published' })
+      expect(unchangedTextbox.value).toBe('Published')
+    }
+
+    harness.render({
+      tag: 'section',
+      children: [
+        {
+          tag: 'button',
+          children: ['Publish'],
+        },
       ],
     })
 
@@ -223,6 +248,12 @@ describe('createRenderHarness', () => {
       kind: 'element',
       children: [buttonId],
     })
+    const updatedButton = harness.bubble.getNode(buttonId)
+
+    expect(updatedButton?.kind).toBe('element')
+    if (updatedButton?.kind === 'element') {
+      expect(updatedButton.attributes).toEqual({})
+    }
   })
 
   test('re-renders incompatible content by replacing nodes and trimming removed roots', () => {
@@ -581,6 +612,20 @@ describe('semantic helpers', () => {
     )
   })
 
+  test('reports regex role misses and unnamed nodes clearly', () => {
+    const renderHarness = createRenderHarness()
+    const queries = createSemanticQueries(renderHarness)
+
+    renderHarness.render({ tag: 'button' })
+
+    expect(() => queries.getByRole('button', { name: /^Save/ })).toThrow(
+      'Unable to find a node with role "button" and name /^Save/. Nodes with role "button":'
+    )
+    expect(() => queries.getByRole('button', { name: /^Save/ })).toThrow(
+      '(<unnamed>)'
+    )
+  })
+
   test('supports semantic assertion helpers for role, name, text, focus, and form state', () => {
     const renderHarness = createRenderHarness()
     const queries = createSemanticQueries(renderHarness)
@@ -671,6 +716,23 @@ describe('semantic helpers', () => {
     )
   })
 
+  test('semantic assertion failures describe unnamed elements clearly', () => {
+    const renderHarness = createRenderHarness()
+    const assertions = createSemanticAssertions(renderHarness)
+
+    renderHarness.render({ tag: 'button' })
+
+    const buttonId = requireId(
+      renderHarness.bubble.getRoot().children[0],
+      'Expected the rendered button to exist.'
+    )
+
+    expect(() => assertions.expectName(buttonId, 'Save')).toThrow(
+      `Expected accessible name for ${buttonId} to be "Save". Received null.`
+    )
+    expect(() => assertions.expectName(buttonId, 'Save')).toThrow('name=null')
+  })
+
   test('getByText supports regex matches and reports useful misses', () => {
     const renderHarness = createRenderHarness()
     const queries = createSemanticQueries(renderHarness)
@@ -683,6 +745,9 @@ describe('semantic helpers', () => {
     assertions.expectText(matchedId, 'Save draft')
     expect(() => queries.getByText(/^Publish/)).toThrow(
       'Unable to find a node with text /^Publish/. Current root text content is "Save draft".'
+    )
+    expect(() => queries.getByText('Publish')).toThrow(
+      'Unable to find a node with text "Publish". Current root text content is "Save draft".'
     )
   })
 

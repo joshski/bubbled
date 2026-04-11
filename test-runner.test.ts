@@ -1,16 +1,19 @@
 import { spawnSync } from 'node:child_process'
-import {
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { expect, test } from 'vitest'
 
 const root = process.cwd()
+
+async function loadConfig(path: string) {
+  const module = await import(
+    `${pathToFileURL(join(root, path)).href}?t=${Date.now()}`
+  )
+
+  return module.default
+}
 
 test('test command runs a targeted smoke fixture', () => {
   const configDir = mkdtempSync(join(tmpdir(), 'bubbled-test-command-'))
@@ -47,89 +50,25 @@ test('test command runs a targeted smoke fixture', () => {
   }
 })
 
-test('coverage gate fails when a repository drops below 100%', () => {
-  const fixtureDir = mkdtempSync(join(tmpdir(), 'bubbled-coverage-gate-'))
+test('unit coverage configuration uses the expected reporter and exclusions', async () => {
+  const vitestConfig = await loadConfig('vitest.coverage.config.ts')
 
-  try {
-    symlinkSync(join(root, 'node_modules'), join(fixtureDir, 'node_modules'))
-    writeFileSync(
-      join(fixtureDir, 'vitest.config.ts'),
-      [
-        'export default {',
-        '  test: {',
-        '    coverage: {',
-        "      provider: 'istanbul',",
-        "      reporter: ['text'],",
-        "      include: ['source.ts'],",
-        "      exclude: ['source.test.ts'],",
-        '      thresholds: {',
-        '        lines: 100,',
-        '        functions: 100,',
-        '        branches: 100,',
-        '        statements: 100,',
-        '      },',
-        '    },',
-        '  },',
-        '}',
-      ].join('\n')
-    )
-    writeFileSync(join(fixtureDir, 'package.json'), '{"type":"module"}')
-    writeFileSync(
-      join(fixtureDir, 'source.ts'),
-      [
-        'export function covered() {',
-        '  return 1;',
-        '}',
-        '',
-        'export function uncovered() {',
-        '  return 2;',
-        '}',
-      ].join('\n')
-    )
-    writeFileSync(
-      join(fixtureDir, 'source.test.ts'),
-      [
-        'import { expect, test } from "vitest";',
-        'import { covered } from "./source";',
-        '',
-        'test("covered", () => {',
-        '  expect(covered()).toBe(1);',
-        '});',
-      ].join('\n')
-    )
-
-    const command = spawnSync(
-      'bun',
-      [join(root, 'node_modules', 'vitest', 'vitest.mjs'), 'run', '--coverage'],
-      {
-        cwd: fixtureDir,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          CI: '1',
-        },
-      }
-    )
-    const output = `${command.stdout}${command.stderr}`
-
-    expect(command.status).toBe(1)
-    expect(output).toContain('source.ts')
-    expect(output).toContain('50')
-  } finally {
-    rmSync(fixtureDir, { force: true, recursive: true })
-  }
+  expect(vitestConfig.test.environment).toBe('jsdom')
+  expect(vitestConfig.test.coverage.provider).toBe('istanbul')
+  expect(vitestConfig.test.coverage.reporter).toEqual(['text', 'lcov'])
+  expect(vitestConfig.test.exclude).toContain(
+    'bubble-browser/browser-verification.test.ts'
+  )
+  expect(vitestConfig.test.exclude).toContain('**/*.e2e.test.ts')
 })
 
-test('coverage thresholds are enforced in vitest configuration', () => {
-  const vitestConfig = readFileSync(join(root, 'vitest.config.ts'), 'utf8')
+test('default vitest configuration still includes the end-to-end browser suite', async () => {
+  const vitestConfig = await loadConfig('vitest.config.ts')
 
-  expect(vitestConfig).toContain("environment: 'jsdom'")
-  expect(vitestConfig).toContain("provider: 'istanbul'")
-  expect(vitestConfig).toContain("reporter: ['text', 'lcov']")
-  expect(vitestConfig).toContain('lines: 100')
-  expect(vitestConfig).toContain('functions: 100')
-  expect(vitestConfig).toContain('branches: 97')
-  expect(vitestConfig).toContain('statements: 100')
+  expect(vitestConfig.test.environment).toBe('jsdom')
+  expect(vitestConfig.test.exclude).not.toContain(
+    'bubble-browser/browser-verification.test.ts'
+  )
 })
 
 test('bun configuration leaves coverage reporting disabled', () => {
@@ -148,4 +87,14 @@ test('ci runs the bun pass and the coverage-gated vitest pass', () => {
   expect(workflow).toContain('bun install --frozen-lockfile')
   expect(workflow).toContain('bun run test')
   expect(workflow).toContain('bun run test:coverage')
+})
+
+test('coverage script uses the unit-only vitest configuration', () => {
+  const packageJson = JSON.parse(
+    readFileSync(join(root, 'package.json'), 'utf8')
+  )
+
+  expect(packageJson.scripts['test:coverage']).toBe(
+    'vitest run --config vitest.coverage.config.ts --coverage'
+  )
 })

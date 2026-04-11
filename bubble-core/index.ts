@@ -490,7 +490,9 @@ function getInputType(node: BubbleElementNode): string | null {
   ).toLowerCase()
 }
 
-function isTextInputElement(node: BubbleElementNode): boolean {
+function isTextInputElement(
+  node: BubbleElementNode
+): node is BubbleElementNode & { value: string } {
   return getInputType(node) === 'text'
 }
 
@@ -648,7 +650,7 @@ function getFormEntriesForControl(node: BubbleElementNode): BubbleFormEntry[] {
   }
 
   if (isTextInputElement(node)) {
-    return [{ name, value: node.value ?? '' }]
+    return [{ name, value: node.value }]
   }
 
   if (isCheckboxInputElement(node) && node.checked === true) {
@@ -1020,7 +1022,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   const insertIntoParent = (
     parent: BubbleRootNode | BubbleElementNode,
     childId: BubbleNodeId,
-    index: number = parent.children.length
+    index: number
   ): void => {
     assertValidChildIndex(index, parent.children.length)
     parent.children.splice(index, 0, childId)
@@ -1094,11 +1096,11 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
   const dispatchSingleEventToTarget = ({
     type,
     targetId,
-    data = {},
-    cancelable = false,
-    mode = 'propagating',
+    data,
+    cancelable,
+    mode,
   }: BubbleDispatchInput & {
-    mode?: BubbleEventDispatchMode
+    readonly mode: BubbleEventDispatchMode
   }): BubbleDispatchResult => {
     assertValidEventType(type)
     const target = nodes.get(targetId)
@@ -1269,7 +1271,6 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     return {
       defaultPrevented:
         initialResult.defaultPrevented || forwardedResult.defaultPrevented,
-      /* istanbul ignore next -- delivery combines the direct and forwarded activation paths. */
       delivered: initialResult.delivered || forwardedResult.delivered,
     }
   }

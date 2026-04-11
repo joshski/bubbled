@@ -417,11 +417,7 @@ export function createRenderHarness(
 
       if (options.shift) {
         if (currentIndex === -1) {
-          const lastTabStop = tabOrder.at(-1)
-
-          if (lastTabStop !== undefined) {
-            currentBubble.focus(lastTabStop)
-          }
+          currentBubble.focus(tabOrder.at(-1)!)
           return
         }
 
