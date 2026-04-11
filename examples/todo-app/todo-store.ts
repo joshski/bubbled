@@ -28,22 +28,6 @@ function normalizeTodoLabel(label: string): string {
   return label.trim().replace(/\s+/g, ' ')
 }
 
-function createNextTodoId(todos: readonly TodoItem[]): string {
-  let maxId = 0
-
-  for (const todo of todos) {
-    const match = /^t(\d+)$/.exec(todo.id)
-
-    if (match === null) {
-      continue
-    }
-
-    maxId = Math.max(maxId, Number(match[1]))
-  }
-
-  return `t${maxId + 1}`
-}
-
 function appendTodo(
   todos: readonly TodoItem[],
   label: string
@@ -57,7 +41,7 @@ function appendTodo(
   return [
     ...todos,
     {
-      id: createNextTodoId(todos),
+      id: `t${todos.length + 1}`,
       label: normalizedLabel,
       done: false,
     },

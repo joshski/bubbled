@@ -111,7 +111,7 @@ describe('createTodoStore', () => {
     expect(store.add('  Ship   it  ')).toBe(true)
     expect(store.get()).toEqual([
       { id: 'a', label: 'Alpha', done: true },
-      { id: 't1', label: 'Ship it', done: false },
+      { id: 't2', label: 'Ship it', done: false },
     ])
     expect(store.add('   ')).toBe(false)
 
