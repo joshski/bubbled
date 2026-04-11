@@ -102,7 +102,7 @@ describe('createTodoStore', () => {
 
     const persisted = storage.getItem(DEFAULT_STORAGE_KEY)
     expect(persisted).not.toBeNull()
-    expect(JSON.parse(persisted as string)).toEqual([...store.get()])
+    expect(JSON.parse(persisted!)).toEqual([...store.get()])
   })
 
   test('subscribe returns an unsubscribe that stops further notifications', () => {

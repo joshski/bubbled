@@ -14,7 +14,14 @@ const host: TodoBrowserHost = {
   getAppContainer(): TodoAppContainer | null {
     const element = globalThis.document.getElementById('app')
 
-    return element instanceof HTMLElement ? element : null
+    if (!(element instanceof HTMLElement)) return null
+
+    return {
+      replaceChildren: () => element.replaceChildren(),
+      appendChild: (node: TodoAppTextNode) => {
+        element.appendChild(node as unknown as Node)
+      },
+    }
   },
   async fetchTodos(path: string): Promise<TodoFetchResponse> {
     return globalThis.fetch(path)

@@ -18,9 +18,8 @@ function createFakeContainer(): TodoAppContainer & {
     replaceChildren(): void {
       container.children = []
     },
-    appendChild(node: unknown): unknown {
-      container.children.push(node as TodoAppTextNode)
-      return node
+    appendChild(node: TodoAppTextNode): void {
+      container.children.push(node)
     },
   }
 

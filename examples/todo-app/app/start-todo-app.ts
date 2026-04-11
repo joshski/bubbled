@@ -11,7 +11,7 @@ export interface TodoFetchResponse {
 
 export interface TodoAppContainer {
   replaceChildren(): void
-  appendChild(node: unknown): unknown
+  appendChild(node: TodoAppTextNode): void
 }
 
 export interface TodoAppTextNode {
