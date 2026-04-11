@@ -22,24 +22,26 @@ function createInMemoryStorage(seed: Record<string, string> = {}): BubbleStorage
 
 This is a complete, generic implementation with no todo-specific logic. A `seed` parameter makes it convenient to pre-populate storage for hydration tests.
 
+`bubble-test` currently exports render helpers (`createRenderHarness`), semantic query helpers (`createSemanticQueries`), and semantic assertion helpers (`createSemanticAssertions`). Each concern lives in its own file (`render-harness.ts`, `semantic-queries.ts`, `semantic-assertions.ts`) and is exported from `index.ts`.
+
 ## Open Questions
 
-### Should the exported name be `createInMemoryStorage` or something that signals it is for testing?
+### Should the exported name signal generic capability or test-only intent?
 
-#### Option
+#### `createInMemoryStorage` — matches existing naming conventions
 
-Keep `createInMemoryStorage` — consistent with `createBubble`, `createHarness`, etc. Moving it verbatim keeps the name simple.
+Consistent with `createBubble`, `createHarness`, `createRenderHarness`. Moving it verbatim keeps the name simple and unsurprising.
 
-#### Option
+#### `createStorageStub` — signals test-only intent
 
-Name it `createFakeStorage` or `createStorageStub` — explicitly signals test-only usage, matching the "stub" vocabulary in project principles (`stubs-over-mocks`).
+Explicitly marks the helper as test infrastructure, matching the `stubs-over-mocks` principle vocabulary. Callers scanning `bubble-test` exports see immediately that this is a stub, not a production implementation.
 
-### Where in bubble-test should it live?
+### Where in `bubble-test` should the stub live?
 
-#### Option
+#### Inline in `bubble-test/index.ts` — no new files
 
-Add it directly to `bubble-test/index.ts` — simple, no new files.
+Simple, low overhead. Appropriate if the stub is short and unlikely to grow.
 
-#### Option
+#### Dedicated `bubble-test/storage-stub.ts` exported from the index — one concern per file
 
-Add a dedicated `bubble-test/storage-stub.ts` file and export from the index — `bubble-test` currently exports render and semantic utilities; a separate file keeps storage stubs as their own concern, consistent with the existing pattern of one-concern-per-file.
+Follows the existing pattern where each exported concern (`render-harness.ts`, `semantic-queries.ts`, `semantic-assertions.ts`) has its own file. Keeps `index.ts` as a pure re-export barrel and makes the stub easy to locate.
