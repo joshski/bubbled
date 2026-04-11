@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'vitest'
 
 import {
   createBubble,
@@ -13,11 +13,16 @@ import { mountTodoApp } from './todo-react.ts'
 const originalFetch = globalThis.fetch
 const originalConsoleError = console.error
 const originalHTMLElement = globalThis.HTMLElement
+const originalDocument = globalThis.document
+const originalAddEventListener = globalThis.addEventListener
 
 afterEach(() => {
   globalThis.fetch = originalFetch
   console.error = originalConsoleError
   globalThis.HTMLElement = originalHTMLElement
+  globalThis.document = originalDocument
+  globalThis.addEventListener = originalAddEventListener
+  originalDocument?.body.replaceChildren()
 })
 
 function collectAttachedElementsByTag(
@@ -137,6 +142,8 @@ function createFakeDocument(includeApp = true) {
     },
   }
 }
+
+const defaultGlobalsTest = originalDocument === undefined ? test.skip : test
 
 describe('mountTodoApp', () => {
   test('renders whatever the store currently holds on first mount', () => {
@@ -373,4 +380,42 @@ describe('startTodoApp', () => {
       'Expected a root element with id "app".'
     )
   })
+
+  defaultGlobalsTest(
+    'uses the default global dependencies when no options are provided',
+    async () => {
+      const listeners: Array<() => void> = []
+      originalDocument?.body.replaceChildren()
+      const app = originalDocument?.createElement('main') ?? null
+
+      app?.setAttribute('id', 'app')
+      originalDocument?.body.appendChild(
+        app ?? originalDocument!.createElement('main')
+      )
+
+      globalThis.fetch = (async () =>
+        Response.json([])) as unknown as typeof fetch
+      globalThis.addEventListener = ((
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        options?: boolean | AddEventListenerOptions
+      ) => {
+        if (type === 'beforeunload') {
+          listeners.push(listener as () => void)
+        }
+
+        return originalAddEventListener.call(
+          globalThis,
+          type,
+          listener,
+          options
+        )
+      }) as typeof globalThis.addEventListener
+
+      await startTodoApp()
+
+      expect(app?.childElementCount).toBeGreaterThan(0)
+      expect(listeners).toHaveLength(1)
+    }
+  )
 })

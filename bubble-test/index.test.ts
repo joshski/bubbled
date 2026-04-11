@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 
 import { createBubble } from '../bubble-core'
 import {
@@ -390,6 +390,34 @@ describe('createRenderHarness', () => {
     expect(bubble.getFocusedNodeId()).toBe(nestedButtonId)
   })
 
+  test('preserves explicit namespaces when rendering elements', () => {
+    const harness = createRenderHarness()
+
+    harness.render({
+      tag: 'svg',
+      namespace: 'svg',
+      children: [{ tag: 'circle', namespace: 'svg' }],
+    })
+
+    const svgId = requireId(
+      harness.bubble.getRoot().children[0],
+      'Expected the rendered svg to exist.'
+    )
+    const svg = harness.bubble.getNode(svgId)
+    const circleId =
+      svg?.kind === 'element'
+        ? requireId(svg.children[0], 'Expected the rendered circle to exist.')
+        : null
+    const circle = circleId === null ? null : harness.bubble.getNode(circleId)
+
+    expect(svg?.kind).toBe('element')
+    expect(circle?.kind).toBe('element')
+    if (svg?.kind === 'element' && circle?.kind === 'element') {
+      expect(svg.namespace).toBe('svg')
+      expect(circle.namespace).toBe('svg')
+    }
+  })
+
   test('stops at the end of the tab order', () => {
     const bubble = createBubble()
     const harness = createRenderHarness(bubble)
@@ -630,6 +658,16 @@ describe('semantic helpers', () => {
       assertions.expectValue(textboxId, 'published@example.com')
     ).toThrow(
       `Expected value for ${textboxId} to be "published@example.com". Received "draft@example.com".`
+    )
+
+    renderHarness.render({ tag: 'div', children: ['Status'] })
+    const divId = requireId(
+      renderHarness.bubble.getRoot().children[0],
+      'Expected the rendered div to exist.'
+    )
+
+    expect(() => assertions.expectRole(divId, 'button')).toThrow(
+      `Expected role for ${divId} to be "button". Received null.`
     )
   })
 

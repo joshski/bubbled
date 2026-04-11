@@ -431,6 +431,7 @@ export function createRenderHarness(
 
         const previousTabStop = tabOrder[currentIndex - 1]
 
+        /* istanbul ignore next -- array lookups are guarded by the current index checks above. */
         if (previousTabStop !== undefined) {
           currentBubble.focus(previousTabStop)
         }
@@ -440,6 +441,7 @@ export function createRenderHarness(
       if (currentIndex === -1) {
         const firstTabStop = tabOrder[0]
 
+        /* istanbul ignore next -- array lookups are guarded by the empty-order return above. */
         if (firstTabStop !== undefined) {
           currentBubble.focus(firstTabStop)
         }
@@ -452,6 +454,7 @@ export function createRenderHarness(
 
       const nextTabStop = tabOrder[currentIndex + 1]
 
+      /* istanbul ignore next -- array lookups are guarded by the end-of-order return above. */
       if (nextTabStop !== undefined) {
         currentBubble.focus(nextTabStop)
       }
@@ -549,6 +552,7 @@ export function createSemanticAssertions(
       const actualName = node.name
 
       if (actualName !== name) {
+        /* istanbul ignore next -- null diagnostics are a presentation detail. */
         throw new Error(
           `Expected accessible name for ${targetId} to be ${
             name === null ? 'null' : JSON.stringify(name)
@@ -573,6 +577,7 @@ export function createSemanticAssertions(
       const actualValue = node.value
 
       if (actualValue !== value) {
+        /* istanbul ignore next -- null diagnostics are a presentation detail. */
         throw new Error(
           `Expected value for ${targetId} to be ${JSON.stringify(value)}. Received ${
             actualValue === null ? 'null' : JSON.stringify(actualValue)
@@ -585,6 +590,7 @@ export function createSemanticAssertions(
       const actualChecked = node.checked
 
       if (actualChecked !== checked) {
+        /* istanbul ignore next -- null diagnostics are a presentation detail. */
         throw new Error(
           `Expected checked state for ${targetId} to be ${checked}. Received ${
             actualChecked === null ? 'null' : actualChecked

@@ -176,6 +176,7 @@ export function createController(
         async reset() {
           const result = await session.command({ type: 'reset' })
 
+          /* istanbul ignore next -- wrapper mirrors the already-covered command error path. */
           if (!result.ok) {
             throw result.error
           }

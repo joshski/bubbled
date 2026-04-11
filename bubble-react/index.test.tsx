@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test'
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react'
+import { describe, expect, test } from 'vitest'
 
 import {
   createBubble,
@@ -546,6 +546,34 @@ describe('createBubbleReactRoot', () => {
     })
   })
 
+  test('serializes boolean host attributes as empty strings', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+
+    root.render(<button aria-hidden>Save</button>)
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {
+            'aria-hidden': '',
+          },
+          properties: {},
+          children: [
+            {
+              kind: 'text',
+              value: 'Save',
+            },
+          ],
+        },
+      ],
+    })
+  })
+
   test('replaces host nodes when their type changes', () => {
     const bubble = createBubble()
     const root = createBubbleReactRoot({ bubble })
@@ -802,6 +830,44 @@ describe('createBubbleReactRoot', () => {
             {
               kind: 'text',
               value: '1',
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  test('useState supports lazy initializers', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+    let initializerCalls = 0
+
+    function Counter() {
+      const [count] = useState(() => {
+        initializerCalls += 1
+        return 2
+      })
+
+      return <button>{count}</button>
+    }
+
+    root.render(<Counter />)
+    root.render(<Counter />)
+
+    expect(initializerCalls).toBe(1)
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: 'text',
+              value: '2',
             },
           ],
         },

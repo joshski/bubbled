@@ -1,7 +1,8 @@
-import { afterAll, expect, test } from 'bun:test'
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
+import { afterAll, expect, test } from 'vitest'
 
 async function launchBrowser() {
   if (process.platform === 'darwin') {
@@ -27,11 +28,71 @@ function getBrowser() {
   return sharedBrowserPromise
 }
 
+function buildBrowserBundle(entryPath: string, outdir: string): void {
+  const command = spawnSync(
+    'bun',
+    [
+      'build',
+      entryPath,
+      '--format',
+      'esm',
+      '--outdir',
+      outdir,
+      '--target',
+      'browser',
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CI: '1',
+      },
+    }
+  )
+
+  if (command.status === 0) {
+    return
+  }
+
+  throw new Error(`${command.stdout}${command.stderr}`.trim())
+}
+
 afterAll(async () => {
   const browser = await sharedBrowserPromise
 
   await browser?.close()
 })
+
+async function evaluateBrowserModule<T>(
+  page: Page,
+  moduleSource: string,
+  exportName: string
+): Promise<T> {
+  await page.setContent('<!doctype html><html><body></body></html>')
+  await page.addScriptTag({
+    content: `${moduleSource}\nwindow.__bubbleBrowserRun = ${exportName};`,
+    type: 'module',
+  })
+  await page.waitForFunction(
+    () =>
+      typeof (
+        window as typeof window & {
+          __bubbleBrowserRun?: () => unknown | Promise<unknown>
+        }
+      ).__bubbleBrowserRun === 'function'
+  )
+
+  return page.evaluate(async () => {
+    const run = (
+      window as typeof window & {
+        __bubbleBrowserRun?: () => unknown | Promise<unknown>
+      }
+    ).__bubbleBrowserRun
+
+    return (await run?.()) as T
+  })
+}
 
 test('real browser verifies popover placement against actual projected DOM layout', async () => {
   const tempDir = await mkdtemp(
@@ -43,7 +104,7 @@ test('real browser verifies popover placement against actual projected DOM layou
   let page: Page | null = null
 
   try {
-    await Bun.write(
+    await writeFile(
       entryPath,
       [
         'import { createBubble } from "../bubble-core/index.ts";',
@@ -118,16 +179,7 @@ test('real browser verifies popover placement against actual projected DOM layou
       ].join('\n')
     )
 
-    const buildResult = await Bun.build({
-      entrypoints: [entryPath],
-      format: 'esm',
-      outdir: tempDir,
-      target: 'browser',
-    })
-
-    if (!buildResult.success) {
-      throw new Error(buildResult.logs.map(log => log.message).join('\n'))
-    }
+    buildBrowserBundle(entryPath, tempDir)
 
     const moduleSource = await readFile(bundlePath, 'utf8')
     page = await browser.newPage({
@@ -137,19 +189,25 @@ test('real browser verifies popover placement against actual projected DOM layou
       },
     })
 
-    const result = await page.evaluate(async source => {
-      const moduleUrl = URL.createObjectURL(
-        new Blob([source], { type: 'text/javascript' })
-      )
-
-      try {
-        const module = await import(moduleUrl)
-
-        return module.run()
-      } finally {
-        URL.revokeObjectURL(moduleUrl)
+    const result = await evaluateBrowserModule<{
+      placement: {
+        placement: 'top' | 'bottom'
+        x: number
+        y: number
       }
-    }, moduleSource)
+      anchorRect: {
+        x: number
+        y: number
+        width: number
+        height: number
+      }
+      overlayRect: {
+        x: number
+        y: number
+        width: number
+        height: number
+      }
+    }>(page, moduleSource, 'run')
 
     expect(result.placement.placement).toBe('top')
     expect(result.placement.x).toBeCloseTo(result.anchorRect.x, 5)
@@ -173,7 +231,7 @@ test('real browser verifies native label clicks move focus to the associated inp
   let page: Page | null = null
 
   try {
-    await Bun.write(
+    await writeFile(
       entryPath,
       [
         'import { createBubble } from "../bubble-core/index.ts";',
@@ -205,33 +263,15 @@ test('real browser verifies native label clicks move focus to the associated inp
       ].join('\n')
     )
 
-    const buildResult = await Bun.build({
-      entrypoints: [entryPath],
-      format: 'esm',
-      outdir: tempDir,
-      target: 'browser',
-    })
-
-    if (!buildResult.success) {
-      throw new Error(buildResult.logs.map(log => log.message).join('\n'))
-    }
+    buildBrowserBundle(entryPath, tempDir)
 
     const moduleSource = await readFile(bundlePath, 'utf8')
     page = await browser.newPage()
 
-    const nodeIds = await page.evaluate(async source => {
-      const moduleUrl = URL.createObjectURL(
-        new Blob([source], { type: 'text/javascript' })
-      )
-
-      try {
-        const module = await import(moduleUrl)
-
-        return module.run()
-      } finally {
-        URL.revokeObjectURL(moduleUrl)
-      }
-    }, moduleSource)
+    const nodeIds = await evaluateBrowserModule<{
+      labelId: string
+      inputId: string
+    }>(page, moduleSource, 'run')
 
     await page.locator('#email-label').click()
 
@@ -267,7 +307,7 @@ test('real browser verifies default submit buttons trigger bridged bubble form s
   let page: Page | null = null
 
   try {
-    await Bun.write(
+    await writeFile(
       entryPath,
       [
         'import { createBubble } from "../bubble-core/index.ts";',
@@ -305,16 +345,7 @@ test('real browser verifies default submit buttons trigger bridged bubble form s
       ].join('\n')
     )
 
-    const buildResult = await Bun.build({
-      entrypoints: [entryPath],
-      format: 'esm',
-      outdir: tempDir,
-      target: 'browser',
-    })
-
-    if (!buildResult.success) {
-      throw new Error(buildResult.logs.map(log => log.message).join('\n'))
-    }
+    buildBrowserBundle(entryPath, tempDir)
 
     const moduleSource = await readFile(bundlePath, 'utf8')
     page = await browser.newPage()

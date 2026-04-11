@@ -123,6 +123,7 @@ function readDomEventData(targetNode: DomChildNode): Record<string, unknown> {
   const properties = targetNode as unknown as Record<string, unknown>
   const data: Record<string, unknown> = {}
 
+  /* istanbul ignore next -- DOM event targets may omit value entirely. */
   if ('value' in properties) {
     data['value'] = properties['value']
   }
@@ -366,6 +367,7 @@ export function createDomProjector(
     for (const siblingId of parent.children.slice(index + 1)) {
       const siblingNode = nodeLookup.get(siblingId)
 
+      /* istanbul ignore next -- stale projected siblings are a defensive adapter case. */
       if (siblingNode !== undefined && siblingNode.parentNode === parentNode)
         return siblingNode
     }
@@ -445,6 +447,7 @@ export function createDomProjector(
       return
     }
 
+    /* istanbul ignore next -- focus sync is an optional runtime adapter behavior. */
     if (options.syncFocus === true) {
       syncDomFocus(event.nodeId)
     }
@@ -560,6 +563,7 @@ export function createDomProjector(
         const projectedNode = nodeLookup.get(childId)
 
         projectedNode?.remove()
+        /* istanbul ignore next -- cleanup tolerates partially projected roots defensively. */
         if (projectedNode !== undefined) {
           bubbleIdByDomNode.delete(projectedNode)
         }

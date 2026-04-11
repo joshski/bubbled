@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 
 import {
   type BubbleLayout,
@@ -4549,6 +4549,54 @@ describe('createBubble', () => {
       propertyInputId,
       attributeButtonId,
       defaultButtonId,
+      naturalButtonId,
+    ])
+  })
+
+  test('keeps equal positive tabIndex entries in DOM order', () => {
+    const bubble = createBubble()
+
+    const { firstButtonId, secondButtonId, naturalButtonId } = bubble.transact(
+      tx => {
+        const createdFirstButtonId = tx.createElement({ tag: 'button' })
+        const createdSecondButtonId = tx.createElement({ tag: 'button' })
+        const createdNaturalButtonId = tx.createElement({ tag: 'button' })
+
+        tx.setAttribute({
+          nodeId: createdFirstButtonId,
+          name: 'tabindex',
+          value: '2',
+        })
+        tx.setProperty({
+          nodeId: createdSecondButtonId,
+          name: 'tabIndex',
+          value: 2,
+        })
+
+        tx.insertChild({
+          parentId: bubble.rootId,
+          childId: createdFirstButtonId,
+        })
+        tx.insertChild({
+          parentId: bubble.rootId,
+          childId: createdSecondButtonId,
+        })
+        tx.insertChild({
+          parentId: bubble.rootId,
+          childId: createdNaturalButtonId,
+        })
+
+        return {
+          firstButtonId: createdFirstButtonId,
+          secondButtonId: createdSecondButtonId,
+          naturalButtonId: createdNaturalButtonId,
+        }
+      }
+    )
+
+    expect(bubble.getTabOrder()).toEqual([
+      firstButtonId,
+      secondButtonId,
       naturalButtonId,
     ])
   })

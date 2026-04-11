@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 
 import type {
   BubbleCommand,
@@ -283,5 +283,11 @@ describe('bubble-cli main', () => {
     expect(exitCode).toBe(1)
     expect(stdout.toString()).toBe('')
     expect(stderr.toString()).toBe('Unknown command: query explode\n')
+  })
+
+  test('uses the default options object when no overrides are provided', async () => {
+    const exitCode = await main(['explode'])
+
+    expect(exitCode).toBe(1)
   })
 })

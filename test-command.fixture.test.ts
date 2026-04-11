@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, test } from 'vitest'
 
 import { type BubbleElementNode, createBubble } from './bubble-core'
 

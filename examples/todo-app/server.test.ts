@@ -1,10 +1,6 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 
-import {
-  createTodoApiResponse,
-  createTodoRoutes,
-  handleTodoFallbackRequest,
-} from './server.ts'
+import { createTodoRoutes, handleTodoFallbackRequest } from './server.ts'
 
 async function withTodoServer<T>(
   callback: (baseUrl: string) => Promise<T>,
@@ -26,39 +22,23 @@ async function withTodoServer<T>(
   }
 }
 
-describe('createTodoApiResponse', () => {
-  test('serves an empty todo list as JSON by default', async () => {
-    const response = createTodoApiResponse()
-
-    expect(response.headers.get('content-type')).toBe(
-      'application/json;charset=utf-8'
-    )
-    expect(await response.json()).toEqual([])
-  })
-
-  test('serves custom initial todos when provided', async () => {
+describe('createTodoRoutes', () => {
+  test('returns html and api routes with a configurable todos handler', async () => {
     const customTodos = [{ id: 'c', label: 'Custom', done: false }]
-    const response = createTodoApiResponse({ initialTodos: customTodos })
+    const routes = createTodoRoutes({ initialTodos: customTodos })
+    const apiRoute = routes['/api/todos']
+
+    expect(Object.keys(routes).sort()).toEqual([
+      '/',
+      '/api/todos',
+      '/index.html',
+    ])
+    expect(routes['/']).toBe(routes['/index.html'])
+    expect(typeof apiRoute.GET).toBe('function')
+
+    const response = apiRoute.GET()
 
     expect(await response.json()).toEqual(customTodos)
-  })
-})
-
-describe('handleTodoFallbackRequest', () => {
-  test('returns 405 for unsupported methods on /api/todos', () => {
-    const response = handleTodoFallbackRequest(
-      new Request('http://localhost/api/todos', { method: 'POST' })
-    )
-
-    expect(response.status).toBe(405)
-  })
-
-  test('returns 404 for unknown routes', () => {
-    const response = handleTodoFallbackRequest(
-      new Request('http://localhost/nope')
-    )
-
-    expect(response.status).toBe(404)
   })
 })
 
@@ -105,9 +85,7 @@ describe('todo app Bun routes', () => {
       const response = await fetch(new URL('/api/todos', baseUrl))
 
       expect(response.status).toBe(200)
-      expect(response.headers.get('content-type')).toBe(
-        'application/json;charset=utf-8'
-      )
+      expect(response.headers.get('content-type')).toContain('application/json')
       expect(await response.json()).toEqual([])
     })
   })

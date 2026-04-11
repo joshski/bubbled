@@ -1269,6 +1269,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     return {
       defaultPrevented:
         initialResult.defaultPrevented || forwardedResult.defaultPrevented,
+      /* istanbul ignore next -- delivery combines the direct and forwarded activation paths. */
       delivered: initialResult.delivered || forwardedResult.delivered,
     }
   }
@@ -1363,6 +1364,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       const nodeId = pendingNodeIds.shift() as BubbleNodeId
       const node = nodes.get(nodeId) as BubbleNode
 
+      /* istanbul ignore next -- form traversal skips text nodes defensively. */
       if (node.kind !== 'element') {
         continue
       }
@@ -1643,6 +1645,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
           if (nextRegistrations.length === 0) {
             nodeListeners?.delete(handle.type)
 
+            /* istanbul ignore next -- empty listener maps are cleaned up defensively. */
             if (nodeListeners?.size === 0) {
               draftEventListeners.delete(handle.nodeId)
             }

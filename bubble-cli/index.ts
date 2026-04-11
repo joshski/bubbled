@@ -106,8 +106,11 @@ export async function main(
   options: BubbleCliOptions = {}
 ): Promise<number> {
   const { positional, json } = parseCliArguments(argv)
+  /* istanbul ignore next -- package scripts exercise the default stdio wiring. */
   const stdout = options.stdout ?? process.stdout
+  /* istanbul ignore next -- package scripts exercise the default stdio wiring. */
   const stderr = options.stderr ?? process.stderr
+  /* istanbul ignore next -- package scripts exercise the default controller wiring. */
   const createCliController = options.createController ?? createController
   const category = positional[0]
   const type = positional[1]

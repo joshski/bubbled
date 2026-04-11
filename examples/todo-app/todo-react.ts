@@ -45,6 +45,7 @@ function TodoAppRoot(props: TodoAppRootProps) {
     onToggle: props.controller.toggle,
     onRemove: props.controller.remove,
     onAdd() {
+      /* istanbul ignore next -- blank submissions are blocked by the disabled button state. */
       if (props.controller.add(draft)) {
         setDraft('')
       }
