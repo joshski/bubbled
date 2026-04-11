@@ -1099,7 +1099,11 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     data,
     cancelable,
     mode,
-  }: BubbleDispatchInput & {
+  }: {
+    readonly type: string
+    readonly targetId: BubbleNodeId
+    readonly data: Record<string, unknown>
+    readonly cancelable: boolean
     readonly mode: BubbleEventDispatchMode
   }): BubbleDispatchResult => {
     assertValidEventType(type)
