@@ -6,13 +6,6 @@ export interface TodoItem {
   readonly done: boolean
 }
 
-export const SAMPLE_TODO_LABELS: readonly string[] = Object.freeze([
-  'Taste the bubble tea',
-  'Bridge a DOM event',
-  'Inspect the snapshot',
-  'Ship a tiny slice',
-])
-
 export const DEFAULT_STORAGE_KEY = 'bubbled-todos'
 
 export function toggleTodo(
@@ -31,13 +24,44 @@ export function removeTodo(
   return todos.filter(todo => todo.id !== id)
 }
 
-export function appendSampleTodo(
+export function normalizeTodoLabel(label: string): string {
+  return label.trim().replace(/\s+/g, ' ')
+}
+
+function createNextTodoId(todos: readonly TodoItem[]): string {
+  let maxId = 0
+
+  for (const todo of todos) {
+    const match = /^t(\d+)$/.exec(todo.id)
+
+    if (match === null) {
+      continue
+    }
+
+    maxId = Math.max(maxId, Number(match[1]))
+  }
+
+  return `t${maxId + 1}`
+}
+
+export function appendTodo(
   todos: readonly TodoItem[],
-  cycle: number
+  label: string
 ): readonly TodoItem[] {
-  const label = SAMPLE_TODO_LABELS[cycle % SAMPLE_TODO_LABELS.length] as string
-  const nextId = `t${todos.length + 1 + cycle}`
-  return [...todos, { id: nextId, label, done: false }]
+  const normalizedLabel = normalizeTodoLabel(label)
+
+  if (normalizedLabel.length === 0) {
+    return todos
+  }
+
+  return [
+    ...todos,
+    {
+      id: createNextTodoId(todos),
+      label: normalizedLabel,
+      done: false,
+    },
+  ]
 }
 
 export function summarizeTodos(todos: readonly TodoItem[]): string {
@@ -56,7 +80,7 @@ export interface TodoStore {
   subscribe(listener: () => void): () => void
   toggle(id: string): void
   remove(id: string): void
-  addSample(): void
+  add(label: string): boolean
 }
 
 export interface CreateTodoStoreOptions {
@@ -76,8 +100,6 @@ export function createTodoStore(options: CreateTodoStoreOptions): TodoStore {
   } else {
     todos = JSON.parse(rawStored) as readonly TodoItem[]
   }
-
-  let cycle = 0
 
   const persist = (next: readonly TodoItem[]): void => {
     todos = next
@@ -103,10 +125,15 @@ export function createTodoStore(options: CreateTodoStoreOptions): TodoStore {
     remove(id) {
       persist(removeTodo(todos, id))
     },
-    addSample() {
-      const nextCycle = cycle
-      cycle += 1
-      persist(appendSampleTodo(todos, nextCycle))
+    add(label) {
+      const next = appendTodo(todos, label)
+
+      if (next === todos) {
+        return false
+      }
+
+      persist(next)
+      return true
     },
   }
 }

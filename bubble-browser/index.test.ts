@@ -49,6 +49,7 @@ class FakeDomElement extends FakeDomNode {
   readonly attributes = new Map<string, string>()
   readonly listeners = new Map<string, Array<(event: FakeDomEvent) => void>>()
   defaultPrevented = false
+  value = ''
   rect = {
     x: 0,
     y: 0,
@@ -625,7 +626,7 @@ describe('createDomProjector', () => {
     )
   })
 
-  test('applies mounted attribute updates and ignores projected property-only mutations', () => {
+  test('applies mounted attribute and property updates', () => {
     const bubble = createBubble()
     let inputId = ''
 
@@ -641,15 +642,55 @@ describe('createDomProjector', () => {
 
     bubble.transact(tx => {
       tx.setAttribute({ nodeId: inputId, name: 'type', value: 'text' })
-      tx.removeAttribute({ nodeId: inputId, name: 'type' })
       tx.setProperty({
         nodeId: inputId,
         name: 'value',
-        value: 'Ignored in DOM projection',
+        value: 'Projected into the DOM',
       })
     })
 
+    const input = container.childNodes[0] as FakeDomElement
+
+    expect(markup()).toBe('<input type="text"></input>')
+    expect(input.value).toBe('Projected into the DOM')
+  })
+
+  test('applies mounted attribute removals', () => {
+    const bubble = createBubble()
+    let inputId = ''
+
+    bubble.transact(tx => {
+      inputId = tx.createElement({ tag: 'input' })
+      tx.setAttribute({ nodeId: inputId, name: 'type', value: 'text' })
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId })
+    })
+
+    const projector = createDomProjector({ bubble })
+    const { container, markup } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    bubble.transact(tx => {
+      tx.removeAttribute({ nodeId: inputId, name: 'type' })
+    })
+
+    expect(container.childNodes[0]).toBeDefined()
     expect(markup()).toBe('<input></input>')
+  })
+
+  test('ignores node-created mutations until a created node is inserted', () => {
+    const bubble = createBubble()
+    const projector = createDomProjector({ bubble })
+    const { container, markup } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    bubble.transact(tx => {
+      tx.createElement({ tag: 'aside' })
+    })
+
+    expect(container.childNodes).toHaveLength(0)
+    expect(markup()).toBe('')
   })
 
   test('inserts root children incrementally before existing projected siblings', () => {
@@ -904,6 +945,161 @@ describe('createDomProjector', () => {
       },
     ])
     expect(form.defaultPrevented).toBe(true)
+  })
+
+  test('bridged DOM input events dispatch bubble change events with the current value', () => {
+    const bubble = createBubble()
+    const calls: Array<{ currentTargetId: string; value: unknown }> = []
+    let inputId = ''
+
+    bubble.transact(tx => {
+      inputId = tx.createElement({ tag: 'input' })
+      tx.setAttribute({ nodeId: inputId, name: 'type', value: 'text' })
+      tx.setProperty({ nodeId: inputId, name: 'value', value: 'Draft' })
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId })
+      tx.addEventListener({
+        nodeId: inputId,
+        type: 'change',
+        listener: event => {
+          calls.push({
+            currentTargetId: event.currentTargetId,
+            value: event.data['value'],
+          })
+        },
+      })
+    })
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true })
+    const { container } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    const input = container.childNodes[0] as FakeDomElement
+    input.value = 'Published'
+    input.dispatchEvent({
+      type: 'input',
+      target: input,
+      preventDefault() {},
+    })
+
+    expect(calls).toEqual([
+      {
+        currentTargetId: inputId,
+        value: 'Published',
+      },
+    ])
+  })
+
+  test('bridged DOM input events include checkbox checked state', () => {
+    const bubble = createBubble()
+    const calls: Array<{ checked: unknown }> = []
+    let inputId = ''
+
+    bubble.transact(tx => {
+      inputId = tx.createElement({ tag: 'input' })
+      tx.setAttribute({ nodeId: inputId, name: 'type', value: 'checkbox' })
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId })
+      tx.addEventListener({
+        nodeId: inputId,
+        type: 'change',
+        listener: event => {
+          calls.push({ checked: event.data['checked'] })
+        },
+      })
+    })
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true })
+    const { container } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    const input = container.childNodes[0] as FakeDomElement & {
+      checked?: boolean
+    }
+    input.checked = true
+    input.dispatchEvent({
+      type: 'input',
+      target: input,
+      preventDefault() {},
+    })
+
+    expect(calls).toEqual([{ checked: true }])
+  })
+
+  test('bridged DOM input events ignore null targets', () => {
+    const bubble = createBubble()
+    const projector = createDomProjector({ bubble, bridgeEvents: true })
+    const { container } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    expect(() => {
+      container.dispatchEvent({
+        type: 'input',
+        target: null,
+        preventDefault() {},
+      })
+    }).not.toThrow()
+  })
+
+  test('bridged DOM input events fail safely for non-element targets', () => {
+    const bubble = createBubble()
+    let wrapperId = ''
+
+    bubble.transact(tx => {
+      wrapperId = tx.createElement({ tag: 'span' })
+      const textId = tx.createText({ value: 'Draft' })
+      tx.insertChild({ parentId: bubble.rootId, childId: wrapperId })
+      tx.insertChild({ parentId: wrapperId, childId: textId })
+    })
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true })
+    const { container } = createContainer()
+
+    projector.mount(container as unknown as HTMLElement)
+
+    const wrapper = container.childNodes[0] as FakeDomElement
+    const textNode = wrapper.childNodes[0] as FakeDomText
+
+    expect(() => {
+      container.dispatchEvent({
+        type: 'input',
+        target: textNode,
+        preventDefault() {},
+      })
+    }).not.toThrow()
+  })
+
+  test('bridged DOM input events ignore unknown targets', () => {
+    const bubble = createBubble()
+    const calls: string[] = []
+
+    bubble.transact(tx => {
+      const inputId = tx.createElement({ tag: 'input' })
+      tx.insertChild({ parentId: bubble.rootId, childId: inputId })
+      tx.addEventListener({
+        nodeId: inputId,
+        type: 'change',
+        listener: () => {
+          calls.push('changed')
+        },
+      })
+    })
+
+    const projector = createDomProjector({ bubble, bridgeEvents: true })
+    const { container } = createContainer()
+    const unknownTarget = container.ownerDocument.createElement('input')
+
+    projector.mount(container as unknown as HTMLElement)
+
+    expect(() => {
+      container.dispatchEvent({
+        type: 'input',
+        target: unknownTarget,
+        preventDefault() {},
+      })
+    }).not.toThrow()
+    expect(calls).toEqual([])
   })
 
   test('bridged DOM submits ignore unknown targets', () => {

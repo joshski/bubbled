@@ -46,6 +46,7 @@ type BubbleReactEventHandler = (event: BubbleEvent) => void
 
 const EVENT_TYPE_BY_HANDLER_NAME = {
   onClick: 'click',
+  onChange: 'change',
 } as const
 
 type BubbleReactEventHandlerName = keyof typeof EVENT_TYPE_BY_HANDLER_NAME

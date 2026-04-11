@@ -6,11 +6,7 @@ import {
   createTodoAppController,
   createTodoAppSnapshot,
 } from './todo-controller.ts'
-import {
-  createTodoStore,
-  SAMPLE_TODO_LABELS,
-  type TodoItem,
-} from './todo-store.ts'
+import { createTodoStore, type TodoItem } from './todo-store.ts'
 
 function createInMemoryStorage(
   seed: Record<string, string> = {}
@@ -42,7 +38,8 @@ describe('createTodoAppSnapshot', () => {
 
     expect(snapshot.heading).toBe('Bubbled Todos')
     expect(snapshot.summary).toBe('1 of 2 remaining')
-    expect(snapshot.addLabel).toBe('Add sample todo')
+    expect(snapshot.addButtonLabel).toBe('Add todo')
+    expect(snapshot.newTodoLabel).toBe('New todo')
     expect(snapshot.todos).toEqual([
       {
         id: 'a',
@@ -81,13 +78,25 @@ describe('createTodoAppController', () => {
     controller.remove('b')
     expect(controller.getSnapshot().todos).toHaveLength(1)
 
-    controller.addSample()
-    controller.addSample()
-
-    const snapshot = controller.getSnapshot()
-    expect(snapshot.todos).toHaveLength(3)
-    expect(snapshot.todos[1]?.label).toBe(SAMPLE_TODO_LABELS[0] ?? '')
-    expect(snapshot.todos[2]?.label).toBe(SAMPLE_TODO_LABELS[1] ?? '')
+    expect(controller.add('  Ship   it  ')).toBe(true)
+    expect(controller.getSnapshot().todos).toEqual([
+      {
+        id: 'a',
+        label: 'Alpha',
+        done: true,
+        toggleLabel: 'Undo Alpha',
+        toggleText: 'Undo',
+        removeLabel: 'Remove Alpha',
+      },
+      {
+        id: 't1',
+        label: 'Ship it',
+        done: false,
+        toggleLabel: 'Complete Ship it',
+        toggleText: 'Done',
+        removeLabel: 'Remove Ship it',
+      },
+    ])
   })
 
   test('tracks store updates triggered outside the controller adapter', () => {
@@ -105,10 +114,10 @@ describe('createTodoAppController', () => {
       notifications.push(notifications.length + 1)
     })
 
-    store.addSample()
+    store.toggle('a')
 
-    expect(controller.getSnapshot().summary).toBe('2 of 2 remaining')
-    expect(controller.getSnapshot().todos).toHaveLength(2)
+    expect(controller.getSnapshot().summary).toBe('All done')
+    expect(controller.getSnapshot().todos).toHaveLength(1)
     expect(notifications).toEqual([1])
 
     unsubscribe()

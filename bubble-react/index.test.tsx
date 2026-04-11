@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react'
 
-import { createBubble, serializeBubbleSnapshot } from '../bubble-core'
+import {
+  createBubble,
+  serializeBubbleSnapshot,
+  type BubbleEvent,
+} from '../bubble-core'
 import { createBubbleReactRoot } from './index'
 import { readReactClientInternals } from './react-client-internals'
 
@@ -803,6 +807,45 @@ describe('createBubbleReactRoot', () => {
         },
       ],
     })
+  })
+
+  test('change events can drive controlled input state', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+
+    function Editor() {
+      const [value, setValue] = useState('Draft')
+
+      return (
+        <input
+          type="text"
+          aria-label="Title"
+          value={value}
+          onChange={event => {
+            const bubbleEvent = event as unknown as BubbleEvent
+            setValue(String(bubbleEvent.data['value'] ?? ''))
+          }}
+        />
+      )
+    }
+
+    root.render(<Editor />)
+
+    const inputId = bubble.snapshot().query.getByRole('textbox', {
+      name: 'Title',
+    })[0]!.id
+
+    bubble.dispatchEvent({
+      type: 'change',
+      targetId: inputId,
+      data: { value: 'Published' },
+    })
+
+    const textbox = bubble.snapshot().query.getByRole('textbox', {
+      name: 'Title',
+    })[0]!
+
+    expect(textbox.value).toBe('Published')
   })
 
   test('multiple state updates settle deterministically', () => {

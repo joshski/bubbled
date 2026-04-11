@@ -107,6 +107,33 @@ function isDomElementNode(node: DomChildNode): node is DomElementNode {
   return 'focus' in node
 }
 
+function setDomProperty(
+  node: DomElementNode,
+  name: string,
+  value: unknown
+): void {
+  ;(node as unknown as Record<string, unknown>)[name] = value
+}
+
+function readDomEventData(targetNode: DomChildNode): Record<string, unknown> {
+  if (!isDomElementNode(targetNode)) {
+    return {}
+  }
+
+  const properties = targetNode as unknown as Record<string, unknown>
+  const data: Record<string, unknown> = {}
+
+  if ('value' in properties) {
+    data['value'] = properties['value']
+  }
+
+  if ('checked' in properties) {
+    data['checked'] = properties['checked']
+  }
+
+  return data
+}
+
 export function placePopover(input: PlacementInput): PlacementOutput {
   const fitsBelow =
     input.anchor.y + input.anchor.height + input.overlay.height <=
@@ -308,6 +335,10 @@ export function createDomProjector(
       element.setAttribute(name, value)
     }
 
+    for (const [name, value] of Object.entries(node.properties)) {
+      setDomProperty(element, name, value)
+    }
+
     for (const childId of node.children) {
       element.appendChild(ensureProjectedNode(childId, document))
     }
@@ -356,7 +387,7 @@ export function createDomProjector(
   }
 
   const applyMutation = (mutation: BubbleMutation): void => {
-    if (mutation.type === 'node-created' || mutation.type === 'property-set') {
+    if (mutation.type === 'node-created') {
       return
     }
 
@@ -391,6 +422,16 @@ export function createDomProjector(
             (mountedContainer as DomContainer).ownerDocument
           ) as DomElementNode
         ).removeAttribute(mutation.name)
+        return
+      case 'property-set':
+        setDomProperty(
+          ensureProjectedNode(
+            mutation.nodeId,
+            (mountedContainer as DomContainer).ownerDocument
+          ) as DomElementNode,
+          mutation.name,
+          mutation.value
+        )
         return
     }
   }
@@ -445,6 +486,26 @@ export function createDomProjector(
     event.preventDefault()
   }
 
+  const bridgeChangeEvent = (event: DomEvent): void => {
+    const targetNode = event.target
+
+    if (targetNode === null) {
+      return
+    }
+
+    const targetId = bubbleIdByDomNode.get(targetNode)
+
+    if (targetId === undefined) {
+      return
+    }
+
+    options.bubble.dispatchEvent({
+      type: 'change',
+      targetId,
+      data: readDomEventData(targetNode),
+    })
+  }
+
   const projector = Object.freeze({
     mount(container: HTMLElement) {
       if (mountedContainer !== null) {
@@ -472,9 +533,11 @@ export function createDomProjector(
 
       if (options.bridgeEvents === true) {
         domContainer.addEventListener('click', bridgeClickEvent)
+        domContainer.addEventListener('input', bridgeChangeEvent, true)
         domContainer.addEventListener('submit', bridgeSubmitEvent, true)
         removeDomEventBridges = () => {
           domContainer.removeEventListener('click', bridgeClickEvent)
+          domContainer.removeEventListener('input', bridgeChangeEvent, true)
           domContainer.removeEventListener('submit', bridgeSubmitEvent, true)
         }
       }

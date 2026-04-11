@@ -3,11 +3,11 @@ import { describe, expect, test } from 'bun:test'
 import type { BubbleStorage } from '../../bubble-capabilities'
 
 import {
-  appendSampleTodo,
+  appendTodo,
   createTodoStore,
   DEFAULT_STORAGE_KEY,
+  normalizeTodoLabel,
   removeTodo,
-  SAMPLE_TODO_LABELS,
   summarizeTodos,
   toggleTodo,
   type TodoItem,
@@ -58,14 +58,17 @@ describe('pure todo helpers', () => {
     ])
   })
 
-  test('appendSampleTodo cycles through sample labels using the cycle index', () => {
-    const firstTodos = appendSampleTodo([], 0)
-    expect(firstTodos).toHaveLength(1)
-    expect(firstTodos[0]?.label).toBe(SAMPLE_TODO_LABELS[0] ?? '')
+  test('appendTodo trims labels, appends a new item, and ignores blanks', () => {
+    const todos: readonly TodoItem[] = [
+      { id: 't2', label: 'Existing', done: false },
+    ]
 
-    const wrappedTodos = appendSampleTodo(firstTodos, SAMPLE_TODO_LABELS.length)
-    expect(wrappedTodos).toHaveLength(2)
-    expect(wrappedTodos[1]?.label).toBe(SAMPLE_TODO_LABELS[0] ?? '')
+    expect(normalizeTodoLabel('  Ship   it  ')).toBe('Ship it')
+    expect(appendTodo(todos, '  Ship   it  ')).toEqual([
+      { id: 't2', label: 'Existing', done: false },
+      { id: 't3', label: 'Ship it', done: false },
+    ])
+    expect(appendTodo(todos, '   ')).toBe(todos)
   })
 
   test('summarizeTodos reports empty, partial, and complete states', () => {
@@ -127,7 +130,7 @@ describe('createTodoStore', () => {
     expect(storage.getItem(DEFAULT_STORAGE_KEY)).toBeNull()
   })
 
-  test('toggle, remove, and addSample persist the next state and notify subscribers', () => {
+  test('toggle, remove, and add persist the next state and notify subscribers', () => {
     const storage = createInMemoryStorage()
     const store = createTodoStore({
       storage,
@@ -147,13 +150,14 @@ describe('createTodoStore', () => {
     store.remove('b')
     expect(store.get()).toHaveLength(1)
 
-    store.addSample()
-    store.addSample()
-    expect(store.get()).toHaveLength(3)
-    expect(store.get()[1]?.label).toBe(SAMPLE_TODO_LABELS[0] ?? '')
-    expect(store.get()[2]?.label).toBe(SAMPLE_TODO_LABELS[1] ?? '')
+    expect(store.add('  Ship   it  ')).toBe(true)
+    expect(store.get()).toEqual([
+      { id: 'a', label: 'Alpha', done: true },
+      { id: 't1', label: 'Ship it', done: false },
+    ])
+    expect(store.add('   ')).toBe(false)
 
-    expect(notifications).toHaveLength(4)
+    expect(notifications).toHaveLength(3)
 
     const persisted = storage.getItem(DEFAULT_STORAGE_KEY)
     expect(persisted).not.toBeNull()

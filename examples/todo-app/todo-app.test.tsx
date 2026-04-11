@@ -9,7 +9,6 @@ import {
 import { createSemanticAssertions } from '../../bubble-test'
 import { startTodoApp } from './todo-browser.ts'
 import { mountTodoApp } from './todo-react.ts'
-import { SAMPLE_TODO_LABELS } from './todo-store.ts'
 
 const originalFetch = globalThis.fetch
 const originalConsoleError = console.error
@@ -64,13 +63,37 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
     app.bubble.dispatchEvent({ type: 'click', targetId: findButton(name) })
   }
 
+  const changeTextbox = (name: string, value: string): void => {
+    const textboxId = app.bubble
+      .snapshot()
+      .query.getByRole('textbox', { name })[0]!.id
+
+    app.bubble.dispatchEvent({
+      type: 'change',
+      targetId: textboxId,
+      data: { value },
+    })
+  }
+
   const paragraphId = (): string =>
     app.bubble.snapshot().query.getByTag('p')[0]!.id
 
   const attachedLis = (): BubbleSerializedElementNode[] =>
     collectAttachedElementsByTag(attachedTree(), 'li')
 
-  return { app, assertions, attachedLis, attachedTree, click, paragraphId }
+  const textboxValue = (name: string): string | null =>
+    app.bubble.snapshot().query.getByRole('textbox', { name })[0]!.value
+
+  return {
+    app,
+    assertions,
+    attachedLis,
+    attachedTree,
+    changeTextbox,
+    click,
+    paragraphId,
+    textboxValue,
+  }
 }
 
 class FakeElement {
@@ -117,7 +140,7 @@ function createFakeDocument(includeApp = true) {
 
 describe('mountTodoApp', () => {
   test('renders whatever the store currently holds on first mount', () => {
-    const { attachedLis, attachedTree, assertions, paragraphId } =
+    const { attachedLis, attachedTree, assertions, paragraphId, textboxValue } =
       createHarness({
         initialTodos: [
           { id: 't1', label: 'Alpha', done: false },
@@ -130,6 +153,31 @@ describe('mountTodoApp', () => {
     expect(heading).toBeDefined()
     expect(textContentOf(heading!)).toBe('Bubbled Todos')
     assertions.expectText(paragraphId(), '1 of 2 remaining')
+    expect(textboxValue('New todo')).toBe('')
+  })
+
+  test('adds an arbitrary todo from the textbox and clears the draft', () => {
+    const {
+      app,
+      assertions,
+      attachedLis,
+      changeTextbox,
+      click,
+      paragraphId,
+      textboxValue,
+    } = createHarness({
+      initialTodos: [],
+    })
+
+    changeTextbox('New todo', '  Write   regression tests  ')
+    click('Add todo')
+
+    expect(app.store.get()).toEqual([
+      { id: 't1', label: 'Write regression tests', done: false },
+    ])
+    expect(attachedLis()).toHaveLength(1)
+    assertions.expectText(paragraphId(), '1 of 1 remaining')
+    expect(textboxValue('New todo')).toBe('')
   })
 
   test('clicks flow through React props into the store, which re-renders the view', () => {
@@ -157,40 +205,18 @@ describe('mountTodoApp', () => {
     assertions.expectText(paragraphId(), 'No todos yet')
   })
 
-  test("'Add sample todo' clicks cycle through the sample labels via the store", () => {
-    const { attachedLis, attachedTree, click } = createHarness({
-      initialTodos: [],
-    })
-
-    for (let index = 0; index < SAMPLE_TODO_LABELS.length + 1; index += 1) {
-      click('Add sample todo')
-    }
-
-    expect(attachedLis()).toHaveLength(SAMPLE_TODO_LABELS.length + 1)
-
-    const renderedLabels = collectAttachedElementsByTag(
-      attachedTree(),
-      'span'
-    ).map(span => textContentOf(span))
-
-    expect(renderedLabels).toEqual([
-      SAMPLE_TODO_LABELS[0]!,
-      SAMPLE_TODO_LABELS[1]!,
-      SAMPLE_TODO_LABELS[2]!,
-      SAMPLE_TODO_LABELS[3]!,
-      SAMPLE_TODO_LABELS[0]!,
-    ])
-  })
-
   test('mutating the store from outside also re-renders the view', () => {
     const { app, attachedLis, assertions, paragraphId } = createHarness({
-      initialTodos: [{ id: 't1', label: 'Alpha', done: false }],
+      initialTodos: [
+        { id: 't1', label: 'Alpha', done: false },
+        { id: 't2', label: 'Beta', done: false },
+      ],
     })
 
-    app.store.addSample()
+    app.store.remove('t2')
 
-    expect(attachedLis()).toHaveLength(2)
-    assertions.expectText(paragraphId(), '2 of 2 remaining')
+    expect(attachedLis()).toHaveLength(1)
+    assertions.expectText(paragraphId(), '1 of 1 remaining')
   })
 
   test('persists through the injected bubble storage capability across mounts', () => {
@@ -199,11 +225,13 @@ describe('mountTodoApp', () => {
       bubble,
       initialTodos: [{ id: 't1', label: 'Alpha', done: false }],
     })
-    first.store.addSample()
+    first.store.toggle('t1')
     first.unmount()
 
     const second = mountTodoApp({ bubble })
-    expect(second.store.get()).toHaveLength(2)
+    expect(second.store.get()).toEqual([
+      { id: 't1', label: 'Alpha', done: true },
+    ])
     second.unmount()
   })
 

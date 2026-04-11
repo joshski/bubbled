@@ -12,7 +12,8 @@ export interface TodoViewItem {
 export interface TodoAppSnapshot {
   readonly heading: string
   readonly summary: string
-  readonly addLabel: string
+  readonly addButtonLabel: string
+  readonly newTodoLabel: string
   readonly todos: readonly TodoViewItem[]
 }
 
@@ -21,7 +22,7 @@ export interface TodoAppController {
   subscribe(listener: () => void): () => void
   toggle(id: string): void
   remove(id: string): void
-  addSample(): void
+  add(label: string): boolean
 }
 
 export function createTodoAppSnapshot(
@@ -30,7 +31,8 @@ export function createTodoAppSnapshot(
   return {
     heading: 'Bubbled Todos',
     summary: summarizeTodos(todos),
-    addLabel: 'Add sample todo',
+    addButtonLabel: 'Add todo',
+    newTodoLabel: 'New todo',
     todos: todos.map(todo => ({
       id: todo.id,
       label: todo.label,
@@ -56,8 +58,8 @@ export function createTodoAppController(store: TodoStore): TodoAppController {
     remove(id) {
       store.remove(id)
     },
-    addSample() {
-      store.addSample()
+    add(label) {
+      return store.add(label)
     },
   }
 }

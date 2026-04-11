@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useState } from 'react'
 
 import { createBubble, type BubbleRuntime } from '../../bubble-core'
 import { createBubbleReactRoot, type BubbleReactRoot } from '../../bubble-react'
@@ -29,6 +29,29 @@ export interface MountedTodoApp {
   unmount(): void
 }
 
+interface TodoAppRootProps {
+  readonly controller: TodoAppController
+}
+
+function TodoAppRoot(props: TodoAppRootProps) {
+  const [draft, setDraft] = useState('')
+
+  return createElement(TodoAppView, {
+    snapshot: props.controller.getSnapshot(),
+    draft,
+    onDraftChange(nextDraft: string) {
+      setDraft(nextDraft)
+    },
+    onToggle: props.controller.toggle,
+    onRemove: props.controller.remove,
+    onAdd() {
+      if (props.controller.add(draft)) {
+        setDraft('')
+      }
+    },
+  })
+}
+
 export function mountTodoApp(
   options: MountTodoAppOptions = {}
 ): MountedTodoApp {
@@ -44,14 +67,7 @@ export function mountTodoApp(
   const root = createBubbleReactRoot({ bubble })
 
   const render = (): void => {
-    root.render(
-      createElement(TodoAppView, {
-        snapshot: controller.getSnapshot(),
-        onToggle: controller.toggle,
-        onRemove: controller.remove,
-        onAdd: controller.addSample,
-      })
-    )
+    root.render(createElement(TodoAppRoot, { controller }))
   }
 
   const unsubscribe = controller.subscribe(render)
