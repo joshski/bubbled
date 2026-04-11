@@ -23,6 +23,14 @@
     {
       "name": "typecheck",
       "command": "bunx tsc --noEmit"
+    },
+    {
+      "name": "coverage",
+      "command": "bun run test:coverage",
+      "hints": [
+        "Run `bun run test:coverage` locally to see the coverage report",
+        "100% coverage is required for lines, functions, branches, and statements before committing"
+      ]
     }
   ]
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 import { createBubble } from '../bubble-core'
 import {
   createHarness,
+  createInMemoryStorage,
   createRenderHarness,
   createSemanticAssertions,
   createSemanticInteractions,
@@ -805,6 +806,25 @@ describe('semantic helpers', () => {
     ).toThrow(
       `Expected text content for ${renderHarness.bubble.rootId} to be "Publish". Received "Save". ${renderHarness.bubble.rootId} <root>`
     )
+  })
+})
+
+describe('createInMemoryStorage', () => {
+  test('removeItem removes a previously set entry', () => {
+    const storage = createInMemoryStorage({ key: 'value' })
+
+    storage.removeItem('key')
+
+    expect(storage.getItem('key')).toBeNull()
+  })
+
+  test('clear removes all entries', () => {
+    const storage = createInMemoryStorage({ a: '1', b: '2' })
+
+    storage.clear()
+
+    expect(storage.getItem('a')).toBeNull()
+    expect(storage.getItem('b')).toBeNull()
   })
 })
 
