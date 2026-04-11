@@ -10,7 +10,13 @@ import type {
 } from '../bubble-capabilities'
 
 import { createBubbleCapabilityRuntime } from './capabilities'
-import { createBubbleEventRuntime, resolveLabelControl } from './event-runtime'
+import {
+  deriveElementName,
+  deriveElementRole,
+  isCheckboxInputElement,
+  resolveLabelControl,
+} from './dom-semantics'
+import { createBubbleEventRuntime } from './event-runtime'
 import { createBubbleFocusNavigation } from './focus-navigation'
 import { createBubbleRuntimeStore } from './runtime-store'
 
@@ -405,104 +411,6 @@ export function serializeBubbleSnapshot(snapshot: BubbleSnapshot): string {
     null,
     2
   )
-}
-
-function getInputType(node: BubbleElementNode): string | null {
-  if (node.namespace !== 'html' || node.tag !== 'input') {
-    return null
-  }
-
-  return (
-    node.attributes.type ??
-    getStringProperty(node, 'type') ??
-    'text'
-  ).toLowerCase()
-}
-
-function isTextInputElement(
-  node: BubbleElementNode
-): node is BubbleElementNode & { value: string } {
-  return getInputType(node) === 'text'
-}
-
-function isCheckboxInputElement(node: BubbleElementNode): boolean {
-  return getInputType(node) === 'checkbox'
-}
-
-function getStringProperty(
-  node: BubbleElementNode,
-  name: string
-): string | null {
-  const propertyValue = node.properties[name]
-
-  return typeof propertyValue === 'string' ? propertyValue : null
-}
-
-function getExplicitRole(node: BubbleElementNode): string | null {
-  const role = node.attributes.role?.trim()
-
-  return role ? role : null
-}
-
-function deriveImplicitRole(node: BubbleElementNode): string | null {
-  if (node.namespace !== 'html') {
-    return null
-  }
-
-  switch (node.tag.toLowerCase()) {
-    case 'button':
-      return 'button'
-    case 'a':
-      return node.attributes.href !== undefined ||
-        getStringProperty(node, 'href') !== null
-        ? 'link'
-        : null
-    case 'textarea':
-      return 'textbox'
-    case 'input': {
-      return isTextInputElement(node) ? 'textbox' : null
-    }
-    default:
-      return null
-  }
-}
-
-function deriveElementRole(node: BubbleElementNode): string | null {
-  return getExplicitRole(node) ?? deriveImplicitRole(node)
-}
-
-function normalizeAccessibleText(value: string): string | null {
-  const normalizedValue = value.replace(/\s+/g, ' ').trim()
-
-  return normalizedValue.length === 0 ? null : normalizedValue
-}
-
-function deriveTextContent(
-  nodeId: BubbleNodeId,
-  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>
-): string {
-  const node = nodeLookup.get(nodeId) as BubbleNode
-
-  if (node.kind === 'text') {
-    return node.value
-  }
-
-  return node.children
-    .map(childId => deriveTextContent(childId, nodeLookup))
-    .join('')
-}
-
-function deriveElementName(
-  node: BubbleElementNode,
-  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>
-): string | null {
-  const ariaLabel = normalizeAccessibleText(node.attributes['aria-label'] ?? '')
-
-  if (ariaLabel !== null) {
-    return ariaLabel
-  }
-
-  return normalizeAccessibleText(deriveTextContent(node.id, nodeLookup))
 }
 
 export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {

@@ -6,6 +6,8 @@ import type {
   BubbleRuntimeEvent,
 } from './index'
 
+import { getTabIndexValue, isTabbableElement } from './dom-semantics'
+
 type BubbleEventDispatchMode = 'propagating' | 'target-only'
 
 interface CreateBubbleFocusNavigationOptions {
@@ -41,44 +43,6 @@ function assertFocusableNode(
   if (node.namespace !== 'html' || !FOCUSABLE_HTML_TAGS.has(node.tag)) {
     throw new Error(`Node is not focusable: ${nodeId}`)
   }
-}
-
-function getTabIndexValue(node: BubbleElementNode): number | null {
-  const propertyValue = node.properties.tabIndex
-
-  if (typeof propertyValue === 'number' && Number.isInteger(propertyValue)) {
-    return propertyValue
-  }
-
-  const attributeValue = node.attributes.tabindex
-
-  if (attributeValue === undefined) {
-    return null
-  }
-
-  const parsedValue = Number.parseInt(attributeValue, 10)
-
-  return Number.isNaN(parsedValue) ? null : parsedValue
-}
-
-function isDisabledElement(node: BubbleElementNode): boolean {
-  return (
-    node.attributes.disabled !== undefined || node.properties.disabled === true
-  )
-}
-
-function isTabbableElement(node: BubbleElementNode): boolean {
-  if (
-    node.namespace !== 'html' ||
-    !FOCUSABLE_HTML_TAGS.has(node.tag) ||
-    isDisabledElement(node)
-  ) {
-    return false
-  }
-
-  const tabIndex = getTabIndexValue(node)
-
-  return tabIndex === null || tabIndex >= 0
 }
 
 export function createBubbleFocusNavigation({

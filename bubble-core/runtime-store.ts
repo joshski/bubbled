@@ -12,6 +12,8 @@ import type {
   BubbleTransactionRecord,
 } from './index'
 
+import { isCheckboxInputElement, isTextInputElement } from './dom-semantics'
+
 interface BubbleRuntimeStoreOptions {
   createQuery(snapshot: Pick<BubbleSnapshot, 'nodes'>): BubbleQueryApi
   createTransactionParticipant(input: {
@@ -84,37 +86,6 @@ function assertElementNode(
   if (node.kind !== 'element') {
     throw new Error(`${target} are only supported on element nodes: ${nodeId}`)
   }
-}
-
-function getStringProperty(
-  node: BubbleElementNode,
-  name: string
-): string | null {
-  const propertyValue = node.properties[name]
-
-  return typeof propertyValue === 'string' ? propertyValue : null
-}
-
-function getInputType(node: BubbleElementNode): string | null {
-  if (node.namespace !== 'html' || node.tag !== 'input') {
-    return null
-  }
-
-  return (
-    node.attributes.type ??
-    getStringProperty(node, 'type') ??
-    'text'
-  ).toLowerCase()
-}
-
-function isTextInputElement(
-  node: BubbleElementNode
-): node is BubbleElementNode & { value: string } {
-  return getInputType(node) === 'text'
-}
-
-function isCheckboxInputElement(node: BubbleElementNode): boolean {
-  return getInputType(node) === 'checkbox'
 }
 
 function assertValuePropertyTarget(

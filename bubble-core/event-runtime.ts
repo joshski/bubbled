@@ -4,7 +4,6 @@ import type {
   BubbleElementNode,
   BubbleEvent,
   BubbleEventListener,
-  BubbleFormEntry,
   BubbleFormPayload,
   BubbleListenerHandle,
   BubbleNode,
@@ -12,6 +11,9 @@ import type {
   BubbleSubmitDispatchResult,
   BubbleTransaction,
 } from './index'
+
+import { resolveLabelControl } from './dom-semantics'
+import { serializeForm as serializeFormPayload } from './form-serialization'
 
 export interface BubbleRegisteredListener {
   handle: BubbleListenerHandle
@@ -106,50 +108,6 @@ function getNodeListeners(
   return createdNodeListeners
 }
 
-function getStringProperty(
-  node: BubbleElementNode,
-  name: string
-): string | null {
-  const propertyValue = node.properties[name]
-
-  return typeof propertyValue === 'string' ? propertyValue : null
-}
-
-function getInputType(node: BubbleElementNode): string | null {
-  if (node.namespace !== 'html' || node.tag !== 'input') {
-    return null
-  }
-
-  return (
-    node.attributes.type ??
-    getStringProperty(node, 'type') ??
-    'text'
-  ).toLowerCase()
-}
-
-function isTextInputElement(
-  node: BubbleElementNode
-): node is BubbleElementNode & { value: string } {
-  return getInputType(node) === 'text'
-}
-
-function isCheckboxInputElement(node: BubbleElementNode): boolean {
-  return getInputType(node) === 'checkbox'
-}
-
-function assertFormNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode {
-  if (
-    node.kind !== 'element' ||
-    node.namespace !== 'html' ||
-    node.tag !== 'form'
-  ) {
-    throw new Error(`Only html form elements can be serialized: ${nodeId}`)
-  }
-}
-
 function assertSubmitTargetNode(
   node: BubbleNode,
   nodeId: BubbleNodeId
@@ -163,125 +121,6 @@ function assertSubmitTargetNode(
       `Only html form elements can receive submit events: ${nodeId}`
     )
   }
-}
-
-function isDisabledElement(node: BubbleElementNode): boolean {
-  return (
-    node.attributes.disabled !== undefined || node.properties.disabled === true
-  )
-}
-
-function getFormControlName(node: BubbleElementNode): string | null {
-  return node.attributes.name ?? getStringProperty(node, 'name')
-}
-
-function getCheckboxSubmissionValue(node: BubbleElementNode): string {
-  return node.attributes.value ?? 'on'
-}
-
-function getFormEntriesForControl(node: BubbleElementNode): BubbleFormEntry[] {
-  if (node.namespace !== 'html' || isDisabledElement(node)) {
-    return []
-  }
-
-  const name = getFormControlName(node)
-
-  if (name === null) {
-    return []
-  }
-
-  if (isTextInputElement(node)) {
-    return [{ name, value: node.value }]
-  }
-
-  if (isCheckboxInputElement(node) && node.checked === true) {
-    return [{ name, value: getCheckboxSubmissionValue(node) }]
-  }
-
-  return []
-}
-
-function isLabelElement(
-  node: BubbleNode | undefined
-): node is BubbleElementNode {
-  return (
-    node?.kind === 'element' &&
-    node.namespace === 'html' &&
-    node.tag === 'label'
-  )
-}
-
-function isLabelableElement(
-  node: BubbleNode | undefined
-): node is BubbleElementNode {
-  return (
-    node?.kind === 'element' &&
-    node.namespace === 'html' &&
-    [
-      'button',
-      'input',
-      'meter',
-      'output',
-      'progress',
-      'select',
-      'textarea',
-    ].includes(node.tag)
-  )
-}
-
-function findFirstLabelableDescendant(
-  nodeId: BubbleNodeId,
-  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>
-): BubbleElementNode | null {
-  const node = nodeLookup.get(nodeId)
-
-  if (node === undefined || node.kind === 'text') {
-    return null
-  }
-
-  for (const childId of node.children) {
-    const childNode = nodeLookup.get(childId)
-
-    if (isLabelableElement(childNode)) {
-      return childNode
-    }
-
-    const nestedControl = findFirstLabelableDescendant(childId, nodeLookup)
-
-    if (nestedControl !== null) {
-      return nestedControl
-    }
-  }
-
-  return null
-}
-
-export function resolveLabelControl(
-  labelId: BubbleNodeId,
-  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>
-): BubbleElementNode | null {
-  const labelNode = nodeLookup.get(labelId)
-
-  if (!isLabelElement(labelNode)) {
-    return null
-  }
-
-  const explicitControlId = labelNode.attributes.for
-
-  if (explicitControlId !== undefined) {
-    for (const node of nodeLookup.values()) {
-      if (
-        isLabelableElement(node) &&
-        node.attributes.id === explicitControlId
-      ) {
-        return node
-      }
-    }
-
-    return null
-  }
-
-  return findFirstLabelableDescendant(labelId, nodeLookup)
 }
 
 export function createBubbleEventRuntime({
@@ -437,32 +276,7 @@ export function createBubbleEventRuntime({
   }
 
   const serializeForm = (formId: BubbleNodeId): BubbleFormPayload => {
-    const formNode = getNodes().get(formId)
-
-    if (formNode === undefined) {
-      throw new Error(`Unknown node ID: ${formId}`)
-    }
-
-    assertFormNode(formNode, formId)
-
-    const entries: BubbleFormEntry[] = []
-    const getElementChildNodeIds = (
-      childNodeIds: readonly BubbleNodeId[]
-    ): BubbleNodeId[] =>
-      childNodeIds.filter(
-        childNodeId => getNodes().get(childNodeId)?.kind === 'element'
-      )
-    const pendingNodeIds = getElementChildNodeIds(formNode.children)
-
-    while (pendingNodeIds.length > 0) {
-      const nodeId = pendingNodeIds.shift() as BubbleNodeId
-      const node = getNodes().get(nodeId) as BubbleElementNode
-
-      entries.push(...getFormEntriesForControl(node))
-      pendingNodeIds.unshift(...getElementChildNodeIds(node.children))
-    }
-
-    return Object.freeze(entries.map(entry => Object.freeze({ ...entry })))
+    return serializeFormPayload(formId, getNodes())
   }
 
   return {

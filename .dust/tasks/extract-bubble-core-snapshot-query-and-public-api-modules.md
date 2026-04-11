@@ -111,7 +111,7 @@ implement
 
 ## Blocked By
 
-- [Extract Bubble Core DOM Semantics and Form Modules](./extract-bubble-core-dom-semantics-and-form-modules.md)
+- (none)
 
 ## Decomposed From
 
