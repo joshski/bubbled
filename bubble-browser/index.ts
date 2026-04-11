@@ -1,9 +1,4 @@
 import type {
-  BubbleLayout,
-  BubbleRect,
-  BubbleViewportState,
-} from '../bubble-capabilities'
-import type {
   BubbleElementNode,
   BubbleMutation,
   BubbleNode,
@@ -13,106 +8,38 @@ import type {
   BubbleRuntimeEvent,
 } from '../bubble-core'
 
+import {
+  isDomElementNode,
+  type DomCheckedElementNode,
+  type DomChildNode,
+  type DomContainer,
+  type DomDocument,
+  type DomElementNode,
+  type DomEvent,
+  type DomTextNode,
+  type DomValueElementNode,
+} from './internal/dom'
+import {
+  createDomLayout,
+  measureAndPlacePopover,
+  placePopover,
+  type PlacementInput,
+  type PlacementOutput,
+} from './internal/layout'
+import {
+  attachDomProjectionState,
+  createDomProjectionState,
+} from './internal/projection-state'
+
 export interface BubbleDomProjector {
   mount(container: HTMLElement): void
   unmount(): void
-}
-
-export interface PlacementInput {
-  anchor: BubbleRect
-  overlay: BubbleRect
-  viewport: BubbleViewportState
-}
-
-export interface PlacementOutput {
-  x: number
-  y: number
-  placement: 'top' | 'bottom'
 }
 
 export interface CreateDomProjectorOptions {
   bubble: BubbleRuntime
   bridgeEvents?: boolean
   syncFocus?: boolean
-}
-
-interface DomParentNode {
-  appendChild(node: DomChildNode): DomChildNode
-  insertBefore(
-    node: DomChildNode,
-    referenceNode: DomChildNode | null
-  ): DomChildNode
-  removeChild(node: DomChildNode): DomChildNode
-}
-
-interface DomChildNode {
-  parentNode: DomParentNode | null
-  remove(): void
-}
-
-interface DomTextNode extends DomChildNode {
-  data: string
-}
-
-interface DomElementNode extends DomChildNode, DomParentNode {
-  addEventListener(
-    type: string,
-    listener: (event: DomEvent) => void,
-    options?: boolean
-  ): void
-  removeEventListener(
-    type: string,
-    listener: (event: DomEvent) => void,
-    options?: boolean
-  ): void
-  focus(): void
-  blur(): void
-  getBoundingClientRect(): BubbleRect
-  setAttribute(name: string, value: string): void
-  removeAttribute(name: string): void
-}
-
-interface DomValueElementNode extends DomElementNode {
-  value: unknown
-}
-
-interface DomCheckedElementNode extends DomElementNode {
-  checked: unknown
-}
-
-interface DomEvent {
-  readonly type: string
-  readonly target: DomChildNode | null
-  preventDefault(): void
-}
-
-interface DomDocument {
-  activeElement: DomElementNode | null
-  createElement(tag: string): DomElementNode
-  createTextNode(value: string): DomTextNode
-}
-
-interface DomContainer extends DomParentNode {
-  addEventListener(
-    type: string,
-    listener: (event: DomEvent) => void,
-    options?: boolean
-  ): void
-  removeEventListener(
-    type: string,
-    listener: (event: DomEvent) => void,
-    options?: boolean
-  ): void
-  ownerDocument: DomDocument
-}
-
-const projectedElementLookupByProjector = new WeakMap<
-  BubbleDomProjector,
-  Map<BubbleNodeId, DomElementNode>
->()
-
-function isDomElementNode(node: DomChildNode): node is DomElementNode {
-  return 'focus' in node
 }
 
 function setDomProperty(
@@ -142,77 +69,12 @@ function readDomChangeEventData(
   return {}
 }
 
-export function placePopover(input: PlacementInput): PlacementOutput {
-  const fitsBelow =
-    input.anchor.y + input.anchor.height + input.overlay.height <=
-    input.viewport.height
-
-  if (fitsBelow) {
-    return {
-      x: input.anchor.x,
-      y: input.anchor.y + input.anchor.height,
-      placement: 'bottom',
-    }
-  }
-
-  return {
-    x: input.anchor.x,
-    y: input.anchor.y - input.overlay.height,
-    placement: 'top',
-  }
-}
-
-export function measureAndPlacePopover(
-  bubble: Pick<BubbleRuntime, 'measureElement' | 'getViewportState'>,
-  anchorId: BubbleNodeId,
-  overlayId: BubbleNodeId
-): PlacementOutput {
-  return placePopover({
-    anchor: bubble.measureElement(anchorId),
-    overlay: bubble.measureElement(overlayId),
-    viewport: bubble.getViewportState(),
-  })
-}
-
-export function createDomLayout(options: {
-  projector: BubbleDomProjector
-}): BubbleLayout {
-  return Object.freeze({
-    measureElement(nodeId: BubbleNodeId) {
-      const projectedElements = projectedElementLookupByProjector.get(
-        options.projector
-      )
-
-      if (projectedElements === undefined) {
-        throw new Error(
-          'Bubble DOM projector does not support DOM-backed layout measurement.'
-        )
-      }
-
-      const element = projectedElements.get(nodeId)
-
-      if (element === undefined) {
-        throw new Error(
-          `Bubble DOM projector has no projected element for node ${nodeId}.`
-        )
-      }
-
-      if (element.parentNode === null) {
-        throw new Error(
-          `Bubble DOM projector cannot measure detached node ${nodeId}.`
-        )
-      }
-
-      const rect = element.getBoundingClientRect()
-
-      return {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-      }
-    },
-  })
+export {
+  createDomLayout,
+  measureAndPlacePopover,
+  placePopover,
+  type PlacementInput,
+  type PlacementOutput,
 }
 
 function getBubbleNode(
@@ -247,9 +109,7 @@ export function createDomProjector(
   let mountedContainer: DomContainer | null = null
   let unsubscribe: (() => void) | null = null
   let removeDomEventBridges: (() => void) | null = null
-  const nodeLookup = new Map<BubbleNodeId, DomChildNode>()
-  const bubbleIdByDomNode = new Map<DomChildNode, BubbleNodeId>()
-  const projectedElements = new Map<BubbleNodeId, DomElementNode>()
+  const projectionState = createDomProjectionState()
   let isSyncingFocusFromBubble = false
   let isSyncingFocusFromDom = false
 
@@ -258,7 +118,10 @@ export function createDomProjector(
       .activeElement
 
     if (nodeId === null) {
-      if (activeElement !== null && bubbleIdByDomNode.has(activeElement)) {
+      if (
+        activeElement !== null &&
+        projectionState.getBubbleNodeId(activeElement) !== undefined
+      ) {
         isSyncingFocusFromBubble = true
         activeElement.blur()
         isSyncingFocusFromBubble = false
@@ -267,7 +130,7 @@ export function createDomProjector(
       return
     }
 
-    const projectedNode = nodeLookup.get(nodeId)
+    const projectedNode = projectionState.getProjectedNode(nodeId)
 
     if (projectedNode === undefined || !isDomElementNode(projectedNode)) {
       return
@@ -286,7 +149,7 @@ export function createDomProjector(
     nodeId: BubbleNodeId,
     document: DomDocument
   ): DomChildNode => {
-    const existingNode = nodeLookup.get(nodeId)
+    const existingNode = projectionState.getProjectedNode(nodeId)
 
     if (existingNode !== undefined) {
       return existingNode
@@ -297,8 +160,7 @@ export function createDomProjector(
     if (node.kind === 'text') {
       const textNode = document.createTextNode(node.value)
 
-      nodeLookup.set(nodeId, textNode)
-      bubbleIdByDomNode.set(textNode, nodeId)
+      projectionState.registerProjectedNode(nodeId, textNode)
       return textNode
     }
 
@@ -308,9 +170,7 @@ export function createDomProjector(
 
     const element = document.createElement(node.tag)
 
-    nodeLookup.set(nodeId, element)
-    bubbleIdByDomNode.set(element, nodeId)
-    projectedElements.set(nodeId, element)
+    projectionState.registerProjectedNode(nodeId, element)
 
     if (options.syncFocus === true) {
       element.addEventListener('focus', event => {
@@ -324,7 +184,7 @@ export function createDomProjector(
           return
         }
 
-        const targetId = bubbleIdByDomNode.get(targetNode)
+        const targetId = projectionState.getBubbleNodeId(targetNode)
 
         if (
           targetId === undefined ||
@@ -361,7 +221,7 @@ export function createDomProjector(
       return mountedContainer as DomContainer
     }
 
-    return nodeLookup.get(parentId) as DomElementNode
+    return projectionState.getProjectedNode(parentId) as DomElementNode
   }
 
   const findReferenceNode = (
@@ -372,7 +232,7 @@ export function createDomProjector(
     const parent = getBubbleContainerNode(options.bubble, parentId)
 
     for (const siblingId of parent.children.slice(index + 1)) {
-      const siblingNode = nodeLookup.get(siblingId)
+      const siblingNode = projectionState.getProjectedNode(siblingId)
 
       if (siblingNode !== undefined && siblingNode.parentNode === parentNode)
         return siblingNode
@@ -405,7 +265,7 @@ export function createDomProjector(
         insertChildAt(mutation.parentId, mutation.childId, mutation.index)
         return
       case 'child-removed':
-        nodeLookup.get(mutation.childId)?.remove()
+        projectionState.getProjectedNode(mutation.childId)?.remove()
         return
       case 'text-set':
         ;(
@@ -465,7 +325,7 @@ export function createDomProjector(
       return
     }
 
-    const targetId = bubbleIdByDomNode.get(targetNode)
+    const targetId = projectionState.getBubbleNodeId(targetNode)
 
     if (targetId === undefined) {
       return
@@ -481,7 +341,7 @@ export function createDomProjector(
       return
     }
 
-    const targetId = bubbleIdByDomNode.get(targetNode)
+    const targetId = projectionState.getBubbleNodeId(targetNode)
 
     if (targetId === undefined) {
       return
@@ -501,7 +361,7 @@ export function createDomProjector(
       return
     }
 
-    const targetId = bubbleIdByDomNode.get(targetNode)
+    const targetId = projectionState.getBubbleNodeId(targetNode)
 
     if (targetId === undefined) {
       return
@@ -520,7 +380,7 @@ export function createDomProjector(
     })
   }
 
-  const projector = Object.freeze({
+  const projector: BubbleDomProjector = {
     mount(container: HTMLElement) {
       if (mountedContainer !== null) {
         throw new Error('Bubble DOM projector is already mounted.')
@@ -571,22 +431,17 @@ export function createDomProjector(
       unsubscribe = null
 
       for (const childId of options.bubble.getRoot().children) {
-        const projectedNode = nodeLookup.get(childId)
+        const projectedNode = projectionState.getProjectedNode(childId)
 
         projectedNode?.remove()
-        if (projectedNode !== undefined) {
-          bubbleIdByDomNode.delete(projectedNode)
-        }
       }
 
-      nodeLookup.clear()
-      bubbleIdByDomNode.clear()
-      projectedElements.clear()
+      projectionState.clear()
       mountedContainer = null
     },
-  })
+  }
 
-  projectedElementLookupByProjector.set(projector, projectedElements)
+  attachDomProjectionState(projector, projectionState)
 
-  return projector
+  return Object.freeze(projector)
 }

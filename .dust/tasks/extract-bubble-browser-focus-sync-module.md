@@ -112,7 +112,7 @@ implement
 
 ## Blocked By
 
-- [Extract Bubble Browser Projection State and Layout Modules](./extract-bubble-browser-projection-state-and-layout-modules.md)
+(none)
 
 ## Decomposed From
 
