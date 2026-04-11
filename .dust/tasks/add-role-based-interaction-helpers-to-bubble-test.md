@@ -8,14 +8,7 @@ Add `clickByRole(role, name)` and `changeByRole(role, name, value)` helpers to `
 
 ## Principles
 
-- [Build Thin Tested Slices](./../principles/build-thin-tested-slices.md)
-- [Clarity Over Brevity](https://github.com/joshski/dust/blob/main/principles/clarity-over-brevity.md)
-- [Consistent Naming](https://github.com/joshski/dust/blob/main/principles/consistent-naming.md)
-- [Comprehensive Assertions](https://github.com/joshski/dust/blob/main/principles/comprehensive-assertions.md)
-- [Actionable Errors](https://github.com/joshski/dust/blob/main/principles/actionable-errors.md)
-- [Co-located Tests](https://github.com/joshski/dust/blob/main/principles/co-located-tests.md)
-- [Design for Testability](https://github.com/joshski/dust/blob/main/principles/design-for-testability.md)
-- [Comprehensive Test Coverage](https://github.com/joshski/dust/blob/main/principles/comprehensive-test-coverage.md)
+- [Build Thin Tested Slices](../principles/build-thin-tested-slices.md)
 
 ## Guidance
 
@@ -120,6 +113,14 @@ Agents cannot manually verify that their changes work. They rely entirely on aut
 - Include `BubbleSemanticInteractions` in `createHarness()`
 - Add tests in `bubble-test/index.test.ts` covering both helpers and their error messages
 - Error messages should follow the same pattern as `getByRole` (actionable, include what was found)
+
+## Task Type
+
+implement
+
+## Blocked By
+
+(none)
 
 ## Definition of Done
 
