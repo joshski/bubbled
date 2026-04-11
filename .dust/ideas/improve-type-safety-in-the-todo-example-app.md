@@ -28,21 +28,19 @@ The only value ever passed to `appendChild` is a `TodoAppTextNode`, and the retu
 
 ### `persisted as string` in tests
 
-`todo-store.test.ts:105` checks `persisted` is not null and then must still use `persisted as string` for `JSON.parse`. The workaround is minor but indicates a narrowing gap.
+`todo-store.test.ts:105` checks `persisted` is not null and then must still use `persisted as string` for `JSON.parse`. This is a minor narrowing gap that could be addressed alongside other type safety work.
 
 ### `TodoFetchResponse.json()` returns `Promise<unknown>`
 
-This is intentional — the interface deliberately leaves the response shape open — but it forces the caller to assert the return type. A generic overload (`json<T>(): Promise<T>`) or a domain-specific method would let the cast happen once in a well-defined place rather than inline at the call site.
+This is intentional — the interface deliberately leaves the response shape open — but it forces the caller to assert the return type. A generic overload or domain-specific method would let the cast happen once in a well-defined place rather than inline at the call site.
 
 ## Open Questions
 
 ### Should JSON parsed from storage and the API be validated at runtime?
 
-The `as` casts in `todo-store.ts` and `start-todo-app.ts` assume the stored/fetched JSON always matches `TodoItem[]`. A schema validator (e.g. valibot or zod) would catch corrupt storage or API drift.
-
 #### Option: Add a schema validator dependency
 
-Introduce a lightweight schema library and validate at the two parse sites. Errors would surface with clear messages instead of silent wrong-state behaviour.
+The `as` casts in `todo-store.ts` and `start-todo-app.ts` assume the stored/fetched JSON always matches `TodoItem[]`. Introduce a lightweight schema library (e.g. valibot or zod) and validate at the two parse sites. Errors would surface with clear messages instead of silent wrong-state behaviour.
 
 #### Option: Write a hand-rolled guard function
 
@@ -54,11 +52,9 @@ Accept that the todo app is an example, not production code, and that the casts 
 
 ### Should `TodoAppContainer.appendChild` accept `TodoAppTextNode` instead of `unknown`?
 
-Typing the parameter as `TodoAppTextNode` would remove the cast in the test stub and make the interface self-documenting, but it would also tighten the contract to a single node type.
-
 #### Option: Type as `TodoAppTextNode`
 
-Replace `node: unknown` with `node: TodoAppTextNode` and drop the return value (`void`). The browser implementation already passes a `<p>` element which satisfies the interface structurally.
+Replace `node: unknown` with `node: TodoAppTextNode` and drop the return value to `void`. Typing the parameter as `TodoAppTextNode` removes the cast in the test stub and makes the interface self-documenting. The browser implementation already passes a `<p>` element which satisfies the interface structurally.
 
 #### Option: Introduce a generic `TodoAppNode` union or interface
 
