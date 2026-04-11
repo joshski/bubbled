@@ -5,6 +5,7 @@ import type {
   BubbleSemanticQueries,
 } from './types'
 
+import type { BubbleStorage } from '../bubble-capabilities'
 import { createBubble, type BubbleRuntime } from '../bubble-core'
 import { createRenderHarness } from './render-harness'
 import { createInternalSemanticAssertions } from './semantic-assertions'
@@ -30,6 +31,18 @@ export function createSemanticAssertions(
   target: BubbleHarnessContext
 ): BubbleSemanticAssertions {
   return createInternalSemanticAssertions(target)
+}
+
+export function createInMemoryStorage(
+  seed: Record<string, string> = {}
+): BubbleStorage {
+  const entries = new Map<string, string>(Object.entries(seed))
+  return {
+    getItem(key) { return entries.get(key) ?? null },
+    setItem(key, value) { entries.set(key, value) },
+    removeItem(key) { entries.delete(key) },
+    clear() { entries.clear() },
+  }
 }
 
 export function createHarness(

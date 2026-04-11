@@ -57,12 +57,14 @@ describe('public entrypoints', () => {
 
     expect(Object.keys(entrypoint).sort()).toEqual([
       'createHarness',
+      'createInMemoryStorage',
       'createRenderHarness',
       'createSemanticAssertions',
       'createSemanticQueries',
     ])
     expect(entrypoint).toMatchObject({
       createHarness: expect.any(Function),
+      createInMemoryStorage: expect.any(Function),
       createRenderHarness: expect.any(Function),
       createSemanticAssertions: expect.any(Function),
       createSemanticQueries: expect.any(Function),

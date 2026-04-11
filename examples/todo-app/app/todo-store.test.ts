@@ -1,30 +1,9 @@
 import { describe, expect, test } from 'vitest'
 
-import type { BubbleStorage } from '../../../bubble-capabilities'
 import type { TodoItem } from '../domain/todos.ts'
+import { createInMemoryStorage } from '../../../bubble-test'
 
 import { createTodoStore, DEFAULT_STORAGE_KEY } from './todo-store.ts'
-
-function createInMemoryStorage(
-  seed: Record<string, string> = {}
-): BubbleStorage {
-  const entries = new Map<string, string>(Object.entries(seed))
-
-  return {
-    getItem(key) {
-      return entries.get(key) ?? null
-    },
-    setItem(key, value) {
-      entries.set(key, value)
-    },
-    removeItem(key) {
-      entries.delete(key)
-    },
-    clear() {
-      entries.clear()
-    },
-  }
-}
 
 describe('createTodoStore', () => {
   test('starts empty when the storage is empty and no override is given', () => {
