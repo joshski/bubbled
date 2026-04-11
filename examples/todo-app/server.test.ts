@@ -95,5 +95,4 @@ describe('todo app Bun routes', () => {
       expect(assetResponse.headers.get('content-type')).toContain('javascript')
     })
   })
-
 })
