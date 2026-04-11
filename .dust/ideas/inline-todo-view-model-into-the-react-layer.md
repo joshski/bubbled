@@ -6,7 +6,7 @@ type: idea
 
 # Inline todo view model into the React layer
 
-`todo-store.ts` exports a `createTodoAppSnapshot` function and two types (`TodoAppSnapshot`, `TodoViewItem`) that build a "view model" object consumed only by the React component. These are display-layer concerns living in the data layer.
+`todo-store.ts` exports `createTodoAppSnapshot` and two types (`TodoAppSnapshot`, `TodoViewItem`) that build a "view model" consumed only by the React component. These are display-layer concerns living in the data layer.
 
 ## Context
 

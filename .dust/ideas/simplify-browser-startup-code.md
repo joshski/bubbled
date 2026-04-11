@@ -6,7 +6,7 @@ type: idea
 
 # Simplify browser startup code
 
-`todo-browser.ts` defines `startTodoApp` with five injected dependencies (`document`, `fetch`, `addEventListener`, `createProjector`, `isMountContainer`) specifically to make the function unit-testable without a DOM. This results in:
+`startTodoApp` in `todo-browser.ts` accepts five injected dependencies to stay unit-testable without a DOM. This results in:
 - Three interface definitions for duck-typed DOM objects (`TodoAppTextNodeLike`, `TodoAppMountContainerLike`, `TodoAppDocumentLike`)
 - `isDefaultMountContainer` — a one-liner that exists only to be swappable
 - `renderStartupError` — extracted solely because it needs the injectable document
