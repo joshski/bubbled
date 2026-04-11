@@ -7,7 +7,8 @@ import {
   type BubbleSerializedNode,
 } from '../../bubble-core'
 import { createSemanticAssertions } from '../../bubble-test'
-import { mountTodoApp, startTodoApp } from './app.ts'
+import { startTodoApp } from './todo-browser.ts'
+import { mountTodoApp } from './todo-react.ts'
 import { SAMPLE_TODO_LABELS } from './todo-store.ts'
 
 const originalFetch = globalThis.fetch

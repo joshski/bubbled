@@ -1,3 +1,3 @@
-import { startTodoApp } from './app.ts'
+import { startTodoApp } from './todo-browser.ts'
 
 await startTodoApp()
