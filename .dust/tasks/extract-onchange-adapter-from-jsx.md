@@ -12,10 +12,16 @@ String(bubbleEvent.data['value'] ?? '')
 
 This adapter casts a Bubble event to extract a string value. Extracting it to a named pure function makes it unit-testable in isolation and removes all logic from the JSX file.
 
+## Task Type
+
+implementation
+
+## Blocked By
+
+(none)
+
 ## Principles
 
-- [Functional Core, Imperative Shell](../principles/functional-core-imperative-shell.md)
-- [Design for Testability](../principles/design-for-testability.md)
 - [Build Thin Tested Slices](../principles/build-thin-tested-slices.md)
 
 ## Guidance

@@ -1,6 +1,6 @@
 # Switch Vitest to Node Environment
 
-Switch `vitest.config.ts` from `environment: 'jsdom'` to `environment: 'node'`. Add per-file `@vitest-environment jsdom` directives to `bubble-browser/index.test.ts` (after auditing whether it actually needs JSDOM) and the `defaultGlobalsTest` in `todo-app.test.tsx`. Confirm all tests pass after the change.
+Switch `vitest.config.ts` from `environment: 'jsdom'` to `environment: 'node'`. Add per-file `@vitest-environment jsdom` directives where needed. Confirm all tests pass after the change.
 
 ## Background
 
@@ -10,11 +10,16 @@ Switch `vitest.config.ts` from `environment: 'jsdom'` to `environment: 'node'`. 
 
 `todo-app.test.tsx` has a single test (`defaultGlobalsTest`) that calls `document.createElement` and `document.body.appendChild`. It is already guarded with a skip when `document` is undefined. This test needs the `@vitest-environment jsdom` annotation.
 
+## Task Type
+
+implementation
+
+## Blocked By
+
+(none)
+
 ## Principles
 
-- [Keep Unit Tests Pure](../principles/keep-unit-tests-pure.md)
-- [Fast Feedback Loops](../principles/fast-feedback-loops.md)
-- [Design for Testability](../principles/design-for-testability.md)
 - [Build Thin Tested Slices](../principles/build-thin-tested-slices.md)
 
 ## Guidance

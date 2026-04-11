@@ -1,6 +1,6 @@
 # Remove Redundant HTTP Route Tests
 
-In `server.test.ts`, delete the route-correctness tests from the `todo app Bun routes` describe block that duplicate what the direct function tests already cover. Keep only the bundled-asset test that genuinely requires a running server and a built artifact.
+Delete the route-correctness tests from `server.test.ts` that duplicate direct function test coverage. Keep only the bundled-asset test.
 
 ## Background
 
@@ -8,10 +8,16 @@ In `server.test.ts`, delete the route-correctness tests from the `todo app Bun r
 
 Only the test `serves the bundled client asset referenced by the HTML page` exercises something that genuinely requires a running server and a built artifact. The rest can be deleted without any loss of coverage.
 
+## Task Type
+
+implementation
+
+## Blocked By
+
+(none)
+
 ## Principles
 
-- [Keep Unit Tests Pure](../principles/keep-unit-tests-pure.md)
-- [Fast Feedback Loops](../principles/fast-feedback-loops.md)
 - [Build Thin Tested Slices](../principles/build-thin-tested-slices.md)
 
 ## Guidance
