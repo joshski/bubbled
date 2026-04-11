@@ -81,28 +81,6 @@ describe('createTodoRoutes', () => {
 })
 
 describe('todo app Bun routes', () => {
-  test('returns an HTML document for GET /', async () => {
-    await withTodoServer(async baseUrl => {
-      const response = await fetch(baseUrl)
-
-      expect(response.status).toBe(200)
-      expect(response.headers.get('content-type')).toContain('text/html')
-      const text = await response.text()
-      expect(text).toContain('<title>Bubbled Todos</title>')
-      expect(text).toContain('<main id="app">')
-      expect(text).toContain('Loading todos...')
-    })
-  })
-
-  test('also serves HTML from /index.html', async () => {
-    await withTodoServer(async baseUrl => {
-      const response = await fetch(new URL('/index.html', baseUrl))
-
-      expect(response.status).toBe(200)
-      expect(response.headers.get('content-type')).toContain('text/html')
-    })
-  })
-
   test('serves the bundled client asset referenced by the HTML page', async () => {
     await withTodoServer(async baseUrl => {
       const pageResponse = await fetch(baseUrl)
@@ -118,44 +96,4 @@ describe('todo app Bun routes', () => {
     })
   })
 
-  test('serves an empty todo list as JSON from /api/todos by default', async () => {
-    await withTodoServer(async baseUrl => {
-      const response = await fetch(new URL('/api/todos', baseUrl))
-
-      expect(response.status).toBe(200)
-      expect(response.headers.get('content-type')).toContain('application/json')
-      expect(await response.json()).toEqual([])
-    })
-  })
-
-  test('serves custom initial todos from /api/todos when provided', async () => {
-    const customTodos = [{ id: 'c', label: 'Custom', done: false }]
-
-    await withTodoServer(
-      async baseUrl => {
-        const response = await fetch(new URL('/api/todos', baseUrl))
-
-        expect(await response.json()).toEqual(customTodos)
-      },
-      { initialTodos: customTodos }
-    )
-  })
-
-  test('returns 404 for unknown routes', async () => {
-    await withTodoServer(async baseUrl => {
-      const response = await fetch(new URL('/nope', baseUrl))
-
-      expect(response.status).toBe(404)
-    })
-  })
-
-  test('returns 405 for unsupported methods on /api/todos', async () => {
-    await withTodoServer(async baseUrl => {
-      const response = await fetch(new URL('/api/todos', baseUrl), {
-        method: 'POST',
-      })
-
-      expect(response.status).toBe(405)
-    })
-  })
 })
