@@ -38,11 +38,9 @@ A central goal of this framework is to make most application tests run without J
 
 ### Should the global vitest environment change from `jsdom` to `node`?
 
-Running tests in `node` by default and opting specific files into `jsdom` (via Vitest's per-file `@vitest-environment jsdom` directive) would make the framework's intent explicit in the test config.
-
 #### Option: Change globally to `node`, annotate files that need JSDOM
 
-Switch `vitest.config.ts` to `environment: 'node'`. Add `// @vitest-environment jsdom` (or equivalent) to `bubble-browser/index.test.ts` and the one `defaultGlobalsTest` in `todo-app.test.tsx`. All other tests should pass unchanged if they have no hidden DOM dependencies.
+Switch `vitest.config.ts` to `environment: 'node'`. Add a per-file `@vitest-environment jsdom` directive to `bubble-browser/index.test.ts` and the `defaultGlobalsTest` in `todo-app.test.tsx`. All other tests should pass unchanged if they have no hidden DOM dependencies. This makes the framework's intent explicit in the config.
 
 #### Option: Keep `jsdom` globally
 
@@ -50,11 +48,9 @@ Treat it as a low-priority inconvenience rather than a correctness issue. Docume
 
 ### Does `bubble-browser/index.test.ts` actually need real JSDOM?
 
-The file defines its own `FakeDomNode`, `FakeDomElement`, and `FakeDomText` hierarchies that stub out all DOM interactions. If these cover everything tested, the file could move to `node` environment like the rest.
-
 #### Option: Audit and move to `node` environment
 
-Run `bubble-browser/index.test.ts` with `environment: 'node'` and observe which (if any) tests fail. Fix or annotate failures.
+The file defines its own `FakeDomNode`, `FakeDomElement`, and `FakeDomText` hierarchies that stub out all DOM interactions. Run the file with `environment: 'node'` and observe which (if any) tests fail. If everything passes, remove the JSDOM dependency entirely.
 
 #### Option: Leave in `jsdom`
 
@@ -62,11 +58,9 @@ DOM projector tests are the one place where JSDOM might actually be appropriate 
 
 ### Should HTTP route tests be split from unit tests?
 
-The `todo app Bun routes` describe block in `server.test.ts` starts a real HTTP server. Most of what it tests is already covered by the direct function tests in the same file.
-
 #### Option: Remove the redundant HTTP tests, keep only the bundled-asset test
 
-The route correctness tests (status codes, JSON shape) are already covered by direct function calls. Only the bundled-asset test (`serves the bundled client asset referenced by the HTML page`) exercises something that genuinely requires a running server and a built artifact. The rest could be deleted.
+The `todo app Bun routes` describe block starts a real `Bun.serve()` instance. Most of what it tests — status codes, JSON shape, method handling — is already covered by the direct function tests in the same file. Only the bundled-asset test (`serves the bundled client asset referenced by the HTML page`) exercises something that genuinely requires a running server and a built artifact. The rest could be deleted.
 
 #### Option: Keep all HTTP tests for end-to-end confidence
 
@@ -74,11 +68,9 @@ Real HTTP tests catch integration issues (routing table wiring, header handling 
 
 ### Should the `onChange` event adapter be extracted from JSX?
 
-`todo-app.tsx` contains `String(bubbleEvent.data['value'] ?? '')` inside the JSX `onChange` handler. This is minimal but is the only non-trivial logic inside JSX.
-
 #### Option: Extract to a pure function in `todo-react.ts` or `todo-store.ts`
 
-Makes the adapter unit-testable in isolation and removes all logic from the JSX file.
+`todo-app.tsx` contains `String(bubbleEvent.data['value'] ?? '')` inside the JSX `onChange` handler — the only non-trivial logic embedded in JSX. Extracting it makes the adapter unit-testable in isolation and removes all logic from the JSX file.
 
 #### Option: Leave it in JSX
 
