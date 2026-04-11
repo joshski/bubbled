@@ -9,16 +9,13 @@ import type {
 } from '../bubble-core'
 
 import {
-  isDomElementNode,
-  type DomCheckedElementNode,
   type DomChildNode,
   type DomContainer,
   type DomDocument,
   type DomElementNode,
-  type DomEvent,
   type DomTextNode,
-  type DomValueElementNode,
 } from './internal/dom'
+import { createDomEventBridge } from './internal/event-bridge'
 import { createDomFocusSync, type DomFocusSync } from './internal/focus-sync'
 import {
   createDomLayout,
@@ -49,25 +46,6 @@ function setDomProperty(
   value: unknown
 ): void {
   ;(node as unknown as Record<string, unknown>)[name] = value
-}
-
-function readDomChangeEventData(
-  targetNode: DomElementNode,
-  target: Readonly<BubbleElementNode>
-): Record<string, unknown> {
-  if (target.checked !== null) {
-    return {
-      checked: (targetNode as DomCheckedElementNode).checked,
-    }
-  }
-
-  if (target.value !== null) {
-    return {
-      value: (targetNode as DomValueElementNode).value,
-    }
-  }
-
-  return {}
 }
 
 export {
@@ -268,68 +246,6 @@ export function createDomProjector(
     focusSync?.syncBubbleFocusToDom(event.nodeId)
   }
 
-  const bridgeClickEvent = (event: DomEvent): void => {
-    const targetNode = event.target
-
-    if (targetNode === null) {
-      return
-    }
-
-    const targetId = projectionState.getBubbleNodeId(targetNode)
-
-    if (targetId === undefined) {
-      return
-    }
-
-    options.bubble.dispatchEvent({ type: 'click', targetId })
-  }
-
-  const bridgeSubmitEvent = (event: DomEvent): void => {
-    const targetNode = event.target
-
-    if (targetNode === null) {
-      return
-    }
-
-    const targetId = projectionState.getBubbleNodeId(targetNode)
-
-    if (targetId === undefined) {
-      return
-    }
-
-    options.bubble.dispatchEvent({ type: 'submit', targetId })
-
-    // Native form navigation is outside the bubble runtime; keep the browser
-    // on the current document after translating the submit into bubble events.
-    event.preventDefault()
-  }
-
-  const bridgeChangeEvent = (event: DomEvent): void => {
-    const targetNode = event.target
-
-    if (targetNode === null || !isDomElementNode(targetNode)) {
-      return
-    }
-
-    const targetId = projectionState.getBubbleNodeId(targetNode)
-
-    if (targetId === undefined) {
-      return
-    }
-
-    const target = getBubbleNode(options.bubble, targetId)
-
-    if (target.kind !== 'element') {
-      return
-    }
-
-    options.bubble.dispatchEvent({
-      type: 'change',
-      targetId,
-      data: readDomChangeEventData(targetNode, target),
-    })
-  }
-
   const projector: BubbleDomProjector = {
     mount(container: HTMLElement) {
       if (mountedContainer !== null) {
@@ -356,14 +272,12 @@ export function createDomProjector(
       unsubscribe = options.bubble.subscribe(handleRuntimeEvent)
 
       if (options.bridgeEvents === true) {
-        domContainer.addEventListener('click', bridgeClickEvent)
-        domContainer.addEventListener('input', bridgeChangeEvent, true)
-        domContainer.addEventListener('submit', bridgeSubmitEvent, true)
-        removeDomEventBridges = () => {
-          domContainer.removeEventListener('click', bridgeClickEvent)
-          domContainer.removeEventListener('input', bridgeChangeEvent, true)
-          domContainer.removeEventListener('submit', bridgeSubmitEvent, true)
-        }
+        const bridge = createDomEventBridge(
+          domContainer,
+          options.bubble,
+          projectionState
+        )
+        removeDomEventBridges = () => bridge.remove()
       }
 
       focusSync?.syncBubbleFocusToDom(options.bubble.getFocusedNodeId())
