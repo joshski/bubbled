@@ -10,6 +10,14 @@ type: task
 
 No file outside `todo-store.ts` imports any of these four functions.
 
+## Task Type
+
+task
+
+## Blocked By
+
+(none)
+
 ## Principles
 
 - [Build Thin Tested Slices](../principles/build-thin-tested-slices.md)
