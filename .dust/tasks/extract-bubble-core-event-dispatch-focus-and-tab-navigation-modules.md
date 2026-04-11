@@ -112,7 +112,7 @@ implement
 
 ## Blocked By
 
-- [Extract Bubble Core Runtime Store and Capability Modules](./extract-bubble-core-runtime-store-and-capability-modules.md)
+(none)
 
 ## Decomposed From
 

@@ -1,14 +1,19 @@
-import {
-  createCapabilityRegistry,
-  type BubbleCapabilities,
-  type BubbleCapabilityName,
-  type BubbleNetworkRequest,
-  type BubbleNetworkResponse,
-  type BubbleRect,
-  type BubbleTimerHandle,
-  type BubbleViewportListener,
-  type BubbleViewportState,
+import type {
+  BubbleCapabilities,
+  BubbleCapabilityName,
+  BubbleNetworkRequest,
+  BubbleNetworkResponse,
+  BubbleRect,
+  BubbleTimerHandle,
+  BubbleViewportListener,
+  BubbleViewportState,
 } from '../bubble-capabilities'
+
+import { createBubbleCapabilityRuntime } from './capabilities'
+import {
+  createBubbleRuntimeStore,
+  type BubbleRegisteredListener,
+} from './runtime-store'
 
 export type BubbleNodeId = string
 
@@ -170,11 +175,6 @@ export interface BubbleListenerHandle {
   readonly type: string
   readonly capture: boolean
   readonly internalId: string
-}
-
-interface BubbleRegisteredListener {
-  handle: BubbleListenerHandle
-  listener: BubbleEventListener
 }
 
 type BubbleEventPhase = BubbleEvent['phase']
@@ -411,70 +411,12 @@ export function serializeBubbleSnapshot(snapshot: BubbleSnapshot): string {
   )
 }
 
-const ROOT_NODE_ID = 'root'
-const NODE_ID_PREFIX = 'node:'
-const DEFAULT_VIEWPORT_STATE: BubbleViewportState = Object.freeze({
-  width: 1024,
-  height: 768,
-  scrollX: 0,
-  scrollY: 0,
-})
-
-const ELEMENT_TAG_ERROR = 'Element tag must be a non-empty string'
-const TEXT_VALUE_ERROR = 'Text value must be a string'
 const EVENT_TYPE_ERROR = 'Event type must be a non-empty string'
-const CHILD_INDEX_ERROR =
-  'Child index must be an integer within the parent child range'
-const NESTED_TRANSACTION_ERROR = 'Nested transactions are not supported'
 const FOCUSABLE_HTML_TAGS = new Set(['button', 'input', 'select', 'textarea'])
-
-let nextBubbleInstanceId = 0
-
-function assertValidElementTag(tag: unknown): asserts tag is string {
-  if (typeof tag !== 'string' || tag.trim().length === 0) {
-    throw new Error(ELEMENT_TAG_ERROR)
-  }
-}
-
-function assertValidTextValue(value: unknown): asserts value is string {
-  if (typeof value !== 'string') {
-    throw new Error(TEXT_VALUE_ERROR)
-  }
-}
-
-function assertValidCheckedValue(value: unknown): asserts value is boolean {
-  if (typeof value !== 'boolean') {
-    throw new Error('Checked value must be a boolean')
-  }
-}
 
 function assertValidEventType(type: unknown): asserts type is string {
   if (typeof type !== 'string' || type.trim().length === 0) {
     throw new Error(EVENT_TYPE_ERROR)
-  }
-}
-
-function assertValidChildIndex(
-  index: unknown,
-  childCount: number
-): asserts index is number {
-  if (
-    typeof index !== 'number' ||
-    !Number.isInteger(index) ||
-    index < 0 ||
-    index > childCount
-  ) {
-    throw new Error(CHILD_INDEX_ERROR)
-  }
-}
-
-function assertElementNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId,
-  target: 'Attributes' | 'Properties'
-): asserts node is BubbleElementNode {
-  if (node.kind !== 'element') {
-    throw new Error(`${target} are only supported on element nodes: ${nodeId}`)
   }
 }
 
@@ -498,48 +440,6 @@ function isTextInputElement(
 
 function isCheckboxInputElement(node: BubbleElementNode): boolean {
   return getInputType(node) === 'checkbox'
-}
-
-function assertValuePropertyTarget(
-  node: BubbleElementNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode & { value: string } {
-  if (!isTextInputElement(node)) {
-    throw new Error(
-      `The value property is only supported on text input elements: ${nodeId}`
-    )
-  }
-}
-
-function assertCheckedPropertyTarget(
-  node: BubbleElementNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode & { checked: boolean } {
-  if (!isCheckboxInputElement(node)) {
-    throw new Error(
-      `The checked property is only supported on checkbox input elements: ${nodeId}`
-    )
-  }
-}
-
-function assertTextNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleTextNode {
-  if (node.kind !== 'text') {
-    throw new Error(`Text content can only be updated on text nodes: ${nodeId}`)
-  }
-}
-
-function assertEventTargetNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode {
-  if (node.kind !== 'element') {
-    throw new Error(
-      `Event listeners are only supported on element nodes: ${nodeId}`
-    )
-  }
 }
 
 function assertFocusableNode(
@@ -810,60 +710,10 @@ function resolveLabelControl(
   return findFirstLabelableDescendant(labelId, nodeLookup)
 }
 
-function snapshotViewportState(
-  state: BubbleViewportState
-): BubbleViewportState {
-  return Object.freeze({ ...state })
-}
-
-function createStorageCapability() {
-  const storage = new Map<string, string>()
-
-  return Object.freeze({
-    getItem(key: string): string | null {
-      return storage.get(key) ?? null
-    },
-    setItem(key: string, value: string): void {
-      storage.set(key, value)
-    },
-    removeItem(key: string): void {
-      storage.delete(key)
-    },
-    clear(): void {
-      storage.clear()
-    },
-  })
-}
-
 export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
-  const root: BubbleRootNode = {
-    id: ROOT_NODE_ID,
-    kind: 'root',
-    children: [],
-  }
-
-  let nodes = new Map<BubbleNodeId, BubbleNode>([[root.id, root]])
-  nextBubbleInstanceId += 1
-  const bubbleInstanceId = nextBubbleInstanceId
-  let nextNodeId = 0
-  let nextTransactionSequence = 0
-  let nextListenerId = 0
-  let transactionDepth = 0
   let focusedNodeId: BubbleNodeId | null = null
-  const capabilityRegistry = createCapabilityRegistry({
-    storage: createStorageCapability(),
-    viewport: {
-      getState() {
-        return DEFAULT_VIEWPORT_STATE
-      },
-    },
-    ...options.capabilities,
-  })
+  const capabilities = createBubbleCapabilityRuntime(options.capabilities)
   const listeners = new Set<BubbleRuntimeListener>()
-  let eventListeners = new Map<
-    BubbleNodeId,
-    Map<string, BubbleRegisteredListener[]>
-  >()
 
   const emitRuntimeEvent = (event: BubbleRuntimeEvent): void => {
     for (const listener of listeners) {
@@ -871,217 +721,48 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     }
   }
 
-  const allocateNodeId = (): BubbleNodeId => {
-    nextNodeId += 1
+  const runtimeStore = createBubbleRuntimeStore({
+    createQuery: createBubbleQuery,
+    refreshDerivedElementMetadata(
+      nodeLookup: Map<BubbleNodeId, BubbleNode>
+    ): void {
+      for (const node of nodeLookup.values()) {
+        if (node.kind !== 'element') {
+          continue
+        }
 
-    return `${NODE_ID_PREFIX}${bubbleInstanceId}:${nextNodeId}`
-  }
-
-  const allocateListenerId = (): string => {
-    nextListenerId += 1
-
-    return `listener:${bubbleInstanceId}:${nextListenerId}`
-  }
-
-  const cloneNode = (node: BubbleNode): BubbleNode => {
-    if (node.kind === 'root') {
-      return {
-        id: node.id,
-        kind: node.kind,
-        children: [...node.children],
+        node.checked =
+          isCheckboxInputElement(node) &&
+          typeof node.properties.checked === 'boolean'
+            ? node.properties.checked
+            : isCheckboxInputElement(node)
+              ? false
+              : null
+        node.role = deriveElementRole(node)
+        node.name = deriveElementName(node, nodeLookup)
       }
-    }
-
-    if (node.kind === 'element') {
-      return {
-        id: node.id,
-        kind: node.kind,
-        tag: node.tag,
-        namespace: node.namespace,
-        parentId: node.parentId,
-        children: [...node.children],
-        attributes: { ...node.attributes },
-        properties: { ...node.properties },
-        value: node.value,
-        checked: node.checked,
-        role: node.role,
-        name: node.name,
-      }
-    }
-
-    return {
-      id: node.id,
-      kind: node.kind,
-      parentId: node.parentId,
-      value: node.value,
-    }
-  }
-
-  const snapshotNode = (node: BubbleNode): Readonly<BubbleNode> => {
-    if (node.kind === 'root') {
-      return Object.freeze({
-        id: node.id,
-        kind: node.kind,
-        children: Object.freeze([...node.children]),
-      }) as Readonly<BubbleRootNode>
-    }
-
-    if (node.kind === 'element') {
-      const elementSnapshot = {
-        id: node.id,
-        kind: node.kind,
-        tag: node.tag,
-        namespace: node.namespace,
-        parentId: node.parentId,
-        children: Object.freeze([...node.children]),
-        attributes: Object.freeze({ ...node.attributes }),
-        properties: Object.freeze({ ...node.properties }),
-      }
-
-      Object.defineProperty(elementSnapshot, 'role', {
-        value: node.role,
-        enumerable: false,
-        writable: false,
-        configurable: false,
+    },
+    onTransactionCommitted(record) {
+      emitRuntimeEvent({
+        type: 'transaction-committed',
+        record,
       })
+    },
+  })
 
-      Object.defineProperty(elementSnapshot, 'name', {
-        value: node.name,
-        enumerable: false,
-        writable: false,
-        configurable: false,
-      })
-
-      Object.defineProperty(elementSnapshot, 'value', {
-        value: node.value,
-        enumerable: false,
-        writable: false,
-        configurable: false,
-      })
-
-      Object.defineProperty(elementSnapshot, 'checked', {
-        value: node.checked,
-        enumerable: false,
-        writable: false,
-        configurable: false,
-      })
-
-      return Object.freeze(elementSnapshot) as Readonly<BubbleNode>
-    }
-
-    return Object.freeze({
-      id: node.id,
-      kind: node.kind,
-      parentId: node.parentId,
-      value: node.value,
-    })
-  }
-
-  const createSnapshot = (): BubbleSnapshot => {
-    const snapshotNodes = new Map<BubbleNodeId, Readonly<BubbleNode>>()
-
-    for (const [nodeId, node] of nodes) {
-      snapshotNodes.set(nodeId, snapshotNode(node))
-    }
-
-    const snapshotBase = {
-      rootId: root.id,
-      nodes: snapshotNodes as ReadonlyMap<BubbleNodeId, Readonly<BubbleNode>>,
-    }
-
-    return Object.freeze({
-      ...snapshotBase,
-      query: createBubbleQuery(snapshotBase),
-    })
-  }
-
-  const cloneEventListeners = (
-    source: Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>
-  ): Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>> => {
-    const clonedListeners = new Map<
-      BubbleNodeId,
-      Map<string, BubbleRegisteredListener[]>
-    >()
-
-    for (const [nodeId, nodeListeners] of source) {
-      const clonedNodeListeners = new Map<string, BubbleRegisteredListener[]>()
-
-      for (const [eventType, registrations] of nodeListeners) {
-        clonedNodeListeners.set(
-          eventType,
-          registrations.map(registration => ({ ...registration }))
-        )
-      }
-
-      clonedListeners.set(nodeId, clonedNodeListeners)
-    }
-
-    return clonedListeners
-  }
-
-  const insertIntoParent = (
-    parent: BubbleRootNode | BubbleElementNode,
-    childId: BubbleNodeId,
-    index: number
-  ): void => {
-    assertValidChildIndex(index, parent.children.length)
-    parent.children.splice(index, 0, childId)
-  }
-
-  const removeFromParent = (
-    parent: BubbleRootNode | BubbleElementNode,
-    childId: BubbleNodeId
-  ): number => {
-    const childIndex = parent.children.indexOf(childId)
-
-    if (childIndex === -1) {
-      throw new Error(`Node ${childId} is not a child of ${parent.id}`)
-    }
-
-    parent.children.splice(childIndex, 1)
-
-    return childIndex
-  }
-
-  const moveWithinParent = (
-    parent: BubbleRootNode | BubbleElementNode,
-    childId: BubbleNodeId,
-    index: number
-  ): void => {
-    const childIndex = parent.children.indexOf(childId)
-
-    if (childIndex === -1) {
-      throw new Error(`Node ${childId} is not a child of ${parent.id}`)
-    }
-
-    assertValidChildIndex(index, parent.children.length - 1)
-
-    parent.children.splice(childIndex, 1)
-    parent.children.splice(index, 0, childId)
-  }
-
-  const getNodeListeners = (
-    listenerMap: Map<BubbleNodeId, Map<string, BubbleRegisteredListener[]>>,
-    nodeId: BubbleNodeId
-  ): Map<string, BubbleRegisteredListener[]> => {
-    const nodeListeners = listenerMap.get(nodeId)
-
-    if (nodeListeners !== undefined) {
-      return nodeListeners
-    }
-
-    const createdNodeListeners = new Map<string, BubbleRegisteredListener[]>()
-    listenerMap.set(nodeId, createdNodeListeners)
-
-    return createdNodeListeners
-  }
+  const getNodes = (): ReadonlyMap<BubbleNodeId, BubbleNode> =>
+    runtimeStore.getNodes()
+  const getEventListeners = (): ReadonlyMap<
+    BubbleNodeId,
+    ReadonlyMap<string, readonly BubbleRegisteredListener[]>
+  > => runtimeStore.getEventListeners()
 
   const getEventPath = (targetId: BubbleNodeId): BubbleNodeId[] => {
     const path: BubbleNodeId[] = []
     let currentId: BubbleNodeId | null = targetId
 
     while (currentId !== null) {
-      const node = nodes.get(currentId) as BubbleNode
+      const node = getNodes().get(currentId) as BubbleNode
 
       if (node.kind === 'element') {
         path.push(node.id)
@@ -1107,7 +788,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     readonly mode: BubbleEventDispatchMode
   }): BubbleDispatchResult => {
     assertValidEventType(type)
-    const target = nodes.get(targetId)
+    const target = getNodes().get(targetId)
 
     if (target === undefined) {
       throw new Error(`Unknown node ID: ${targetId}`)
@@ -1117,7 +798,9 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       return { defaultPrevented: false, delivered: false }
     }
 
-    const targetQueue = (eventListeners.get(targetId)?.get(type) ?? []).slice()
+    const targetQueue = (
+      getEventListeners().get(targetId)?.get(type) ?? []
+    ).slice()
     const deliveryQueue =
       mode === 'target-only'
         ? targetQueue.map(registration => ({
@@ -1132,12 +815,12 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
               .slice()
               .reverse()
               .flatMap(nodeId =>
-                (eventListeners.get(nodeId)?.get(type) ?? []).filter(
+                (getEventListeners().get(nodeId)?.get(type) ?? []).filter(
                   registration => registration.handle.capture
                 )
               )
             const bubbleQueue = ancestorPath.flatMap(nodeId =>
-              (eventListeners.get(nodeId)?.get(type) ?? []).filter(
+              (getEventListeners().get(nodeId)?.get(type) ?? []).filter(
                 registration => !registration.handle.capture
               )
             )
@@ -1214,6 +897,35 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     return { defaultPrevented, delivered: true }
   }
 
+  const serializeForm = (formId: BubbleNodeId): BubbleFormPayload => {
+    const formNode = getNodes().get(formId)
+
+    if (formNode === undefined) {
+      throw new Error(`Unknown node ID: ${formId}`)
+    }
+
+    assertFormNode(formNode, formId)
+
+    const entries: BubbleFormEntry[] = []
+    const getElementChildNodeIds = (
+      childNodeIds: readonly BubbleNodeId[]
+    ): BubbleNodeId[] =>
+      childNodeIds.filter(
+        childNodeId => getNodes().get(childNodeId)?.kind === 'element'
+      )
+    const pendingNodeIds = getElementChildNodeIds(formNode.children)
+
+    while (pendingNodeIds.length > 0) {
+      const nodeId = pendingNodeIds.shift() as BubbleNodeId
+      const node = getNodes().get(nodeId) as BubbleElementNode
+
+      entries.push(...getFormEntriesForControl(node))
+      pendingNodeIds.unshift(...getElementChildNodeIds(node.children))
+    }
+
+    return Object.freeze(entries.map(entry => Object.freeze({ ...entry })))
+  }
+
   const dispatchEventToTarget = ({
     type,
     targetId,
@@ -1224,7 +936,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     | BubbleDispatchResult
     | BubbleSubmitDispatchResult => {
     if (type === 'submit') {
-      const targetNode = nodes.get(targetId)
+      const targetNode = getNodes().get(targetId)
 
       if (targetNode === undefined) {
         throw new Error(`Unknown node ID: ${targetId}`)
@@ -1258,7 +970,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       return initialResult
     }
 
-    const associatedControl = resolveLabelControl(targetId, nodes)
+    const associatedControl = resolveLabelControl(targetId, getNodes())
 
     if (associatedControl === null || initialResult.defaultPrevented) {
       return initialResult
@@ -1296,7 +1008,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     const visitedElementIds: BubbleNodeId[] = []
 
     const visitNode = (nodeId: BubbleNodeId): void => {
-      const node = nodes.get(nodeId) as BubbleNode
+      const node = getNodes().get(nodeId) as BubbleNode
 
       if (node.kind === 'element') {
         visitedElementIds.push(nodeId)
@@ -1311,11 +1023,11 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       }
     }
 
-    visitNode(root.id)
+    visitNode(runtimeStore.rootId)
 
     const tabbableEntries = visitedElementIds
       .map((nodeId, domIndex) => {
-        const node = nodes.get(nodeId) as BubbleElementNode
+        const node = getNodes().get(nodeId) as BubbleElementNode
 
         if (!isTabbableElement(node)) {
           return null
@@ -1353,356 +1065,53 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     ])
   }
 
-  const serializeForm = (formId: BubbleNodeId): BubbleFormPayload => {
-    const formNode = nodes.get(formId)
-
-    if (formNode === undefined) {
-      throw new Error(`Unknown node ID: ${formId}`)
-    }
-
-    assertFormNode(formNode, formId)
-
-    const entries: BubbleFormEntry[] = []
-    const getElementChildNodeIds = (
-      childNodeIds: readonly BubbleNodeId[]
-    ): BubbleNodeId[] =>
-      childNodeIds.filter(
-        childNodeId => nodes.get(childNodeId)?.kind === 'element'
-      )
-    const pendingNodeIds = getElementChildNodeIds(formNode.children)
-
-    while (pendingNodeIds.length > 0) {
-      const nodeId = pendingNodeIds.shift() as BubbleNodeId
-      const node = nodes.get(nodeId) as BubbleElementNode
-
-      entries.push(...getFormEntriesForControl(node))
-      pendingNodeIds.unshift(...getElementChildNodeIds(node.children))
-    }
-
-    return Object.freeze(entries.map(entry => Object.freeze({ ...entry })))
-  }
-
-  const refreshDerivedElementMetadata = (
-    nodeLookup: Map<BubbleNodeId, BubbleNode>
-  ): void => {
-    for (const node of nodeLookup.values()) {
-      if (node.kind !== 'element') {
-        continue
-      }
-
-      node.checked =
-        isCheckboxInputElement(node) &&
-        typeof node.properties.checked === 'boolean'
-          ? node.properties.checked
-          : isCheckboxInputElement(node)
-            ? false
-            : null
-      node.role = deriveElementRole(node)
-      node.name = deriveElementName(node, nodeLookup)
-    }
-  }
-
   return {
-    rootId: root.id,
+    rootId: runtimeStore.rootId,
     resolveCapability(name) {
-      return capabilityRegistry.resolveCapability(name)
+      return capabilities.resolveCapability(name)
     },
     now() {
-      return capabilityRegistry.resolveCapability('clock').now()
+      return capabilities.now()
     },
     setTimeout(callback, delayMs) {
-      return capabilityRegistry
-        .resolveCapability('timers')
-        .setTimeout(callback, delayMs)
+      return capabilities.setTimeout(callback, delayMs)
     },
     clearTimeout(handle) {
-      capabilityRegistry.resolveCapability('timers').clearTimeout(handle)
+      capabilities.clearTimeout(handle)
     },
     queueMicrotask(task) {
-      capabilityRegistry.resolveCapability('scheduler').queueMicrotask(task)
+      capabilities.queueMicrotask(task)
     },
     measureElement(nodeId) {
-      return capabilityRegistry
-        .resolveCapability('layout')
-        .measureElement(nodeId)
+      return capabilities.measureElement(nodeId)
     },
     getViewportState() {
-      return snapshotViewportState(
-        capabilityRegistry.resolveCapability('viewport').getState()
-      )
+      return capabilities.getViewportState()
     },
     subscribeToViewport(listener) {
-      const viewport = capabilityRegistry.resolveCapability('viewport')
-
-      if (viewport.subscribe === undefined) {
-        return () => {}
-      }
-
-      return viewport.subscribe(state => {
-        listener(snapshotViewportState(state))
-      })
+      return capabilities.subscribeToViewport(listener)
     },
     async fetch(request) {
-      return capabilityRegistry.resolveCapability('network').fetch(request)
+      return capabilities.fetch(request)
     },
     transact<T>(fn: (tx: BubbleTransaction) => T): T {
-      if (transactionDepth > 0) {
-        throw new Error(NESTED_TRANSACTION_ERROR)
-      }
-
-      transactionDepth += 1
-      const draftNodes = new Map<BubbleNodeId, BubbleNode>()
-      const draftEventListeners = cloneEventListeners(eventListeners)
-
-      for (const [nodeId, node] of nodes) {
-        draftNodes.set(nodeId, cloneNode(node))
-      }
-
-      const getDraftNode = (id: BubbleNodeId): BubbleNode => {
-        const node = draftNodes.get(id)
-
-        if (node === undefined) {
-          throw new Error(`Unknown node ID: ${id}`)
-        }
-
-        return node
-      }
-
-      const mutations: BubbleMutation[] = []
-
-      const transaction: BubbleTransaction = {
-        createElement({ tag, namespace = 'html' }) {
-          assertValidElementTag(tag)
-
-          const id = allocateNodeId()
-          const elementNode: BubbleElementNode = {
-            id,
-            kind: 'element',
-            tag,
-            namespace,
-            parentId: null,
-            children: [],
-            attributes: {},
-            properties: {},
-            value: tag === 'input' && namespace === 'html' ? '' : null,
-            checked: null,
-            role: null,
-            name: null,
-          }
-
-          draftNodes.set(id, elementNode)
-          mutations.push({ type: 'node-created', nodeId: id, kind: 'element' })
-
-          return id
-        },
-        createText({ value }) {
-          assertValidTextValue(value)
-
-          const id = allocateNodeId()
-
-          draftNodes.set(id, {
-            id,
-            kind: 'text',
-            parentId: null,
-            value,
-          })
-          mutations.push({ type: 'node-created', nodeId: id, kind: 'text' })
-
-          return id
-        },
-        setText({ nodeId, value }) {
-          const node = getDraftNode(nodeId)
-
-          assertValidTextValue(value)
-          assertTextNode(node, nodeId)
-          node.value = value
-          mutations.push({ type: 'text-set', nodeId, value })
-        },
-        insertChild({ parentId, childId, index }) {
-          const parent = getDraftNode(parentId)
-          const child = getDraftNode(childId)
-
-          if (parent.kind === 'text') {
-            throw new Error(`Text nodes cannot have children: ${parentId}`)
-          }
-
-          if (child.kind === 'root') {
-            throw new Error('The root node cannot be inserted as a child')
-          }
-
-          child.parentId = parentId
-          const insertionIndex = index ?? parent.children.length
-
-          insertIntoParent(parent, childId, insertionIndex)
-          mutations.push({
-            type: 'child-inserted',
-            parentId,
-            childId,
-            index: insertionIndex,
-          })
-        },
-        removeChild({ parentId, childId }) {
-          const parent = getDraftNode(parentId)
-          const child = getDraftNode(childId)
-
-          if (parent.kind === 'text') {
-            throw new Error(`Text nodes cannot have children: ${parentId}`)
-          }
-
-          if (child.kind === 'root') {
-            throw new Error('The root node cannot be removed as a child')
-          }
-
-          const removedIndex = removeFromParent(parent, childId)
-          child.parentId = null
-          mutations.push({
-            type: 'child-removed',
-            parentId,
-            childId,
-            index: removedIndex,
-          })
-        },
-        moveChild({ parentId, childId, index }) {
-          const parent = getDraftNode(parentId)
-          const child = getDraftNode(childId)
-
-          if (parent.kind === 'text') {
-            throw new Error(`Text nodes cannot have children: ${parentId}`)
-          }
-
-          if (child.kind === 'root') {
-            throw new Error('The root node cannot be moved as a child')
-          }
-
-          if (child.parentId !== parentId) {
-            throw new Error(`Node ${childId} is not a child of ${parentId}`)
-          }
-
-          moveWithinParent(parent, childId, index)
-          mutations.push({ type: 'child-moved', parentId, childId, index })
-        },
-        setAttribute({ nodeId, name, value }) {
-          const node = getDraftNode(nodeId)
-
-          assertElementNode(node, nodeId, 'Attributes')
-          node.attributes[name] = value
-          mutations.push({ type: 'attribute-set', nodeId, name, value })
-        },
-        removeAttribute({ nodeId, name }) {
-          const node = getDraftNode(nodeId)
-
-          assertElementNode(node, nodeId, 'Attributes')
-          delete node.attributes[name]
-          mutations.push({ type: 'attribute-removed', nodeId, name })
-        },
-        setProperty({ nodeId, name, value }) {
-          const node = getDraftNode(nodeId)
-
-          assertElementNode(node, nodeId, 'Properties')
-          if (name === 'value') {
-            assertValuePropertyTarget(node, nodeId)
-            assertValidTextValue(value)
-            node.value = value
-          }
-          if (name === 'checked') {
-            assertCheckedPropertyTarget(node, nodeId)
-            assertValidCheckedValue(value)
-            node.checked = value
-          }
-          node.properties[name] = value
-          mutations.push({ type: 'property-set', nodeId, name, value })
-        },
-        addEventListener({ nodeId, type, listener, capture = false }) {
-          const node = getDraftNode(nodeId)
-
-          assertEventTargetNode(node, nodeId)
-          assertValidEventType(type)
-
-          const handle: BubbleListenerHandle = {
-            nodeId,
-            type,
-            capture,
-            internalId: allocateListenerId(),
-          }
-          const nodeListeners = getNodeListeners(draftEventListeners, nodeId)
-          const registrations = nodeListeners.get(type) ?? []
-
-          registrations.push({ handle, listener })
-          nodeListeners.set(type, registrations)
-
-          return handle
-        },
-        removeEventListener(handle) {
-          const nodeListeners = draftEventListeners.get(handle.nodeId)
-          const registrations = nodeListeners?.get(handle.type)
-
-          if (nodeListeners === undefined || registrations === undefined) {
-            return
-          }
-
-          const nextRegistrations = registrations.filter(
-            registration => registration.handle.internalId !== handle.internalId
-          )
-
-          if (nextRegistrations.length === registrations.length) {
-            return
-          }
-
-          if (nextRegistrations.length === 0) {
-            nodeListeners.delete(handle.type)
-
-            if (nodeListeners.size === 0) {
-              draftEventListeners.delete(handle.nodeId)
-            }
-
-            return
-          }
-
-          nodeListeners.set(handle.type, nextRegistrations)
-        },
-      }
-
-      try {
-        const result = fn(transaction)
-        refreshDerivedElementMetadata(draftNodes)
-
-        nodes = draftNodes
-        eventListeners = draftEventListeners
-        transactionDepth = 0
-        nextTransactionSequence += 1
-
-        const event: BubbleRuntimeEvent = {
-          type: 'transaction-committed',
-          record: { sequence: nextTransactionSequence, mutations },
-        }
-
-        emitRuntimeEvent(event)
-
-        return result
-      } catch (error) {
-        transactionDepth = 0
-        throw error
-      }
+      return runtimeStore.transact(fn)
     },
     getNode(id) {
-      const node = nodes.get(id)
-
-      return node === undefined ? null : snapshotNode(node)
+      return runtimeStore.getNode(id)
     },
     getRoot() {
-      return snapshotNode(
-        nodes.get(root.id) as BubbleRootNode
-      ) as Readonly<BubbleRootNode>
+      return runtimeStore.getRoot()
     },
     snapshot() {
-      return createSnapshot()
+      return runtimeStore.snapshot()
     },
     serializeForm(formId) {
       return serializeForm(formId)
     },
     dispatchEvent,
     focus(id) {
-      const node = nodes.get(id)
+      const node = getNodes().get(id)
 
       if (node === undefined) {
         throw new Error(`Unknown node ID: ${id}`)
