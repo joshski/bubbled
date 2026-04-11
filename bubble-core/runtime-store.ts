@@ -1,6 +1,5 @@
 import type {
   BubbleElementNode,
-  BubbleListenerHandle,
   BubbleMutation,
   BubbleNode,
   BubbleNodeId,
@@ -9,22 +8,19 @@ import type {
   BubbleSnapshot,
   BubbleTextNode,
   BubbleTransaction,
+  BubbleTransaction as BubbleTransactionApi,
   BubbleTransactionRecord,
-  BubbleEventListener,
 } from './index'
-
-export interface BubbleRegisteredListener {
-  handle: BubbleListenerHandle
-  listener: BubbleEventListener
-}
-
-type BubbleEventListenerMap = Map<
-  BubbleNodeId,
-  Map<string, BubbleRegisteredListener[]>
->
 
 interface BubbleRuntimeStoreOptions {
   createQuery(snapshot: Pick<BubbleSnapshot, 'nodes'>): BubbleQueryApi
+  createTransactionParticipant(input: {
+    draftNodes: Map<BubbleNodeId, BubbleNode>
+    getDraftNode(id: BubbleNodeId): BubbleNode
+  }): {
+    api: Pick<BubbleTransactionApi, 'addEventListener' | 'removeEventListener'>
+    commit(): void
+  }
   refreshDerivedElementMetadata(nodeLookup: Map<BubbleNodeId, BubbleNode>): void
   onTransactionCommitted?(record: BubbleTransactionRecord): void
 }
@@ -36,14 +32,12 @@ export interface BubbleRuntimeStore {
   getRoot(): Readonly<BubbleRootNode>
   snapshot(): BubbleSnapshot
   getNodes(): ReadonlyMap<BubbleNodeId, BubbleNode>
-  getEventListeners(): BubbleEventListenerMap
 }
 
 const ROOT_NODE_ID = 'root'
 const NODE_ID_PREFIX = 'node:'
 const ELEMENT_TAG_ERROR = 'Element tag must be a non-empty string'
 const TEXT_VALUE_ERROR = 'Text value must be a string'
-const EVENT_TYPE_ERROR = 'Event type must be a non-empty string'
 const CHILD_INDEX_ERROR =
   'Child index must be an integer within the parent child range'
 const NESTED_TRANSACTION_ERROR = 'Nested transactions are not supported'
@@ -65,12 +59,6 @@ function assertValidTextValue(value: unknown): asserts value is string {
 function assertValidCheckedValue(value: unknown): asserts value is boolean {
   if (typeof value !== 'boolean') {
     throw new Error('Checked value must be a boolean')
-  }
-}
-
-function assertValidEventType(type: unknown): asserts type is string {
-  if (typeof type !== 'string' || type.trim().length === 0) {
-    throw new Error(EVENT_TYPE_ERROR)
   }
 }
 
@@ -157,17 +145,6 @@ function assertTextNode(
 ): asserts node is BubbleTextNode {
   if (node.kind !== 'text') {
     throw new Error(`Text content can only be updated on text nodes: ${nodeId}`)
-  }
-}
-
-function assertEventTargetNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode {
-  if (node.kind !== 'element') {
-    throw new Error(
-      `Event listeners are only supported on element nodes: ${nodeId}`
-    )
   }
 }
 
@@ -265,30 +242,6 @@ function snapshotNode(node: BubbleNode): Readonly<BubbleNode> {
   })
 }
 
-function cloneEventListeners(
-  source: BubbleEventListenerMap
-): BubbleEventListenerMap {
-  const clonedListeners = new Map<
-    BubbleNodeId,
-    Map<string, BubbleRegisteredListener[]>
-  >()
-
-  for (const [nodeId, nodeListeners] of source) {
-    const clonedNodeListeners = new Map<string, BubbleRegisteredListener[]>()
-
-    for (const [eventType, registrations] of nodeListeners) {
-      clonedNodeListeners.set(
-        eventType,
-        registrations.map(registration => ({ ...registration }))
-      )
-    }
-
-    clonedListeners.set(nodeId, clonedNodeListeners)
-  }
-
-  return clonedListeners
-}
-
 function insertIntoParent(
   parent: BubbleRootNode | BubbleElementNode,
   childId: BubbleNodeId,
@@ -330,24 +283,9 @@ function moveWithinParent(
   parent.children.splice(index, 0, childId)
 }
 
-function getNodeListeners(
-  listenerMap: BubbleEventListenerMap,
-  nodeId: BubbleNodeId
-): Map<string, BubbleRegisteredListener[]> {
-  const nodeListeners = listenerMap.get(nodeId)
-
-  if (nodeListeners !== undefined) {
-    return nodeListeners
-  }
-
-  const createdNodeListeners = new Map<string, BubbleRegisteredListener[]>()
-  listenerMap.set(nodeId, createdNodeListeners)
-
-  return createdNodeListeners
-}
-
 export function createBubbleRuntimeStore({
   createQuery,
+  createTransactionParticipant,
   refreshDerivedElementMetadata,
   onTransactionCommitted,
 }: BubbleRuntimeStoreOptions): BubbleRuntimeStore {
@@ -358,24 +296,16 @@ export function createBubbleRuntimeStore({
   }
 
   let nodes = new Map<BubbleNodeId, BubbleNode>([[root.id, root]])
-  let eventListeners: BubbleEventListenerMap = new Map()
   nextBubbleInstanceId += 1
   const bubbleInstanceId = nextBubbleInstanceId
   let nextNodeId = 0
   let nextTransactionSequence = 0
-  let nextListenerId = 0
   let transactionDepth = 0
 
   const allocateNodeId = (): BubbleNodeId => {
     nextNodeId += 1
 
     return `${NODE_ID_PREFIX}${bubbleInstanceId}:${nextNodeId}`
-  }
-
-  const allocateListenerId = (): string => {
-    nextListenerId += 1
-
-    return `listener:${bubbleInstanceId}:${nextListenerId}`
   }
 
   const createSnapshot = (): BubbleSnapshot => {
@@ -405,7 +335,6 @@ export function createBubbleRuntimeStore({
 
       transactionDepth += 1
       const draftNodes = new Map<BubbleNodeId, BubbleNode>()
-      const draftEventListeners = cloneEventListeners(eventListeners)
 
       for (const [nodeId, node] of nodes) {
         draftNodes.set(nodeId, cloneNode(node))
@@ -422,6 +351,10 @@ export function createBubbleRuntimeStore({
       }
 
       const mutations: BubbleMutation[] = []
+      const participant = createTransactionParticipant({
+        draftNodes,
+        getDraftNode,
+      })
 
       const transaction: BubbleTransaction = {
         createElement({ tag, namespace = 'html' }) {
@@ -565,54 +498,7 @@ export function createBubbleRuntimeStore({
           node.properties[name] = value
           mutations.push({ type: 'property-set', nodeId, name, value })
         },
-        addEventListener({ nodeId, type, listener, capture = false }) {
-          const node = getDraftNode(nodeId)
-
-          assertEventTargetNode(node, nodeId)
-          assertValidEventType(type)
-
-          const handle: BubbleListenerHandle = {
-            nodeId,
-            type,
-            capture,
-            internalId: allocateListenerId(),
-          }
-          const nodeListeners = getNodeListeners(draftEventListeners, nodeId)
-          const registrations = nodeListeners.get(type) ?? []
-
-          registrations.push({ handle, listener })
-          nodeListeners.set(type, registrations)
-
-          return handle
-        },
-        removeEventListener(handle) {
-          const nodeListeners = draftEventListeners.get(handle.nodeId)
-          const registrations = nodeListeners?.get(handle.type)
-
-          if (nodeListeners === undefined || registrations === undefined) {
-            return
-          }
-
-          const nextRegistrations = registrations.filter(
-            registration => registration.handle.internalId !== handle.internalId
-          )
-
-          if (nextRegistrations.length === registrations.length) {
-            return
-          }
-
-          if (nextRegistrations.length === 0) {
-            nodeListeners.delete(handle.type)
-
-            if (nodeListeners.size === 0) {
-              draftEventListeners.delete(handle.nodeId)
-            }
-
-            return
-          }
-
-          nodeListeners.set(handle.type, nextRegistrations)
-        },
+        ...participant.api,
       }
 
       try {
@@ -620,7 +506,7 @@ export function createBubbleRuntimeStore({
         refreshDerivedElementMetadata(draftNodes)
 
         nodes = draftNodes
-        eventListeners = draftEventListeners
+        participant.commit()
         transactionDepth = 0
         nextTransactionSequence += 1
         onTransactionCommitted?.({
@@ -649,9 +535,6 @@ export function createBubbleRuntimeStore({
     },
     getNodes() {
       return nodes
-    },
-    getEventListeners() {
-      return eventListeners
     },
   }
 }

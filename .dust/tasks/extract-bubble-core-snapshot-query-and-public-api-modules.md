@@ -111,7 +111,6 @@ implement
 
 ## Blocked By
 
-- [Extract Bubble Core Event Dispatch, Focus, and Tab Navigation Modules](./extract-bubble-core-event-dispatch-focus-and-tab-navigation-modules.md)
 - [Extract Bubble Core DOM Semantics and Form Modules](./extract-bubble-core-dom-semantics-and-form-modules.md)
 
 ## Decomposed From

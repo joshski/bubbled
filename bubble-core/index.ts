@@ -10,10 +10,9 @@ import type {
 } from '../bubble-capabilities'
 
 import { createBubbleCapabilityRuntime } from './capabilities'
-import {
-  createBubbleRuntimeStore,
-  type BubbleRegisteredListener,
-} from './runtime-store'
+import { createBubbleEventRuntime, resolveLabelControl } from './event-runtime'
+import { createBubbleFocusNavigation } from './focus-navigation'
+import { createBubbleRuntimeStore } from './runtime-store'
 
 export type BubbleNodeId = string
 
@@ -176,9 +175,6 @@ export interface BubbleListenerHandle {
   readonly capture: boolean
   readonly internalId: string
 }
-
-type BubbleEventPhase = BubbleEvent['phase']
-type BubbleEventDispatchMode = 'propagating' | 'target-only'
 
 export interface BubbleSnapshot {
   readonly rootId: BubbleNodeId
@@ -411,15 +407,6 @@ export function serializeBubbleSnapshot(snapshot: BubbleSnapshot): string {
   )
 }
 
-const EVENT_TYPE_ERROR = 'Event type must be a non-empty string'
-const FOCUSABLE_HTML_TAGS = new Set(['button', 'input', 'select', 'textarea'])
-
-function assertValidEventType(type: unknown): asserts type is string {
-  if (typeof type !== 'string' || type.trim().length === 0) {
-    throw new Error(EVENT_TYPE_ERROR)
-  }
-}
-
 function getInputType(node: BubbleElementNode): string | null {
   if (node.namespace !== 'html' || node.tag !== 'input') {
     return null
@@ -442,85 +429,6 @@ function isCheckboxInputElement(node: BubbleElementNode): boolean {
   return getInputType(node) === 'checkbox'
 }
 
-function assertFocusableNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode {
-  if (node.kind !== 'element') {
-    throw new Error(`Only element nodes can receive focus: ${nodeId}`)
-  }
-
-  if (node.namespace !== 'html' || !FOCUSABLE_HTML_TAGS.has(node.tag)) {
-    throw new Error(`Node is not focusable: ${nodeId}`)
-  }
-}
-
-function assertFormNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode {
-  if (
-    node.kind !== 'element' ||
-    node.namespace !== 'html' ||
-    node.tag !== 'form'
-  ) {
-    throw new Error(`Only html form elements can be serialized: ${nodeId}`)
-  }
-}
-
-function assertSubmitTargetNode(
-  node: BubbleNode,
-  nodeId: BubbleNodeId
-): asserts node is BubbleElementNode {
-  if (
-    node.kind !== 'element' ||
-    node.namespace !== 'html' ||
-    node.tag !== 'form'
-  ) {
-    throw new Error(
-      `Only html form elements can receive submit events: ${nodeId}`
-    )
-  }
-}
-
-function getTabIndexValue(node: BubbleElementNode): number | null {
-  const propertyValue = node.properties.tabIndex
-
-  if (typeof propertyValue === 'number' && Number.isInteger(propertyValue)) {
-    return propertyValue
-  }
-
-  const attributeValue = node.attributes.tabindex
-
-  if (attributeValue === undefined) {
-    return null
-  }
-
-  const parsedValue = Number.parseInt(attributeValue, 10)
-
-  return Number.isNaN(parsedValue) ? null : parsedValue
-}
-
-function isDisabledElement(node: BubbleElementNode): boolean {
-  return (
-    node.attributes.disabled !== undefined || node.properties.disabled === true
-  )
-}
-
-function isTabbableElement(node: BubbleElementNode): boolean {
-  if (
-    node.namespace !== 'html' ||
-    !FOCUSABLE_HTML_TAGS.has(node.tag) ||
-    isDisabledElement(node)
-  ) {
-    return false
-  }
-
-  const tabIndex = getTabIndexValue(node)
-
-  return tabIndex === null || tabIndex >= 0
-}
-
 function getStringProperty(
   node: BubbleElementNode,
   name: string
@@ -528,36 +436,6 @@ function getStringProperty(
   const propertyValue = node.properties[name]
 
   return typeof propertyValue === 'string' ? propertyValue : null
-}
-
-function getFormControlName(node: BubbleElementNode): string | null {
-  return node.attributes.name ?? getStringProperty(node, 'name')
-}
-
-function getCheckboxSubmissionValue(node: BubbleElementNode): string {
-  return node.attributes.value ?? 'on'
-}
-
-function getFormEntriesForControl(node: BubbleElementNode): BubbleFormEntry[] {
-  if (node.namespace !== 'html' || isDisabledElement(node)) {
-    return []
-  }
-
-  const name = getFormControlName(node)
-
-  if (name === null) {
-    return []
-  }
-
-  if (isTextInputElement(node)) {
-    return [{ name, value: node.value }]
-  }
-
-  if (isCheckboxInputElement(node) && node.checked === true) {
-    return [{ name, value: getCheckboxSubmissionValue(node) }]
-  }
-
-  return []
 }
 
 function getExplicitRole(node: BubbleElementNode): string | null {
@@ -627,91 +505,7 @@ function deriveElementName(
   return normalizeAccessibleText(deriveTextContent(node.id, nodeLookup))
 }
 
-function isLabelElement(
-  node: BubbleNode | undefined
-): node is BubbleElementNode {
-  return (
-    node?.kind === 'element' &&
-    node.namespace === 'html' &&
-    node.tag === 'label'
-  )
-}
-
-function isLabelableElement(
-  node: BubbleNode | undefined
-): node is BubbleElementNode {
-  return (
-    node?.kind === 'element' &&
-    node.namespace === 'html' &&
-    [
-      'button',
-      'input',
-      'meter',
-      'output',
-      'progress',
-      'select',
-      'textarea',
-    ].includes(node.tag)
-  )
-}
-
-function findFirstLabelableDescendant(
-  nodeId: BubbleNodeId,
-  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>
-): BubbleElementNode | null {
-  const node = nodeLookup.get(nodeId)
-
-  if (node === undefined || node.kind === 'text') {
-    return null
-  }
-
-  for (const childId of node.children) {
-    const childNode = nodeLookup.get(childId)
-
-    if (isLabelableElement(childNode)) {
-      return childNode
-    }
-
-    const nestedControl = findFirstLabelableDescendant(childId, nodeLookup)
-
-    if (nestedControl !== null) {
-      return nestedControl
-    }
-  }
-
-  return null
-}
-
-function resolveLabelControl(
-  labelId: BubbleNodeId,
-  nodeLookup: ReadonlyMap<BubbleNodeId, BubbleNode>
-): BubbleElementNode | null {
-  const labelNode = nodeLookup.get(labelId)
-
-  if (!isLabelElement(labelNode)) {
-    return null
-  }
-
-  const explicitControlId = labelNode.attributes.for
-
-  if (explicitControlId !== undefined) {
-    for (const node of nodeLookup.values()) {
-      if (
-        isLabelableElement(node) &&
-        node.attributes.id === explicitControlId
-      ) {
-        return node
-      }
-    }
-
-    return null
-  }
-
-  return findFirstLabelableDescendant(labelId, nodeLookup)
-}
-
 export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
-  let focusedNodeId: BubbleNodeId | null = null
   const capabilities = createBubbleCapabilityRuntime(options.capabilities)
   const listeners = new Set<BubbleRuntimeListener>()
 
@@ -723,6 +517,9 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
 
   const runtimeStore = createBubbleRuntimeStore({
     createQuery: createBubbleQuery,
+    createTransactionParticipant(input) {
+      return eventRuntime.createTransactionParticipant(input)
+    },
     refreshDerivedElementMetadata(
       nodeLookup: Map<BubbleNodeId, BubbleNode>
     ): void {
@@ -752,244 +549,17 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
 
   const getNodes = (): ReadonlyMap<BubbleNodeId, BubbleNode> =>
     runtimeStore.getNodes()
-  const getEventListeners = (): ReadonlyMap<
-    BubbleNodeId,
-    ReadonlyMap<string, readonly BubbleRegisteredListener[]>
-  > => runtimeStore.getEventListeners()
-
-  const getEventPath = (targetId: BubbleNodeId): BubbleNodeId[] => {
-    const path: BubbleNodeId[] = []
-    let currentId: BubbleNodeId | null = targetId
-
-    while (currentId !== null) {
-      const node = getNodes().get(currentId) as BubbleNode
-
-      if (node.kind === 'element') {
-        path.push(node.id)
-      }
-
-      currentId = node.kind === 'root' ? null : node.parentId
-    }
-
-    return path
-  }
-
-  const dispatchSingleEventToTarget = ({
-    type,
-    targetId,
-    data,
-    cancelable,
-    mode,
-  }: {
-    readonly type: string
-    readonly targetId: BubbleNodeId
-    readonly data: Record<string, unknown>
-    readonly cancelable: boolean
-    readonly mode: BubbleEventDispatchMode
-  }): BubbleDispatchResult => {
-    assertValidEventType(type)
-    const target = getNodes().get(targetId)
-
-    if (target === undefined) {
-      throw new Error(`Unknown node ID: ${targetId}`)
-    }
-
-    if (target.kind !== 'element') {
-      return { defaultPrevented: false, delivered: false }
-    }
-
-    const targetQueue = (
-      getEventListeners().get(targetId)?.get(type) ?? []
-    ).slice()
-    const deliveryQueue =
-      mode === 'target-only'
-        ? targetQueue.map(registration => ({
-            nodeId: registration.handle.nodeId,
-            phase: 'target' as BubbleEventPhase,
-            registration,
-          }))
-        : (() => {
-            const path = getEventPath(targetId)
-            const ancestorPath = path.slice(1)
-            const captureQueue = ancestorPath
-              .slice()
-              .reverse()
-              .flatMap(nodeId =>
-                (getEventListeners().get(nodeId)?.get(type) ?? []).filter(
-                  registration => registration.handle.capture
-                )
-              )
-            const bubbleQueue = ancestorPath.flatMap(nodeId =>
-              (getEventListeners().get(nodeId)?.get(type) ?? []).filter(
-                registration => !registration.handle.capture
-              )
-            )
-
-            return [
-              ...captureQueue.map(registration => ({
-                nodeId: registration.handle.nodeId,
-                phase: 'capture' as BubbleEventPhase,
-                registration,
-              })),
-              ...targetQueue.map(registration => ({
-                nodeId: registration.handle.nodeId,
-                phase: 'target' as BubbleEventPhase,
-                registration,
-              })),
-              ...bubbleQueue.map(registration => ({
-                nodeId: registration.handle.nodeId,
-                phase: 'bubble' as BubbleEventPhase,
-                registration,
-              })),
-            ]
-          })()
-
-    if (deliveryQueue.length === 0) {
-      return { defaultPrevented: false, delivered: false }
-    }
-
-    const eventData = Object.freeze({ ...data })
-    let currentTargetId = targetId
-    let phase: BubbleEventPhase = 'target'
-    let defaultPrevented = false
-    let propagationStopped = false
-    let propagationStopNodeId: BubbleNodeId | null = null
-
-    const event: BubbleEvent = {
-      type,
-      targetId,
-      get currentTargetId() {
-        return currentTargetId
-      },
-      get phase() {
-        return phase
-      },
-      cancelable,
-      get defaultPrevented() {
-        return defaultPrevented
-      },
-      data: eventData,
-      preventDefault() {
-        if (cancelable) {
-          defaultPrevented = true
-        }
-      },
-      stopPropagation() {
-        propagationStopped = true
-        propagationStopNodeId = currentTargetId
-      },
-    }
-
-    for (const queuedListener of deliveryQueue) {
-      if (
-        propagationStopped &&
-        propagationStopNodeId !== null &&
-        queuedListener.nodeId !== propagationStopNodeId
-      ) {
-        break
-      }
-
-      currentTargetId = queuedListener.nodeId
-      phase = queuedListener.phase
-      queuedListener.registration.listener(event)
-    }
-
-    return { defaultPrevented, delivered: true }
-  }
-
-  const serializeForm = (formId: BubbleNodeId): BubbleFormPayload => {
-    const formNode = getNodes().get(formId)
-
-    if (formNode === undefined) {
-      throw new Error(`Unknown node ID: ${formId}`)
-    }
-
-    assertFormNode(formNode, formId)
-
-    const entries: BubbleFormEntry[] = []
-    const getElementChildNodeIds = (
-      childNodeIds: readonly BubbleNodeId[]
-    ): BubbleNodeId[] =>
-      childNodeIds.filter(
-        childNodeId => getNodes().get(childNodeId)?.kind === 'element'
-      )
-    const pendingNodeIds = getElementChildNodeIds(formNode.children)
-
-    while (pendingNodeIds.length > 0) {
-      const nodeId = pendingNodeIds.shift() as BubbleNodeId
-      const node = getNodes().get(nodeId) as BubbleElementNode
-
-      entries.push(...getFormEntriesForControl(node))
-      pendingNodeIds.unshift(...getElementChildNodeIds(node.children))
-    }
-
-    return Object.freeze(entries.map(entry => Object.freeze({ ...entry })))
-  }
-
-  const dispatchEventToTarget = ({
-    type,
-    targetId,
-    data = {},
-    cancelable = type === 'submit',
-    mode = 'propagating',
-  }: BubbleDispatchInput & { mode?: BubbleEventDispatchMode }):
-    | BubbleDispatchResult
-    | BubbleSubmitDispatchResult => {
-    if (type === 'submit') {
-      const targetNode = getNodes().get(targetId)
-
-      if (targetNode === undefined) {
-        throw new Error(`Unknown node ID: ${targetId}`)
-      }
-
-      assertSubmitTargetNode(targetNode, targetId)
-
-      const submitResult = dispatchSingleEventToTarget({
-        type,
-        targetId,
-        data,
-        cancelable,
-        mode,
-      })
-
-      return {
-        ...submitResult,
-        payload: submitResult.defaultPrevented ? null : serializeForm(targetId),
-      }
-    }
-
-    const initialResult = dispatchSingleEventToTarget({
-      type,
-      targetId,
-      data,
-      cancelable,
-      mode,
-    })
-
-    if (mode !== 'propagating' || type !== 'click') {
-      return initialResult
-    }
-
-    const associatedControl = resolveLabelControl(targetId, getNodes())
-
-    if (associatedControl === null || initialResult.defaultPrevented) {
-      return initialResult
-    }
-
-    const forwardedResult = dispatchSingleEventToTarget({
-      type,
-      targetId: associatedControl.id,
-      data,
-      cancelable,
-      mode,
-    })
-
-    return {
-      defaultPrevented:
-        initialResult.defaultPrevented || forwardedResult.defaultPrevented,
-      delivered: initialResult.delivered || forwardedResult.delivered,
-    }
-  }
+  const eventRuntime = createBubbleEventRuntime({
+    getNodes,
+  })
+  const focusNavigation = createBubbleFocusNavigation({
+    rootId: runtimeStore.rootId,
+    getNodes,
+    dispatchEvent(input) {
+      return eventRuntime.dispatchEvent(input) as BubbleDispatchResult
+    },
+    emitRuntimeEvent,
+  })
 
   function dispatchEvent(
     input: BubbleSubmitDispatchInput
@@ -1001,68 +571,7 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
     data = {},
     cancelable = type === 'submit',
   }: BubbleDispatchInput): BubbleDispatchResult | BubbleSubmitDispatchResult {
-    return dispatchEventToTarget({ type, targetId, data, cancelable })
-  }
-
-  const getTabOrder = (): readonly BubbleNodeId[] => {
-    const visitedElementIds: BubbleNodeId[] = []
-
-    const visitNode = (nodeId: BubbleNodeId): void => {
-      const node = getNodes().get(nodeId) as BubbleNode
-
-      if (node.kind === 'element') {
-        visitedElementIds.push(nodeId)
-      }
-
-      if (node.kind === 'text') {
-        return
-      }
-
-      for (const childId of node.children) {
-        visitNode(childId)
-      }
-    }
-
-    visitNode(runtimeStore.rootId)
-
-    const tabbableEntries = visitedElementIds
-      .map((nodeId, domIndex) => {
-        const node = getNodes().get(nodeId) as BubbleElementNode
-
-        if (!isTabbableElement(node)) {
-          return null
-        }
-
-        return {
-          nodeId,
-          domIndex,
-          tabIndex: getTabIndexValue(node) ?? 0,
-        }
-      })
-      .filter(
-        (
-          entry
-        ): entry is {
-          nodeId: BubbleNodeId
-          domIndex: number
-          tabIndex: number
-        } => entry !== null
-      )
-
-    const positiveTabIndexEntries = tabbableEntries
-      .filter(entry => entry.tabIndex > 0)
-      .sort(
-        (left, right) =>
-          left.tabIndex - right.tabIndex || left.domIndex - right.domIndex
-      )
-    const naturalTabIndexEntries = tabbableEntries.filter(
-      entry => entry.tabIndex === 0
-    )
-
-    return Object.freeze([
-      ...positiveTabIndexEntries.map(entry => entry.nodeId),
-      ...naturalTabIndexEntries.map(entry => entry.nodeId),
-    ])
+    return eventRuntime.dispatchEvent({ type, targetId, data, cancelable })
   }
 
   return {
@@ -1107,56 +616,20 @@ export function createBubble(options: CreateBubbleOptions = {}): BubbleRuntime {
       return runtimeStore.snapshot()
     },
     serializeForm(formId) {
-      return serializeForm(formId)
+      return eventRuntime.serializeForm(formId)
     },
     dispatchEvent,
     focus(id) {
-      const node = getNodes().get(id)
-
-      if (node === undefined) {
-        throw new Error(`Unknown node ID: ${id}`)
-      }
-
-      assertFocusableNode(node, id)
-      if (focusedNodeId === id) {
-        return
-      }
-
-      if (focusedNodeId !== null) {
-        dispatchEventToTarget({
-          type: 'blur',
-          targetId: focusedNodeId,
-          mode: 'target-only',
-        })
-      }
-
-      focusedNodeId = id
-      dispatchEventToTarget({
-        type: 'focus',
-        targetId: id,
-        mode: 'target-only',
-      })
-      emitRuntimeEvent({ type: 'focus-changed', nodeId: id })
+      focusNavigation.focus(id)
     },
     blur() {
-      if (focusedNodeId === null) {
-        return
-      }
-
-      const previouslyFocusedNodeId = focusedNodeId
-      focusedNodeId = null
-      dispatchEventToTarget({
-        type: 'blur',
-        targetId: previouslyFocusedNodeId,
-        mode: 'target-only',
-      })
-      emitRuntimeEvent({ type: 'focus-changed', nodeId: null })
+      focusNavigation.blur()
     },
     getFocusedNodeId() {
-      return focusedNodeId
+      return focusNavigation.getFocusedNodeId()
     },
     getTabOrder() {
-      return getTabOrder()
+      return focusNavigation.getTabOrder()
     },
     subscribe(listener) {
       listeners.add(listener)
