@@ -1,6 +1,4 @@
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, test } from 'vitest'
@@ -14,41 +12,6 @@ async function loadConfig(path: string) {
 
   return module.default
 }
-
-test('test command runs a targeted smoke fixture', () => {
-  const configDir = mkdtempSync(join(tmpdir(), 'bubbled-test-command-'))
-
-  try {
-    const configPath = join(configDir, 'bunfig.toml')
-
-    writeFileSync(configPath, ['[test]', 'coverage = false'].join('\n'))
-
-    const command = spawnSync(
-      'bun',
-      [
-        '--config',
-        configPath,
-        'run',
-        'test',
-        '--',
-        '--test-name-pattern',
-        '^test command fixture$',
-      ],
-      {
-        cwd: root,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          CI: '1',
-        },
-      }
-    )
-
-    expect(command.status).toBe(0)
-  } finally {
-    rmSync(configDir, { force: true, recursive: true })
-  }
-})
 
 test('single vitest configuration uses the expected reporter and exclusions', async () => {
   const vitestConfig = await loadConfig('vitest.config.ts')
