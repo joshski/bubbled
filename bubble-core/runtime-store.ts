@@ -10,7 +10,7 @@ import type {
   BubbleTransaction,
   BubbleTransaction as BubbleTransactionApi,
   BubbleTransactionRecord,
-} from './index'
+} from './public-api'
 
 import { isCheckboxInputElement, isTextInputElement } from './dom-semantics'
 

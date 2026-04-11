@@ -10,7 +10,7 @@ import type {
   BubbleNodeId,
   BubbleSubmitDispatchResult,
   BubbleTransaction,
-} from './index'
+} from './public-api'
 
 import { resolveLabelControl } from './dom-semantics'
 import { serializeForm as serializeFormPayload } from './form-serialization'

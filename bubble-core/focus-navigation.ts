@@ -4,7 +4,7 @@ import type {
   BubbleNode,
   BubbleNodeId,
   BubbleRuntimeEvent,
-} from './index'
+} from './public-api'
 
 import { getTabIndexValue, isTabbableElement } from './dom-semantics'
 

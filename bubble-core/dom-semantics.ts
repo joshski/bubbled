@@ -1,4 +1,4 @@
-import type { BubbleElementNode, BubbleNode, BubbleNodeId } from './index'
+import type { BubbleElementNode, BubbleNode, BubbleNodeId } from './public-api'
 
 const LABELABLE_HTML_TAGS = new Set([
   'button',

@@ -4,7 +4,7 @@ import type {
   BubbleFormPayload,
   BubbleNode,
   BubbleNodeId,
-} from './index'
+} from './public-api'
 
 import {
   getStringProperty,
