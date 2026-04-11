@@ -8,7 +8,7 @@ export interface TodoItem {
 
 export const DEFAULT_STORAGE_KEY = 'bubbled-todos'
 
-export function toggleTodo(
+function toggleTodo(
   todos: readonly TodoItem[],
   id: string
 ): readonly TodoItem[] {
@@ -17,14 +17,14 @@ export function toggleTodo(
   )
 }
 
-export function removeTodo(
+function removeTodo(
   todos: readonly TodoItem[],
   id: string
 ): readonly TodoItem[] {
   return todos.filter(todo => todo.id !== id)
 }
 
-export function normalizeTodoLabel(label: string): string {
+function normalizeTodoLabel(label: string): string {
   return label.trim().replace(/\s+/g, ' ')
 }
 
@@ -44,7 +44,7 @@ function createNextTodoId(todos: readonly TodoItem[]): string {
   return `t${maxId + 1}`
 }
 
-export function appendTodo(
+function appendTodo(
   todos: readonly TodoItem[],
   label: string
 ): readonly TodoItem[] {

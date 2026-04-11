@@ -3,13 +3,9 @@ import { describe, expect, test } from 'vitest'
 import type { BubbleStorage } from '../../bubble-capabilities'
 
 import {
-  appendTodo,
   createTodoStore,
   DEFAULT_STORAGE_KEY,
-  normalizeTodoLabel,
-  removeTodo,
   summarizeTodos,
-  toggleTodo,
   type TodoItem,
 } from './todo-store.ts'
 
@@ -34,43 +30,7 @@ function createInMemoryStorage(
   }
 }
 
-describe('pure todo helpers', () => {
-  test('toggleTodo flips done for the matching item only', () => {
-    const todos: readonly TodoItem[] = [
-      { id: 'a', label: 'Alpha', done: false },
-      { id: 'b', label: 'Beta', done: true },
-    ]
-
-    expect(toggleTodo(todos, 'a')).toEqual([
-      { id: 'a', label: 'Alpha', done: true },
-      { id: 'b', label: 'Beta', done: true },
-    ])
-  })
-
-  test('removeTodo drops the matching item and keeps the rest', () => {
-    const todos: readonly TodoItem[] = [
-      { id: 'a', label: 'Alpha', done: false },
-      { id: 'b', label: 'Beta', done: false },
-    ]
-
-    expect(removeTodo(todos, 'a')).toEqual([
-      { id: 'b', label: 'Beta', done: false },
-    ])
-  })
-
-  test('appendTodo trims labels, appends a new item, and ignores blanks', () => {
-    const todos: readonly TodoItem[] = [
-      { id: 't2', label: 'Existing', done: false },
-    ]
-
-    expect(normalizeTodoLabel('  Ship   it  ')).toBe('Ship it')
-    expect(appendTodo(todos, '  Ship   it  ')).toEqual([
-      { id: 't2', label: 'Existing', done: false },
-      { id: 't3', label: 'Ship it', done: false },
-    ])
-    expect(appendTodo(todos, '   ')).toBe(todos)
-  })
-
+describe('createTodoStore', () => {
   test('summarizeTodos reports empty, partial, and complete states', () => {
     expect(summarizeTodos([])).toBe('No todos yet')
     expect(
@@ -83,9 +43,7 @@ describe('pure todo helpers', () => {
       'All done'
     )
   })
-})
 
-describe('createTodoStore', () => {
   test('starts empty when the storage is empty and no override is given', () => {
     const storage = createInMemoryStorage()
     const store = createTodoStore({ storage })
