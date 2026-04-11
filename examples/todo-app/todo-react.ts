@@ -1,6 +1,6 @@
 import { createElement, useState } from 'react'
 
-import { createBubble, type BubbleRuntime } from '../../bubble-core'
+import { createBubble, type BubbleEvent, type BubbleRuntime } from '../../bubble-core'
 import { createBubbleReactRoot, type BubbleReactRoot } from '../../bubble-react'
 import { TodoAppView } from './todo-app.tsx'
 import {
@@ -10,6 +10,10 @@ import {
   type TodoItem,
   type TodoStore,
 } from './todo-store.ts'
+
+export function bubbleEventStringValue(event: BubbleEvent): string {
+  return String(event.data['value'] ?? '')
+}
 
 export interface MountTodoAppOptions {
   readonly bubble?: BubbleRuntime
