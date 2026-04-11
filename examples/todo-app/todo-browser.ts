@@ -1,19 +1,44 @@
-import { createDomProjector } from '../../bubble-browser'
-import { createBubble } from '../../bubble-core'
-import { mountTodoApp } from './todo-react.ts'
-import { createTodoStore } from './todo-store.ts'
+import type { TodoItem } from './todo-store.ts'
 
 const TODO_API_PATH = '/api/todos'
 
-export async function startTodoApp(): Promise<void> {
-  try {
-    const container = globalThis.document.getElementById('app')
+export interface TodoFetchResponse {
+  readonly ok: boolean
+  readonly status: number
+  readonly statusText: string
+  json(): Promise<unknown>
+}
 
-    if (!(container instanceof HTMLElement)) {
+export interface TodoAppContainer {
+  replaceChildren(): void
+  appendChild(node: unknown): unknown
+}
+
+export interface TodoAppTextNode {
+  textContent: string
+}
+
+export interface TodoBrowserHost {
+  getAppContainer(): TodoAppContainer | null
+  fetchTodos(path: string): Promise<TodoFetchResponse>
+  onBeforeUnload(listener: () => void): void
+  createErrorMessage(text: string): TodoAppTextNode
+  logError(error: unknown): void
+  mountTodoApp(args: {
+    container: TodoAppContainer
+    initialTodos: readonly TodoItem[]
+  }): () => void
+}
+
+export async function startTodoApp(host: TodoBrowserHost): Promise<void> {
+  try {
+    const container = host.getAppContainer()
+
+    if (container === null) {
       throw new Error('Expected a root element with id "app".')
     }
 
-    const response = await globalThis.fetch(TODO_API_PATH)
+    const response = await host.fetchTodos(TODO_API_PATH)
 
     if (!response.ok) {
       throw new Error(
@@ -21,41 +46,26 @@ export async function startTodoApp(): Promise<void> {
       )
     }
 
-    const initialTodos = await response.json()
-    const bubble = createBubble()
-    const store = createTodoStore({
-      storage: bubble.resolveCapability('storage'),
-      initialTodos,
-    })
-    const mountedApp = mountTodoApp({ bubble, store })
-    const projector = createDomProjector({
-      bubble,
-      bridgeEvents: true,
-      syncFocus: true,
-    })
+    const initialTodos = (await response.json()) as readonly TodoItem[]
+    const dispose = host.mountTodoApp({ container, initialTodos })
 
-    container.replaceChildren()
-    projector.mount(container)
-
-    globalThis.addEventListener(
-      'beforeunload',
-      () => {
-        projector.unmount()
-        mountedApp.unmount()
-      },
-      { once: true }
-    )
+    host.onBeforeUnload(() => {
+      dispose()
+    })
   } catch (error: unknown) {
-    const container = globalThis.document.getElementById('app')
+    const container = host.getAppContainer()
 
-    if (container instanceof HTMLElement) {
+    if (container !== null) {
       container.replaceChildren()
-      const message = globalThis.document.createElement('p')
-      message.textContent =
-        error instanceof Error ? error.message : 'Failed to start the todo app.'
-      container.appendChild(message)
+      container.appendChild(
+        host.createErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'Failed to start the todo app.'
+        )
+      )
     }
 
-    console.error(error)
+    host.logError(error)
   }
 }
