@@ -14,10 +14,17 @@ In `examples/todo-app/todo-store.ts`, replace the `createNextTodoId` function (w
 
 In `examples/todo-app/todo-store.test.ts`, the test `'toggle, remove, and add persist the next state and notify subscribers'` starts with 2 initial todos (`a` and `b`), removes `b`, then adds a new item. After the removal there is 1 todo, so `todos.length + 1 = 2` and the new ID will be `t2`. Update the assertion from `t1` to `t2`.
 
+## Task Type
+
+task
+
+## Blocked By
+
+(none)
+
 ## Principles
 
 - [Build Thin Tested Slices](./../principles/build-thin-tested-slices.md)
-- [Comprehensive Test Coverage](https://github.com/joshski/dust/blob/main/src/core-principles/comprehensive-test-coverage.md)
 
 ## Guidance
 
