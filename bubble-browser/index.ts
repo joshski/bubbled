@@ -40,6 +40,38 @@ export interface CreateDomProjectorOptions {
   syncFocus?: boolean
 }
 
+export interface MountedBubbleApp {
+  readonly bubble: BubbleRuntime
+  unmount(): void
+}
+
+export interface MountBubbleAppOptions {
+  readonly app: MountedBubbleApp
+  readonly container: HTMLElement
+  readonly bridgeEvents?: boolean
+  readonly syncFocus?: boolean
+}
+
+export interface BrowserMount {
+  unmount(): void
+}
+
+export function mountBubbleApp(options: MountBubbleAppOptions): BrowserMount {
+  const projector = createDomProjector({
+    bubble: options.app.bubble,
+    bridgeEvents: options.bridgeEvents,
+    syncFocus: options.syncFocus,
+  })
+  options.container.replaceChildren()
+  projector.mount(options.container)
+  return {
+    unmount(): void {
+      projector.unmount()
+      options.app.unmount()
+    },
+  }
+}
+
 function setDomProperty(
   node: DomElementNode,
   name: string,

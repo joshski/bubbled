@@ -12,6 +12,7 @@ import {
   createDomLayout,
   createDomProjector,
   measureAndPlacePopover,
+  mountBubbleApp,
   placePopover,
 } from './index'
 
@@ -101,6 +102,15 @@ class FakeDomElement extends FakeDomNode {
     }
 
     return node
+  }
+
+  replaceChildren(...nodes: FakeDomNode[]) {
+    while (this.childNodes.length > 0) {
+      this.removeChild(this.childNodes[0] as FakeDomNode)
+    }
+    for (const node of nodes) {
+      this.appendChild(node)
+    }
   }
 
   setAttribute(name: string, value: string) {
@@ -1662,5 +1672,119 @@ describe('createDomProjector', () => {
         },
       })
     ).toThrow('Text nodes cannot have children: text:1')
+  })
+})
+
+describe('mountBubbleApp', () => {
+  test('clears the container and projects the bubble tree into it', () => {
+    const bubble = createBubble()
+
+    bubble.transact(tx => {
+      const buttonId = tx.createElement({ tag: 'button' })
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId })
+    })
+
+    const { container, markup } = createContainer()
+    container.appendChild(container.ownerDocument.createElement('span'))
+
+    mountBubbleApp({
+      app: { bubble, unmount: () => {} },
+      container: container as unknown as HTMLElement,
+    })
+
+    expect(markup()).toBe('<button></button>')
+  })
+
+  test('unmount tears down the projector and the app', () => {
+    const bubble = createBubble()
+    let appUnmounted = false
+
+    bubble.transact(tx => {
+      const divId = tx.createElement({ tag: 'div' })
+      tx.insertChild({ parentId: bubble.rootId, childId: divId })
+    })
+
+    const { container, markup } = createContainer()
+    const mount = mountBubbleApp({
+      app: {
+        bubble,
+        unmount: () => {
+          appUnmounted = true
+        },
+      },
+      container: container as unknown as HTMLElement,
+    })
+
+    mount.unmount()
+
+    expect(appUnmounted).toBe(true)
+    expect(markup()).toBe('')
+  })
+
+  test('bridges DOM events to bubble when bridgeEvents is true', () => {
+    const bubble = createBubble()
+    const calls: string[] = []
+    let buttonId = ''
+
+    bubble.transact(tx => {
+      buttonId = tx.createElement({ tag: 'button' })
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId })
+      tx.addEventListener({
+        nodeId: buttonId,
+        type: 'click',
+        listener: () => {
+          calls.push('clicked')
+        },
+      })
+    })
+
+    const { container } = createContainer()
+    mountBubbleApp({
+      app: { bubble, unmount: () => {} },
+      container: container as unknown as HTMLElement,
+      bridgeEvents: true,
+    })
+
+    const buttonElement = container.childNodes[0] as FakeDomElement
+    buttonElement.dispatchEvent({
+      type: 'click',
+      target: buttonElement,
+      preventDefault() {},
+    })
+
+    expect(calls).toEqual(['clicked'])
+  })
+
+  test('does not bridge DOM events when bridgeEvents is not set', () => {
+    const bubble = createBubble()
+    const calls: string[] = []
+    let buttonId = ''
+
+    bubble.transact(tx => {
+      buttonId = tx.createElement({ tag: 'button' })
+      tx.insertChild({ parentId: bubble.rootId, childId: buttonId })
+      tx.addEventListener({
+        nodeId: buttonId,
+        type: 'click',
+        listener: () => {
+          calls.push('clicked')
+        },
+      })
+    })
+
+    const { container } = createContainer()
+    mountBubbleApp({
+      app: { bubble, unmount: () => {} },
+      container: container as unknown as HTMLElement,
+    })
+
+    const buttonElement = container.childNodes[0] as FakeDomElement
+    buttonElement.dispatchEvent({
+      type: 'click',
+      target: buttonElement,
+      preventDefault() {},
+    })
+
+    expect(calls).toEqual([])
   })
 })

@@ -83,12 +83,14 @@ describe('public entrypoints', () => {
       'createDomLayout',
       'createDomProjector',
       'measureAndPlacePopover',
+      'mountBubbleApp',
       'placePopover',
     ])
     expect(entrypoint).toMatchObject({
       createDomLayout: expect.any(Function),
       createDomProjector: expect.any(Function),
       measureAndPlacePopover: expect.any(Function),
+      mountBubbleApp: expect.any(Function),
       placePopover: expect.any(Function),
     })
     expectNoNewGlobals(globalsBeforeImport)

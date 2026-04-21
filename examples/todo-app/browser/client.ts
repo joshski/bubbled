@@ -1,4 +1,4 @@
-import { createDomProjector } from '../../../bubble-browser'
+import { mountBubbleApp } from '../../../bubble-browser'
 import { createBubble } from '../../../bubble-core'
 import {
   startTodoApp,
@@ -45,20 +45,15 @@ const host: TodoBrowserHost = {
       storage: bubble.resolveCapability('storage'),
       initialTodos,
     })
-    const mountedApp = mountTodoApp({ bubble, store })
-    const projector = createDomProjector({
-      bubble,
+    const app = mountTodoApp({ bubble, store })
+    const mount = mountBubbleApp({
+      app,
+      container: container as unknown as HTMLElement,
       bridgeEvents: true,
       syncFocus: true,
     })
 
-    container.replaceChildren()
-    projector.mount(container as unknown as HTMLElement)
-
-    return () => {
-      projector.unmount()
-      mountedApp.unmount()
-    }
+    return () => mount.unmount()
   },
 }
 
