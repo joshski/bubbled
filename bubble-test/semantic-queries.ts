@@ -19,40 +19,63 @@ export function createInternalSemanticQueries(
 ): BubbleSemanticQueries {
   const { getTextContent } = createSemanticContext(target)
 
+  function findByRole(role: string, options?: { name?: string | RegExp }) {
+    const snapshot = target.bubble.snapshot()
+    const nodesByRole = snapshot.query.getByRole(role)
+    const matchingNode = nodesByRole.find(node => {
+      if (options?.name === undefined) {
+        return true
+      }
+
+      if (typeof options.name === 'string') {
+        return node.name === options.name
+      }
+
+      return node.name !== null && options.name.test(node.name)
+    })
+
+    return { matchingNode, nodesByRole }
+  }
+
+  function throwNotFound(
+    role: string,
+    options: { name?: string | RegExp } | undefined,
+    nodesByRole: ReadonlyArray<{ id: string; name: string | null }>
+  ): never {
+    const queryDescription =
+      options?.name === undefined
+        ? `role ${JSON.stringify(role)}`
+        : `role ${JSON.stringify(role)} and name ${formatNameMatcher(options.name)}`
+    const nodesByRoleDescription =
+      nodesByRole.length === 0
+        ? 'No nodes with that role exist in the current bubble snapshot.'
+        : `Nodes with role ${JSON.stringify(role)}: ${nodesByRole
+            .map(node => `${node.id} (${formatNodeName(node.name)})`)
+            .join(', ')}`
+
+    throw new Error(
+      `Unable to find a node with ${queryDescription}. ${nodesByRoleDescription}`
+    )
+  }
+
   return {
     getByRole(role, options) {
-      const snapshot = target.bubble.snapshot()
-      const nodesByRole = snapshot.query.getByRole(role)
-      const matchingNode = nodesByRole.find(node => {
-        if (options?.name === undefined) {
-          return true
-        }
-
-        if (typeof options.name === 'string') {
-          return node.name === options.name
-        }
-
-        return node.name !== null && options.name.test(node.name)
-      })
+      const { matchingNode, nodesByRole } = findByRole(role, options)
 
       if (matchingNode !== undefined) {
         return matchingNode.id
       }
 
-      const queryDescription =
-        options?.name === undefined
-          ? `role ${JSON.stringify(role)}`
-          : `role ${JSON.stringify(role)} and name ${formatNameMatcher(options.name)}`
-      const nodesByRoleDescription =
-        nodesByRole.length === 0
-          ? 'No nodes with that role exist in the current bubble snapshot.'
-          : `Nodes with role ${JSON.stringify(role)}: ${nodesByRole
-              .map(node => `${node.id} (${formatNodeName(node.name)})`)
-              .join(', ')}`
+      return throwNotFound(role, options, nodesByRole)
+    },
+    getValueByRole(role, options) {
+      const { matchingNode, nodesByRole } = findByRole(role, options)
 
-      throw new Error(
-        `Unable to find a node with ${queryDescription}. ${nodesByRoleDescription}`
-      )
+      if (matchingNode !== undefined) {
+        return matchingNode.value
+      }
+
+      return throwNotFound(role, options, nodesByRole)
     },
     getByText(text) {
       const snapshot = target.bubble.snapshot()

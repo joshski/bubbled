@@ -22,5 +22,19 @@ export function createInternalSemanticInteractions(
         data: { value },
       })
     },
+    typeByRole(role, options, value) {
+      const nodeId = getByRole(role, options)
+
+      return target.bubble.dispatchEvent({
+        type: 'change',
+        targetId: nodeId,
+        data: { value },
+      })
+    },
+    submitByRole(role, options) {
+      const nodeId = getByRole(role, options)
+
+      return target.bubble.dispatchEvent({ type: 'submit', targetId: nodeId })
+    },
   }
 }

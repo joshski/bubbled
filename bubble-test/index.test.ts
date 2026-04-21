@@ -980,4 +980,125 @@ describe('semantic interactions', () => {
       'Unable to find a node with role "textbox" and name "Email". No nodes with that role exist in the current bubble snapshot.'
     )
   })
+
+  test('typeByRole dispatches a change event with the given value', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+    const receivedValues: Array<unknown> = []
+
+    renderHarness.render({
+      tag: 'input',
+      attributes: { type: 'text', 'aria-label': 'Search' },
+      properties: { value: '' },
+    })
+
+    bubble.transact(tx => {
+      const textboxId = bubble.snapshot().query.getByRole('textbox')[0]!.id
+      tx.addEventListener({
+        nodeId: textboxId,
+        type: 'change',
+        listener: event => {
+          receivedValues.push((event.data as Record<string, unknown>).value)
+        },
+      })
+    })
+
+    const result = interactions.typeByRole(
+      'textbox',
+      { name: 'Search' },
+      'hello'
+    )
+
+    expect(result).toEqual({ defaultPrevented: false, delivered: true })
+    expect(receivedValues).toEqual(['hello'])
+  })
+
+  test('typeByRole throws when the role is not found', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+
+    expect(() =>
+      interactions.typeByRole('textbox', { name: 'Search' }, 'hello')
+    ).toThrow(
+      'Unable to find a node with role "textbox" and name "Search". No nodes with that role exist in the current bubble snapshot.'
+    )
+  })
+
+  test('submitByRole dispatches a submit event to the matching node', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+    const receivedEvents: Array<Record<string, unknown>> = []
+
+    renderHarness.render({
+      tag: 'form',
+      attributes: { role: 'form', 'aria-label': 'Contact' },
+      children: [{ tag: 'button', children: ['Send'] }],
+    })
+
+    bubble.transact(tx => {
+      const formId = bubble.snapshot().query.getByRole('form')[0]!.id
+      tx.addEventListener({
+        nodeId: formId,
+        type: 'submit',
+        listener: event => {
+          receivedEvents.push(event.data)
+        },
+      })
+    })
+
+    const result = interactions.submitByRole('form', { name: 'Contact' })
+
+    expect(result.delivered).toBe(true)
+    expect(receivedEvents).toEqual([{}])
+  })
+
+  test('submitByRole throws when the role is not found', () => {
+    const bubble = createBubble()
+    const renderHarness = createRenderHarness(bubble)
+    const interactions = createSemanticInteractions(renderHarness)
+
+    expect(() =>
+      interactions.submitByRole('form', { name: 'Contact' })
+    ).toThrow(
+      'Unable to find a node with role "form" and name "Contact". No nodes with that role exist in the current bubble snapshot.'
+    )
+  })
+})
+
+describe('semantic queries — getValueByRole', () => {
+  test('returns the value of a form element found by role', () => {
+    const renderHarness = createRenderHarness()
+    const queries = createSemanticQueries(renderHarness)
+
+    renderHarness.render({
+      tag: 'input',
+      attributes: { type: 'text', 'aria-label': 'Email' },
+      properties: { value: 'user@example.com' },
+    })
+
+    expect(queries.getValueByRole('textbox', { name: 'Email' })).toBe(
+      'user@example.com'
+    )
+  })
+
+  test('returns null when the element has no value', () => {
+    const renderHarness = createRenderHarness()
+    const queries = createSemanticQueries(renderHarness)
+
+    renderHarness.render({ tag: 'button', children: ['Save'] })
+
+    expect(queries.getValueByRole('button', { name: 'Save' })).toBeNull()
+  })
+
+  test('throws when the role is not found', () => {
+    const bubble = createBubble()
+    const queries = createSemanticQueries({ bubble })
+
+    expect(() => queries.getValueByRole('textbox', { name: 'Email' })).toThrow(
+      'Unable to find a node with role "textbox" and name "Email". No nodes with that role exist in the current bubble snapshot.'
+    )
+  })
 })

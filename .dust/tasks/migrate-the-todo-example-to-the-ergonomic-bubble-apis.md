@@ -14,7 +14,7 @@ implement
 
 ## Blocked By
 
-- [Add Semantic Typing and Submit Helpers to Bubble Test](./add-semantic-typing-and-submit-helpers-to-bubble-test.md)
+(none)
 
 ## Definition of Done
 

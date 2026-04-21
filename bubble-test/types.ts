@@ -29,6 +29,10 @@ export interface BubbleRenderHarness extends BubbleHarnessContext {
 export interface BubbleSemanticQueries {
   getByRole(role: string, options?: { name?: string | RegExp }): string
   getByText(text: string | RegExp): string
+  getValueByRole(
+    role: string,
+    options?: { name?: string | RegExp }
+  ): string | null
 }
 
 export interface BubbleSemanticAssertions {
@@ -49,6 +53,15 @@ export interface BubbleSemanticInteractions {
     role: string,
     options: { name?: string | RegExp },
     value: string
+  ): BubbleDispatchResult
+  typeByRole(
+    role: string,
+    options: { name?: string | RegExp },
+    value: string
+  ): BubbleDispatchResult
+  submitByRole(
+    role: string,
+    options?: { name?: string | RegExp }
   ): BubbleDispatchResult
 }
 

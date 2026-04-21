@@ -9,6 +9,7 @@ import {
 import {
   createSemanticAssertions,
   createSemanticInteractions,
+  createSemanticQueries,
 } from '../../../bubble-test'
 import { mountTodoApp } from './mountTodoApp.ts'
 
@@ -41,21 +42,22 @@ function textContentOf(node: BubbleSerializedNode): string {
 
 function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
   const app = mountTodoApp(options)
-  const assertions = createSemanticAssertions({ bubble: app.bubble })
+  const context = { bubble: app.bubble }
+  const assertions = createSemanticAssertions(context)
+  const interactions = createSemanticInteractions(context)
+  const queries = createSemanticQueries(context)
 
   const attachedTree = (): BubbleSerializedNode =>
     JSON.parse(
       serializeBubbleSnapshot(app.bubble.snapshot())
     ) as BubbleSerializedNode
 
-  const interactions = createSemanticInteractions({ bubble: app.bubble })
-
   const click = (name: string): void => {
     interactions.clickByRole('button', { name })
   }
 
-  const changeTextbox = (name: string, value: string): void => {
-    interactions.changeByRole('textbox', { name }, value)
+  const type = (name: string, value: string): void => {
+    interactions.typeByRole('textbox', { name }, value)
   }
 
   const paragraphId = (): string =>
@@ -65,14 +67,14 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
     collectAttachedElementsByTag(attachedTree(), 'li')
 
   const textboxValue = (name: string): string | null =>
-    app.bubble.snapshot().query.getByRole('textbox', { name })[0]!.value
+    queries.getValueByRole('textbox', { name })
 
   return {
     app,
     assertions,
     attachedLis,
     attachedTree,
-    changeTextbox,
+    type,
     click,
     paragraphId,
     textboxValue,
@@ -102,7 +104,7 @@ describe('mountTodoApp', () => {
       app,
       assertions,
       attachedLis,
-      changeTextbox,
+      type,
       click,
       paragraphId,
       textboxValue,
@@ -110,7 +112,7 @@ describe('mountTodoApp', () => {
       initialTodos: [],
     })
 
-    changeTextbox('New todo', '  Write   regression tests  ')
+    type('New todo', '  Write   regression tests  ')
     click('Add todo')
 
     expect(app.store.get()).toEqual([
@@ -145,15 +147,15 @@ describe('mountTodoApp', () => {
   })
 
   test('enables the add button once the draft has visible content', () => {
-    const { app, changeTextbox } = createHarness({ initialTodos: [] })
+    const { app, type } = createHarness({ initialTodos: [] })
 
-    changeTextbox('New todo', '  ')
+    type('New todo', '  ')
     expect(
       app.bubble.snapshot().query.getByRole('button', { name: 'Add todo' })[0]!
         .properties
     ).toEqual({ disabled: true })
 
-    changeTextbox('New todo', 'Ship it')
+    type('New todo', 'Ship it')
     expect(
       app.bubble.snapshot().query.getByRole('button', { name: 'Add todo' })[0]!
         .properties
