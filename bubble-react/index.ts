@@ -7,7 +7,12 @@ import { reconcileChildren, type BubbleReactNode } from './child-reconciliation'
 import { planReactNode, type BubbleReactPlanningContext } from './planner'
 import { readReactClientInternals } from './react-client-internals'
 
-export { valueChangeHandler } from './react-dom-bindings'
+export {
+  valueChangeHandler,
+  textInput,
+  formSubmitHandler,
+  type TextInputProps,
+} from './react-dom-bindings'
 
 export interface BubbleReactRoot {
   render(node: ReactNode): void

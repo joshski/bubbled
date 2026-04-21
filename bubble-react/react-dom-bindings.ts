@@ -1,4 +1,4 @@
-import type { ChangeEventHandler } from 'react'
+import type { ChangeEventHandler, FormEventHandler } from 'react'
 
 import type { BubbleEvent } from '../bubble-core'
 
@@ -15,6 +15,7 @@ export type BubbleReactEventHandler = (event: BubbleEvent) => void
 export const EVENT_TYPE_BY_HANDLER_NAME = {
   onChange: 'change',
   onClick: 'click',
+  onSubmit: 'submit',
 } as const
 
 export type BubbleReactEventHandlerName =
@@ -28,4 +29,26 @@ export function valueChangeHandler(
   }
 
   return bubbleHandler as unknown as ChangeEventHandler<HTMLInputElement>
+}
+
+export type TextInputProps = {
+  readonly value: string
+  readonly onChange: ChangeEventHandler<HTMLInputElement>
+}
+
+export function textInput(
+  value: string,
+  onChange: (value: string) => void
+): TextInputProps {
+  return { value, onChange: valueChangeHandler(onChange) }
+}
+
+export function formSubmitHandler(
+  handler: () => void
+): FormEventHandler<HTMLFormElement> {
+  const bubbleHandler: BubbleReactEventHandler = _event => {
+    handler()
+  }
+
+  return bubbleHandler as unknown as FormEventHandler<HTMLFormElement>
 }

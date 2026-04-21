@@ -103,10 +103,14 @@ describe('public entrypoints', () => {
 
     expect(Object.keys(entrypoint).sort()).toEqual([
       'createBubbleReactRoot',
+      'formSubmitHandler',
+      'textInput',
       'valueChangeHandler',
     ])
     expect(entrypoint).toMatchObject({
       createBubbleReactRoot: expect.any(Function),
+      formSubmitHandler: expect.any(Function),
+      textInput: expect.any(Function),
       valueChangeHandler: expect.any(Function),
     })
     expectNoNewGlobals(globalsBeforeImport)

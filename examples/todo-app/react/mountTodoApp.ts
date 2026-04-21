@@ -5,7 +5,7 @@ import type { TodoItem } from '../domain/todos.ts'
 import { createBubble, type BubbleRuntime } from '../../../bubble-core'
 import {
   createBubbleReactRoot,
-  valueChangeHandler,
+  textInput,
   type BubbleReactRoot,
 } from '../../../bubble-react'
 import {
@@ -38,8 +38,7 @@ function TodoAppRoot(props: TodoAppRootProps) {
 
   return createElement(TodoAppView, {
     todos: props.store.get(),
-    draft,
-    onDraftChange: valueChangeHandler(setDraft),
+    draftInput: textInput(draft, setDraft),
     onToggle(id: string) {
       props.store.toggle(id)
     },

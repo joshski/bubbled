@@ -1,4 +1,6 @@
-import type { ChangeEventHandler, ReactNode } from 'react'
+import type { ReactNode } from 'react'
+
+import type { TextInputProps } from '../../../bubble-react'
 
 import {
   normalizeTodoLabel,
@@ -8,26 +10,20 @@ import {
 
 export interface TodoAppViewProps {
   readonly todos: readonly TodoItem[]
-  readonly draft: string
-  readonly onDraftChange: ChangeEventHandler<HTMLInputElement>
+  readonly draftInput: TextInputProps
   readonly onToggle: (id: string) => void
   readonly onRemove: (id: string) => void
   readonly onAdd: () => void
 }
 
 export function TodoAppView(props: TodoAppViewProps): ReactNode {
-  const canAdd = normalizeTodoLabel(props.draft).length > 0
+  const canAdd = normalizeTodoLabel(props.draftInput.value).length > 0
   return (
     <section>
       <h1>Bubbled Todos</h1>
       <p>{summarizeTodos(props.todos)}</p>
       <div>
-        <input
-          type="text"
-          aria-label="New todo"
-          value={props.draft}
-          onChange={props.onDraftChange}
-        />
+        <input type="text" aria-label="New todo" {...props.draftInput} />
         <button type="button" disabled={!canAdd} onClick={props.onAdd}>
           Add todo
         </button>

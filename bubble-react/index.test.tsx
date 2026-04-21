@@ -6,7 +6,12 @@ import {
   serializeBubbleSnapshot,
   type BubbleEvent,
 } from '../bubble-core'
-import { createBubbleReactRoot, valueChangeHandler } from './index'
+import {
+  createBubbleReactRoot,
+  formSubmitHandler,
+  textInput,
+  valueChangeHandler,
+} from './index'
 import { readReactClientInternals } from './react-client-internals'
 
 function readSnapshot(bubble: ReturnType<typeof createBubble>) {
@@ -936,6 +941,109 @@ describe('createBubbleReactRoot', () => {
     handler(make({}))
 
     expect(received).toEqual(['hello', '42', '', '', ''])
+  })
+
+  test('textInput returns value and an onChange handler for controlled inputs', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+
+    function Editor() {
+      const [value, setValue] = useState('Draft')
+      const input = textInput(value, setValue)
+
+      return <input type="text" aria-label="Title" {...input} />
+    }
+
+    root.render(<Editor />)
+
+    const inputId = bubble.snapshot().query.getByRole('textbox', {
+      name: 'Title',
+    })[0]!.id
+
+    bubble.dispatchEvent({
+      type: 'change',
+      targetId: inputId,
+      data: { value: 'Published' },
+    })
+
+    const textbox = bubble.snapshot().query.getByRole('textbox', {
+      name: 'Title',
+    })[0]!
+
+    expect(textbox.value).toBe('Published')
+  })
+
+  test('textInput normalizes missing, null, undefined, and non-string values', () => {
+    const received: string[] = []
+    const input = textInput('', value => {
+      received.push(value)
+    })
+    const handler = input.onChange as unknown as (event: BubbleEvent) => void
+
+    const make = (data: Record<string, unknown>): BubbleEvent => ({
+      type: 'change',
+      targetId: 'node',
+      currentTargetId: 'node',
+      phase: 'target',
+      cancelable: false,
+      defaultPrevented: false,
+      data,
+      preventDefault() {},
+      stopPropagation() {},
+    })
+
+    handler(make({ value: 'hello' }))
+    handler(make({ value: 42 }))
+    handler(make({ value: null }))
+    handler(make({ value: undefined }))
+    handler(make({}))
+
+    expect(received).toEqual(['hello', '42', '', '', ''])
+  })
+
+  test('formSubmitHandler calls handler on bubble submit events', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+    let submitCount = 0
+
+    root.render(
+      <form
+        onSubmit={formSubmitHandler(() => {
+          submitCount += 1
+        })}
+      >
+        <button type="submit">Submit</button>
+      </form>
+    )
+
+    const formId = bubble.getRoot().children[0]!
+
+    bubble.dispatchEvent({ type: 'submit', targetId: formId })
+
+    expect(submitCount).toBe(1)
+  })
+
+  test('formSubmitHandler ignores event data and calls handler with no arguments', () => {
+    let callArgs: unknown = 'not-called'
+    const handler = formSubmitHandler((...args: unknown[]) => {
+      callArgs = args
+    }) as unknown as (event: BubbleEvent) => void
+
+    const event: BubbleEvent = {
+      type: 'submit',
+      targetId: 'node',
+      currentTargetId: 'node',
+      phase: 'target',
+      cancelable: false,
+      defaultPrevented: false,
+      data: { irrelevant: 'payload' },
+      preventDefault() {},
+      stopPropagation() {},
+    }
+
+    handler(event)
+
+    expect(callArgs).toEqual([])
   })
 
   test('multiple state updates settle deterministically', () => {
