@@ -2,12 +2,14 @@ import { describe, expect, test } from 'vitest'
 
 import type { TodoItem } from '../domain/todos.ts'
 
+import type { BubbleNetwork } from '../../../bubble-capabilities'
+import { createBubble } from '../../../bubble-core'
+import type { MountedTodoApp } from '../react/mountTodoApp.ts'
 import {
   startTodoApp,
   type TodoAppContainer,
   type TodoAppTextNode,
-  type TodoBrowserHost,
-  type TodoFetchResponse,
+  type TodoStartHost,
 } from './start-todo-app.ts'
 
 function createFakeContainer(): TodoAppContainer & {
@@ -26,42 +28,33 @@ function createFakeContainer(): TodoAppContainer & {
   return container
 }
 
-function createJsonResponse(body: unknown): TodoFetchResponse {
+function createJsonNetwork(body: unknown): BubbleNetwork {
   return {
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-    async json(): Promise<unknown> {
-      return body
+    async fetch() {
+      return { status: 200, headers: {}, body: JSON.stringify(body) }
     },
   }
 }
 
 interface FakeHostLog {
-  fetched: string[]
   beforeUnload: Array<() => void>
   errorMessages: string[]
   logged: unknown[]
-  mounts: Array<{
-    container: TodoAppContainer
-    initialTodos: readonly TodoItem[]
-  }>
+  mounts: Array<{ container: TodoAppContainer; app: MountedTodoApp }>
   disposeCount: number
 }
 
 interface FakeHostOptions {
   getContainer?: () => TodoAppContainer | null
-  fetchTodos?: (path: string) => Promise<TodoFetchResponse>
 }
 
 function createFakeHost(options: FakeHostOptions = {}): {
-  host: TodoBrowserHost
+  host: TodoStartHost
   log: FakeHostLog
   container: TodoAppContainer & { children: TodoAppTextNode[] }
 } {
   const container = createFakeContainer()
   const log: FakeHostLog = {
-    fetched: [],
     beforeUnload: [],
     errorMessages: [],
     logged: [],
@@ -72,16 +65,13 @@ function createFakeHost(options: FakeHostOptions = {}): {
   const getContainer =
     options.getContainer ?? ((): TodoAppContainer | null => container)
 
-  const host: TodoBrowserHost = {
+  const host: TodoStartHost = {
     getAppContainer: getContainer,
-    async fetchTodos(path): Promise<TodoFetchResponse> {
-      log.fetched.push(path)
-
-      if (options.fetchTodos !== undefined) {
-        return options.fetchTodos(path)
+    mountApp(c, app) {
+      log.mounts.push({ container: c, app })
+      return () => {
+        log.disposeCount += 1
       }
-
-      return createJsonResponse([])
     },
     onBeforeUnload(listener): void {
       log.beforeUnload.push(listener)
@@ -93,12 +83,6 @@ function createFakeHost(options: FakeHostOptions = {}): {
     logError(error): void {
       log.logged.push(error)
     },
-    mountTodoApp(args): () => void {
-      log.mounts.push(args)
-      return () => {
-        log.disposeCount += 1
-      }
-    },
   }
 
   return { host, log, container }
@@ -109,16 +93,14 @@ describe('startTodoApp', () => {
     const todos: readonly TodoItem[] = [
       { id: 't1', label: 'Alpha', done: false },
     ]
-    const { host, log, container } = createFakeHost({
-      fetchTodos: async () => createJsonResponse(todos),
-    })
+    const bubble = createBubble({ capabilities: { network: createJsonNetwork(todos) } })
+    const { host, log, container } = createFakeHost()
 
-    await startTodoApp(host)
+    await startTodoApp(host, bubble)
 
-    expect(log.fetched).toEqual(['/api/todos'])
     expect(log.mounts).toHaveLength(1)
     expect(log.mounts[0]?.container).toBe(container)
-    expect(log.mounts[0]?.initialTodos).toBe(todos)
+    expect(log.mounts[0]?.app.store.get()).toEqual(todos)
     expect(log.beforeUnload).toHaveLength(1)
     expect(log.errorMessages).toEqual([])
     expect(log.logged).toEqual([])
@@ -126,9 +108,10 @@ describe('startTodoApp', () => {
   })
 
   test('disposes the mounted app when the beforeunload listener fires', async () => {
+    const bubble = createBubble({ capabilities: { network: createJsonNetwork([]) } })
     const { host, log } = createFakeHost()
 
-    await startTodoApp(host)
+    await startTodoApp(host, bubble)
 
     const listener = log.beforeUnload[0]
     expect(listener).toBeDefined()
@@ -138,11 +121,12 @@ describe('startTodoApp', () => {
   })
 
   test('logs a startup error when the app container is missing', async () => {
+    const bubble = createBubble()
     const { host, log } = createFakeHost({
       getContainer: () => null,
     })
 
-    await startTodoApp(host)
+    await startTodoApp(host, bubble)
 
     expect(log.mounts).toEqual([])
     expect(log.errorMessages).toEqual([])
@@ -156,6 +140,7 @@ describe('startTodoApp', () => {
   test('renders the startup error in the container if it reappears during the catch', async () => {
     const container = createFakeContainer()
     let callCount = 0
+    const bubble = createBubble()
     const { host, log } = createFakeHost({
       getContainer: () => {
         callCount += 1
@@ -163,7 +148,7 @@ describe('startTodoApp', () => {
       },
     })
 
-    await startTodoApp(host)
+    await startTodoApp(host, bubble)
 
     expect(container.children).toHaveLength(1)
     expect(container.children[0]?.textContent).toBe(
@@ -175,36 +160,33 @@ describe('startTodoApp', () => {
   })
 
   test('renders a startup error in the container when loading todos fails', async () => {
-    const { host, log, container } = createFakeHost({
-      fetchTodos: async () => ({
-        ok: false,
-        status: 503,
-        statusText: 'Service Unavailable',
-        async json(): Promise<unknown> {
-          return null
-        },
-      }),
-    })
+    const network: BubbleNetwork = {
+      async fetch() {
+        return { status: 503, headers: {}, body: '' }
+      },
+    }
+    const bubble = createBubble({ capabilities: { network } })
+    const { host, log, container } = createFakeHost()
 
-    await startTodoApp(host)
+    await startTodoApp(host, bubble)
 
     expect(log.mounts).toEqual([])
     expect(container.children).toHaveLength(1)
-    expect(container.children[0]?.textContent).toBe(
-      'Failed to load todos: 503 Service Unavailable'
-    )
+    expect(container.children[0]?.textContent).toBe('Failed to load todos: 503')
     expect(log.logged).toHaveLength(1)
     expect(log.logged[0]).toBeInstanceOf(Error)
   })
 
   test('falls back to a generic startup error when a non-Error is thrown', async () => {
-    const { host, log, container } = createFakeHost({
-      fetchTodos: async () => {
+    const network: BubbleNetwork = {
+      async fetch() {
         throw 'boom'
       },
-    })
+    }
+    const bubble = createBubble({ capabilities: { network } })
+    const { host, log, container } = createFakeHost()
 
-    await startTodoApp(host)
+    await startTodoApp(host, bubble)
 
     expect(container.children).toHaveLength(1)
     expect(container.children[0]?.textContent).toBe(

@@ -1,13 +1,10 @@
 import type { TodoItem } from '../domain/todos.ts'
 
-const TODO_API_PATH = '/api/todos'
+import type { BubbleRuntime } from '../../../bubble-core'
 
-export interface TodoFetchResponse {
-  readonly ok: boolean
-  readonly status: number
-  readonly statusText: string
-  json(): Promise<unknown>
-}
+import { mountTodoApp, type MountedTodoApp } from '../react/mountTodoApp.ts'
+
+const TODO_API_PATH = '/api/todos'
 
 export interface TodoAppContainer {
   replaceChildren(): void
@@ -18,19 +15,18 @@ export interface TodoAppTextNode {
   textContent: string
 }
 
-export interface TodoBrowserHost {
+export interface TodoStartHost {
   getAppContainer(): TodoAppContainer | null
-  fetchTodos(path: string): Promise<TodoFetchResponse>
+  mountApp(container: TodoAppContainer, app: MountedTodoApp): () => void
   onBeforeUnload(listener: () => void): void
   createErrorMessage(text: string): TodoAppTextNode
   logError(error: unknown): void
-  mountTodoApp(args: {
-    container: TodoAppContainer
-    initialTodos: readonly TodoItem[]
-  }): () => void
 }
 
-export async function startTodoApp(host: TodoBrowserHost): Promise<void> {
+export async function startTodoApp(
+  host: TodoStartHost,
+  bubble: BubbleRuntime
+): Promise<void> {
   try {
     const container = host.getAppContainer()
 
@@ -38,16 +34,15 @@ export async function startTodoApp(host: TodoBrowserHost): Promise<void> {
       throw new Error('Expected a root element with id "app".')
     }
 
-    const response = await host.fetchTodos(TODO_API_PATH)
+    const response = await bubble.fetch({ method: 'GET', url: TODO_API_PATH })
 
-    if (!response.ok) {
-      throw new Error(
-        `Failed to load todos: ${response.status} ${response.statusText}`
-      )
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Failed to load todos: ${response.status}`)
     }
 
-    const initialTodos = (await response.json()) as readonly TodoItem[]
-    const dispose = host.mountTodoApp({ container, initialTodos })
+    const initialTodos = JSON.parse(response.body) as readonly TodoItem[]
+    const app = mountTodoApp({ bubble, initialTodos })
+    const dispose = host.mountApp(container, app)
 
     host.onBeforeUnload(() => {
       dispose()

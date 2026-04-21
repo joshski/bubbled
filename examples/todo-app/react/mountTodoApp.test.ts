@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import {
-  createBubble,
-  serializeBubbleSnapshot,
-  type BubbleSerializedElementNode,
-  type BubbleSerializedNode,
-} from '../../../bubble-core'
+import { createBubble } from '../../../bubble-core'
 import {
   createSemanticAssertions,
   createSemanticInteractions,
@@ -13,44 +8,12 @@ import {
 } from '../../../bubble-test'
 import { mountTodoApp } from './mountTodoApp.ts'
 
-function collectAttachedElementsByTag(
-  node: BubbleSerializedNode,
-  tag: string
-): BubbleSerializedElementNode[] {
-  const results: BubbleSerializedElementNode[] = []
-
-  if (node.kind === 'element' && node.tag === tag) {
-    results.push(node)
-  }
-
-  if (node.kind !== 'text') {
-    for (const child of node.children) {
-      results.push(...collectAttachedElementsByTag(child, tag))
-    }
-  }
-
-  return results
-}
-
-function textContentOf(node: BubbleSerializedNode): string {
-  if (node.kind === 'text') {
-    return node.value
-  }
-
-  return node.children.map(child => textContentOf(child)).join('')
-}
-
 function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
   const app = mountTodoApp(options)
   const context = { bubble: app.bubble }
   const assertions = createSemanticAssertions(context)
   const interactions = createSemanticInteractions(context)
   const queries = createSemanticQueries(context)
-
-  const attachedTree = (): BubbleSerializedNode =>
-    JSON.parse(
-      serializeBubbleSnapshot(app.bubble.snapshot())
-    ) as BubbleSerializedNode
 
   const click = (name: string): void => {
     interactions.clickByRole('button', { name })
@@ -63,8 +26,8 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
   const paragraphId = (): string =>
     app.bubble.snapshot().query.getByTag('p')[0]!.id
 
-  const attachedLis = (): BubbleSerializedElementNode[] =>
-    collectAttachedElementsByTag(attachedTree(), 'li')
+  const attachedLis = () =>
+    app.bubble.snapshot().query.getByTag('li').filter(n => n.parentId !== null)
 
   const textboxValue = (name: string): string | null =>
     queries.getValueByRole('textbox', { name })
@@ -73,7 +36,6 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
     app,
     assertions,
     attachedLis,
-    attachedTree,
     type,
     click,
     paragraphId,
@@ -83,7 +45,7 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
 
 describe('mountTodoApp', () => {
   test('renders whatever the store currently holds on first mount', () => {
-    const { attachedLis, attachedTree, assertions, paragraphId, textboxValue } =
+    const { app, attachedLis, assertions, paragraphId, textboxValue } =
       createHarness({
         initialTodos: [
           { id: 't1', label: 'Alpha', done: false },
@@ -92,9 +54,9 @@ describe('mountTodoApp', () => {
       })
 
     expect(attachedLis()).toHaveLength(2)
-    const [heading] = collectAttachedElementsByTag(attachedTree(), 'h1')
+    const heading = app.bubble.snapshot().query.getByTag('h1')[0]
     expect(heading).toBeDefined()
-    expect(textContentOf(heading!)).toBe('Bubbled Todos')
+    assertions.expectText(heading!.id, 'Bubbled Todos')
     assertions.expectText(paragraphId(), '1 of 2 remaining')
     expect(textboxValue('New todo')).toBe('')
   })
