@@ -14,7 +14,7 @@ implement
 
 ## Blocked By
 
-- [Create Shared Browser Bootstrap for Bubble Apps](./create-shared-browser-bootstrap-for-bubble-apps.md)
+(none)
 
 ## Definition of Done
 

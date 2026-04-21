@@ -14,7 +14,6 @@ implement
 
 ## Blocked By
 
-- [Create Shared Browser Bootstrap for Bubble Apps](./create-shared-browser-bootstrap-for-bubble-apps.md)
 - [Add Bubble-Native Input and Form Binding Helpers](./add-bubble-native-input-and-form-binding-helpers.md)
 - [Add Semantic Typing and Submit Helpers to Bubble Test](./add-semantic-typing-and-submit-helpers-to-bubble-test.md)
 - [Expand Bubble React's Deterministic Authoring Surface](./expand-bubble-reacts-deterministic-authoring-surface.md)
