@@ -1,4 +1,12 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react'
+import {
+  StrictMode,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react'
 import { describe, expect, test } from 'vitest'
 
 import {
@@ -1328,6 +1336,215 @@ describe('createBubbleReactRoot', () => {
     })
   })
 
+  test('useReducer drives state transitions from dispatched actions', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+
+    type Action = { type: 'increment' } | { type: 'reset' }
+
+    function reducer(state: number, action: Action): number {
+      if (action.type === 'increment') return state + 1
+      return 0
+    }
+
+    function Counter() {
+      const [count, dispatch] = useReducer(reducer, 0)
+
+      return (
+        <button onClick={() => dispatch({ type: 'increment' })}>
+          Count: {count}
+        </button>
+      )
+    }
+
+    root.render(<Counter />)
+
+    const buttonId = bubble.getRoot().children[0]!
+
+    bubble.dispatchEvent({ type: 'click', targetId: buttonId })
+    bubble.dispatchEvent({ type: 'click', targetId: buttonId })
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [
+            { kind: 'text', value: 'Count: ' },
+            { kind: 'text', value: '2' },
+          ],
+        },
+      ],
+    })
+  })
+
+  test('useReducer supports an init function for lazy initialization', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+    let initCalls = 0
+
+    function Counter() {
+      const [count] = useReducer(
+        (state: number) => state,
+        10,
+        (n: number) => {
+          initCalls += 1
+          return n * 2
+        }
+      )
+
+      return <span>{count}</span>
+    }
+
+    root.render(<Counter />)
+    root.render(<Counter />)
+
+    expect(initCalls).toBe(1)
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'span',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [{ kind: 'text', value: '20' }],
+        },
+      ],
+    })
+  })
+
+  test('useRef returns the same object across renders', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+    const refs: Array<{ current: number }> = []
+
+    function Widget() {
+      const ref = useRef(42)
+      refs.push(ref)
+      return <span>{ref.current}</span>
+    }
+
+    root.render(<Widget />)
+    root.render(<Widget />)
+
+    expect(refs).toHaveLength(2)
+    expect(refs[0]).toBe(refs[1])
+  })
+
+  test('useRef mutations persist across renders without triggering re-render', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+    let commitCount = 0
+
+    bubble.subscribe(event => {
+      if (event.type === 'transaction-committed') commitCount += 1
+    })
+
+    function Widget() {
+      const countRef = useRef(0)
+      const [label, setLabel] = useState('initial')
+
+      return (
+        <button
+          onClick={() => {
+            countRef.current += 1
+            if (countRef.current >= 2) setLabel('ready')
+          }}
+        >
+          {label}
+        </button>
+      )
+    }
+
+    root.render(<Widget />)
+
+    const buttonId = bubble.getRoot().children[0]!
+    commitCount = 0
+
+    bubble.dispatchEvent({ type: 'click', targetId: buttonId })
+
+    expect(commitCount).toBe(0)
+
+    bubble.dispatchEvent({ type: 'click', targetId: buttonId })
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [{ kind: 'text', value: 'ready' }],
+        },
+      ],
+    })
+  })
+
+  test('useReducer ignores dispatch when reducer returns the same state', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+    let commitCount = 0
+
+    bubble.subscribe(event => {
+      if (event.type === 'transaction-committed') commitCount += 1
+    })
+
+    function Widget() {
+      const [value, dispatch] = useReducer(
+        (state: number, action: 'noop') =>
+          action === 'noop' ? state : state + 1,
+        5
+      )
+      return <button onClick={() => dispatch('noop')}>{value}</button>
+    }
+
+    root.render(<Widget />)
+    const buttonId = bubble.getRoot().children[0]!
+    commitCount = 0
+
+    bubble.dispatchEvent({ type: 'click', targetId: buttonId })
+
+    expect(commitCount).toBe(0)
+  })
+
+  test('throws for unsupported built-in React element types without mutating the bubble', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+
+    root.render(<span>Ready</span>)
+
+    expect(() =>
+      root.render(
+        <StrictMode>
+          <button />
+        </StrictMode>
+      )
+    ).toThrow(
+      'bubble-react only supports host elements and text nodes in this slice'
+    )
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'span',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [{ kind: 'text', value: 'Ready' }],
+        },
+      ],
+    })
+  })
+
   test('throws for unsupported non-element React nodes without mutating the bubble', () => {
     const bubble = createBubble()
     const root = createBubbleReactRoot({ bubble })
@@ -1341,22 +1558,75 @@ describe('createBubbleReactRoot', () => {
     })
   })
 
-  test('throws for unsupported fragment elements without mutating the bubble', () => {
+  test('renders fragment children as siblings', () => {
     const bubble = createBubble()
     const root = createBubbleReactRoot({ bubble })
 
-    expect(() =>
-      root.render(
-        <>
-          <button />
-        </>
-      )
-    ).toThrow(
-      'bubble-react only supports host elements and text nodes in this slice'
+    root.render(
+      <>
+        <button>Save</button>
+        <span>Note</span>
+      </>
     )
+
     expect(readSnapshot(bubble)).toEqual({
       kind: 'root',
-      children: [],
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [{ kind: 'text', value: 'Save' }],
+        },
+        {
+          kind: 'element',
+          tag: 'span',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [{ kind: 'text', value: 'Note' }],
+        },
+      ],
+    })
+  })
+
+  test('renders nested fragments by flattening their children', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+
+    function Toolbar() {
+      return (
+        <>
+          <button>Save</button>
+          <button>Cancel</button>
+        </>
+      )
+    }
+
+    root.render(<Toolbar />)
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [{ kind: 'text', value: 'Save' }],
+        },
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [{ kind: 'text', value: 'Cancel' }],
+        },
+      ],
     })
   })
 
@@ -1372,7 +1642,7 @@ describe('createBubbleReactRoot', () => {
     root.render(<span>Ready</span>)
 
     expect(() => root.render(<Button />)).toThrow(
-      'bubble-react only supports useState in this slice'
+      'bubble-react only supports useState, useReducer, and useRef in this slice'
     )
     expect(readSnapshot(bubble)).toEqual({
       kind: 'root',

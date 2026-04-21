@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactNode } from 'react'
+import { Children, Fragment, isValidElement, type ReactNode } from 'react'
 
 import type { BubbleReactComponentExecutionContext } from './component-execution'
 
@@ -125,6 +125,13 @@ export function planReactNode(
 
     const props = child.props as Record<string, unknown>
     const key = child.key === null ? null : String(child.key)
+
+    if (child.type === Fragment) {
+      plans.push(
+        ...planReactNode(props.children as ReactNode, context, childPath)
+      )
+      return
+    }
 
     if (typeof child.type === 'function') {
       plans.push(

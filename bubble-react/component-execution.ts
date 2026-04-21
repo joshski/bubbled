@@ -1,4 +1,4 @@
-import type { Dispatch, ReactNode, SetStateAction } from 'react'
+import type { Dispatch, ReactNode, Reducer, SetStateAction } from 'react'
 
 import type {
   BubbleReactClientInternals,
@@ -13,6 +13,15 @@ import {
 interface BubbleReactHookState<TValue> {
   value: TValue
   setValue: Dispatch<SetStateAction<TValue>>
+}
+
+interface BubbleReactReducerState<TState, TAction> {
+  state: TState
+  dispatch: Dispatch<TAction>
+}
+
+interface BubbleReactRefState<TValue> {
+  ref: { current: TValue }
 }
 
 export interface BubbleReactComponentState {
@@ -80,6 +89,53 @@ export function executeFunctionComponent(
       hookIndex += 1
       return [hookState.value, hookState.setValue]
     },
+    useReducer<TState, TAction>(
+      reducer: Reducer<TState, TAction>,
+      initialArg: TState,
+      init?: (initialArg: TState) => TState
+    ): [TState, Dispatch<TAction>] {
+      const existingState = componentState.hooks[hookIndex] as
+        | BubbleReactReducerState<TState, TAction>
+        | undefined
+
+      if (existingState !== undefined) {
+        hookIndex += 1
+        return [existingState.state, existingState.dispatch]
+      }
+
+      const stateIndex = hookIndex
+      const initialState = init ? init(initialArg) : initialArg
+      const reducerState: BubbleReactReducerState<TState, TAction> = {
+        state: initialState,
+        dispatch(action) {
+          const nextState = reducer(reducerState.state, action)
+          if (Object.is(reducerState.state, nextState)) {
+            return
+          }
+          reducerState.state = nextState
+          context.scheduleRender()
+        },
+      }
+      componentState.hooks[stateIndex] = reducerState
+      hookIndex += 1
+      return [reducerState.state, reducerState.dispatch]
+    },
+    useRef<TValue>(initialValue: TValue): { current: TValue } {
+      const existingState = componentState.hooks[hookIndex] as
+        | BubbleReactRefState<TValue>
+        | undefined
+
+      if (existingState !== undefined) {
+        hookIndex += 1
+        return existingState.ref
+      }
+
+      const stateIndex = hookIndex
+      const ref = { current: initialValue }
+      componentState.hooks[stateIndex] = { ref }
+      hookIndex += 1
+      return ref
+    },
     useCallback: createUnsupportedHook(),
     useContext: createUnsupportedHook(),
     useDebugValue: createUnsupportedHook(),
@@ -91,8 +147,6 @@ export function executeFunctionComponent(
     useLayoutEffect: createUnsupportedHook(),
     useMemo: createUnsupportedHook(),
     useOptimistic: createUnsupportedHook(),
-    useReducer: createUnsupportedHook(),
-    useRef: createUnsupportedHook(),
     useSyncExternalStore: createUnsupportedHook(),
     useTransition: createUnsupportedHook(),
   }
