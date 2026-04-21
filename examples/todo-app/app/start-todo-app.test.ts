@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest'
 
-import type { TodoItem } from '../domain/todos.ts'
-
 import type { BubbleNetwork } from '../../../bubble-capabilities'
-import { createBubble } from '../../../bubble-core'
+import type { TodoItem } from '../domain/todos.ts'
 import type { MountedTodoApp } from '../react/mountTodoApp.ts'
+
+import { createBubble } from '../../../bubble-core'
 import {
   startTodoApp,
   type TodoAppContainer,
@@ -93,7 +93,9 @@ describe('startTodoApp', () => {
     const todos: readonly TodoItem[] = [
       { id: 't1', label: 'Alpha', done: false },
     ]
-    const bubble = createBubble({ capabilities: { network: createJsonNetwork(todos) } })
+    const bubble = createBubble({
+      capabilities: { network: createJsonNetwork(todos) },
+    })
     const { host, log, container } = createFakeHost()
 
     await startTodoApp(host, bubble)
@@ -108,7 +110,9 @@ describe('startTodoApp', () => {
   })
 
   test('disposes the mounted app when the beforeunload listener fires', async () => {
-    const bubble = createBubble({ capabilities: { network: createJsonNetwork([]) } })
+    const bubble = createBubble({
+      capabilities: { network: createJsonNetwork([]) },
+    })
     const { host, log } = createFakeHost()
 
     await startTodoApp(host, bubble)

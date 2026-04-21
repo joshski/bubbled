@@ -27,7 +27,10 @@ function createHarness(options?: Parameters<typeof mountTodoApp>[0]) {
     app.bubble.snapshot().query.getByTag('p')[0]!.id
 
   const attachedLis = () =>
-    app.bubble.snapshot().query.getByTag('li').filter(n => n.parentId !== null)
+    app.bubble
+      .snapshot()
+      .query.getByTag('li')
+      .filter(n => n.parentId !== null)
 
   const textboxValue = (name: string): string | null =>
     queries.getValueByRole('textbox', { name })

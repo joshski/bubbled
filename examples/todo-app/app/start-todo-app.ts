@@ -1,6 +1,5 @@
-import type { TodoItem } from '../domain/todos.ts'
-
 import type { BubbleRuntime } from '../../../bubble-core'
+import type { TodoItem } from '../domain/todos.ts'
 
 import { mountTodoApp, type MountedTodoApp } from '../react/mountTodoApp.ts'
 

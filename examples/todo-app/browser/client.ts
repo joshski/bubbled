@@ -1,5 +1,6 @@
-import { mountBubbleApp } from '../../../bubble-browser'
 import type { BubbleNetwork } from '../../../bubble-capabilities'
+
+import { mountBubbleApp } from '../../../bubble-browser'
 import { createBubble } from '../../../bubble-core'
 import {
   startTodoApp,
@@ -33,7 +34,7 @@ const host: TodoStartHost = {
 
     return {
       replaceChildren: () => element.replaceChildren(),
-      appendChild: (node) => {
+      appendChild: node => {
         element.appendChild(node as unknown as Node)
       },
     }
