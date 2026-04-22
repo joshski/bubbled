@@ -1857,7 +1857,7 @@ describe('startBubbleReactApp', () => {
           headers: {
             'content-type': 'text/plain',
           },
-        })) as typeof globalThis.fetch
+        })) as unknown as typeof globalThis.fetch
 
       const app = await startBubbleReactApp({
         container: container as unknown as HTMLElement,
@@ -1872,6 +1872,28 @@ describe('startBubbleReactApp', () => {
       })
 
       expect(markup()).toBe('<p>Loaded</p>')
+      app.unmount()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  test('reuses a provided bubble runtime without requiring the default browser network', async () => {
+    const { container, markup } = createContainer()
+    const bubble = createBubble()
+    const originalFetch = globalThis.fetch
+
+    try {
+      globalThis.fetch = undefined as unknown as typeof globalThis.fetch
+
+      const app = await startBubbleReactApp({
+        bubble,
+        container: container as unknown as HTMLElement,
+        node: createElement('button', null, 'Reuse'),
+      })
+
+      expect(app.bubble).toBe(bubble)
+      expect(markup()).toBe('<button>Reuse</button>')
       app.unmount()
     } finally {
       globalThis.fetch = originalFetch

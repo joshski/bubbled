@@ -132,11 +132,7 @@ function readEventTarget(
   readonly value: string
   readonly checked: boolean | null
 } {
-  const node = nodes.get(nodeId)
-
-  if (node === undefined || node.kind !== 'element') {
-    throw new Error(`Unknown event target node ID: ${nodeId}`)
-  }
+  const node = nodes.get(nodeId) as BubbleElementNode
 
   return {
     id: node.id,

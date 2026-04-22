@@ -4,7 +4,6 @@ import {
   useReducer,
   useRef,
   useState,
-  type ComponentProps,
   type ReactNode,
 } from 'react'
 import { describe, expect, test } from 'vitest'
@@ -653,14 +652,12 @@ describe('createBubbleReactRoot', () => {
   test('passes the bubble event shape to click handlers', () => {
     const bubble = createBubble()
     const root = createBubbleReactRoot({ bubble })
-    let receivedEvent:
-      | Parameters<NonNullable<ComponentProps<'button'>['onClick']>>[0]
-      | null = null
+    let receivedEvent: BubbleEvent | null = null
 
     root.render(
       <button
         onClick={event => {
-          receivedEvent = event
+          receivedEvent = event as unknown as BubbleEvent
         }}
       >
         Save
@@ -674,7 +671,7 @@ describe('createBubbleReactRoot', () => {
     if (receivedEvent === null) {
       throw new Error('Expected the click handler to receive a bubble event.')
     }
-    const bubbleEvent = receivedEvent
+    const bubbleEvent = receivedEvent as BubbleEvent
 
     expect(bubbleEvent.type).toBe('click')
     expect(bubbleEvent.targetId).toBe(buttonId)

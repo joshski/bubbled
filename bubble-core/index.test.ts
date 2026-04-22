@@ -1805,7 +1805,17 @@ describe('createBubble', () => {
       {
         type: 'click',
         targetId: buttonId,
+        target: {
+          id: buttonId,
+          value: '',
+          checked: null,
+        },
         currentTargetId: buttonId,
+        currentTarget: {
+          id: buttonId,
+          value: '',
+          checked: null,
+        },
         phase: 'target',
         cancelable: true,
         defaultPrevented: true,
@@ -1814,6 +1824,86 @@ describe('createBubble', () => {
         stopPropagation: expect.any(Function),
       },
     ])
+  })
+
+  test('change events expose normalized target value data', () => {
+    const bubble = createBubble()
+    const receivedValues: string[] = []
+
+    const inputId = bubble.transact(tx => {
+      const createdInputId = tx.createElement({ tag: 'input' })
+
+      tx.setAttribute({ nodeId: createdInputId, name: 'type', value: 'text' })
+      tx.setProperty({ nodeId: createdInputId, name: 'value', value: 'Draft' })
+      tx.addEventListener({
+        nodeId: createdInputId,
+        type: 'change',
+        listener: event => {
+          receivedValues.push(event.target.value)
+          receivedValues.push(event.currentTarget.value)
+        },
+      })
+
+      return createdInputId
+    })
+
+    bubble.dispatchEvent({
+      type: 'change',
+      targetId: inputId,
+      data: { value: undefined },
+    })
+
+    expect(receivedValues).toEqual(['', ''])
+  })
+
+  test('propagated change events distinguish target data from current target state', () => {
+    const bubble = createBubble()
+    let receivedEvent: {
+      target: { value: string; checked: boolean | null }
+      currentTarget: { value: string; checked: boolean | null }
+    } | null = null
+
+    bubble.transact(tx => {
+      const parentId = tx.createElement({ tag: 'div' })
+      const inputId = tx.createElement({ tag: 'input' })
+
+      tx.setAttribute({ nodeId: inputId, name: 'type', value: 'checkbox' })
+      tx.insertChild({ parentId, childId: inputId })
+      tx.insertChild({ parentId: bubble.rootId, childId: parentId })
+      tx.addEventListener({
+        nodeId: parentId,
+        type: 'change',
+        capture: true,
+        listener: event => {
+          receivedEvent = {
+            target: event.target,
+            currentTarget: event.currentTarget,
+          }
+        },
+      })
+    })
+
+    const parentId = bubble.getRoot().children[0]!
+    const inputId = (bubble.getNode(parentId) as BubbleElementNode).children[0]!
+
+    bubble.dispatchEvent({
+      type: 'change',
+      targetId: inputId,
+      data: { checked: true },
+    })
+
+    expect(receivedEvent).toEqual({
+      target: {
+        id: inputId,
+        value: '',
+        checked: true,
+      },
+      currentTarget: {
+        id: parentId,
+        value: '',
+        checked: null,
+      },
+    })
   })
 
   test('makes default prevented state visible to later listeners', () => {
