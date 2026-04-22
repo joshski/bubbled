@@ -4,15 +4,21 @@ import { createInMemoryStorage, createReactHarness } from '../../../bubble-test'
 import { TodoApp, DEFAULT_STORAGE_KEY } from './TodoApp.tsx'
 
 function createTodoHarness(
-  options: Partial<Parameters<typeof TodoApp>[0]> = {}
+  options: Partial<Parameters<typeof TodoApp>[0]> & {
+    storage?: ReturnType<typeof createInMemoryStorage>
+  } = {}
 ) {
   const storage = options.storage ?? createInMemoryStorage()
   const harness = createReactHarness(
     <TodoApp
       initialTodos={options.initialTodos}
-      storage={storage}
       storageKey={options.storageKey}
-    />
+    />,
+    {
+      capabilities: {
+        storage,
+      },
+    }
   )
 
   const attachedLis = () =>

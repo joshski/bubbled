@@ -14,6 +14,7 @@ export {
   formSubmitHandler,
   type TextInputProps,
 } from './react-dom-bindings'
+export { useBubble, useBubbleCapability, useStorage } from './runtime-hooks'
 
 export interface BubbleReactRoot {
   render(node: ReactNode): void
@@ -82,6 +83,7 @@ export function createBubbleReactRoot(
         rerenderRequested = false
         const usedComponentPaths = new Set<string>()
         const planningContext: BubbleReactPlanningContext = {
+          bubble: options.bubble,
           getComponentState,
           getReactClientInternals: readReactClientInternals,
           markComponentAsUsed(path) {

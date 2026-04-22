@@ -174,7 +174,13 @@ export async function startBubbleReactApp(
 ): Promise<BubbleReactApp> {
   const app = createBubbleReactApp({
     bubble: options.bubble,
-    capabilities: options.capabilities,
+    capabilities:
+      options.bubble === undefined
+        ? {
+            network: createBrowserNetwork(),
+            ...options.capabilities,
+          }
+        : options.capabilities,
   })
 
   try {

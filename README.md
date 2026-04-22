@@ -17,11 +17,11 @@ Most UI stacks make it easy to render markup, but harder to answer questions lik
 
 It gives you:
 
-- A deterministic runtime in [`bubble-core`](/Users/josh/.dust/repos/joshski/bubbled/bubble-core/index.ts)
-- Explicit capability seams for time, layout, storage, network, and viewport in [`bubble-capabilities`](/Users/josh/.dust/repos/joshski/bubbled/bubble-capabilities/index.ts)
-- A small React host adapter in [`bubble-react`](/Users/josh/.dust/repos/joshski/bubbled/bubble-react/index.ts)
-- A DOM projector that can bridge clicks, submits, and focus in [`bubble-browser`](/Users/josh/.dust/repos/joshski/bubbled/bubble-browser/index.ts)
-- A session-oriented control API and CLI in [`bubble-control`](/Users/josh/.dust/repos/joshski/bubbled/bubble-control/index.ts) and [`bubble-cli`](/Users/josh/.dust/repos/joshski/bubbled/bubble-cli/index.ts)
+- A deterministic runtime in [`bubble-core`](./bubble-core/index.ts)
+- Explicit capability seams for time, layout, storage, network, and viewport in [`bubble-capabilities`](./bubble-capabilities/index.ts)
+- A small React host adapter in [`bubble-react`](./bubble-react/index.ts)
+- A DOM projector that can bridge clicks, submits, and focus in [`bubble-browser`](./bubble-browser/index.ts)
+- A session-oriented control API and CLI in [`bubble-control`](./bubble-control/index.ts) and [`bubble-cli`](./bubble-cli/index.ts)
 
 ## What this is good for
 
@@ -57,21 +57,34 @@ console.log(serializeBubbleSnapshot(bubble.snapshot()))
 
 That is useful when you want tests, tooling, or logs to describe UI state without scraping live DOM.
 
-### 2. Render with React without making React the runtime owner
+### 2. Start a React app with a familiar browser entrypoint
 
-If you want React to describe the UI, while bubbled owns the canonical tree and event dispatch:
+If you want a browser app that still routes rendering and events through the bubble runtime:
 
 ```tsx
-import { createBubble } from './bubble-core'
-import { createBubbleReactRoot } from './bubble-react'
+import { startBubbleReactApp } from './bubble-browser'
+import { useStorage } from './bubble-react'
 
-const bubble = createBubble()
-const root = createBubbleReactRoot({ bubble })
+function TodoApp() {
+  const storage = useStorage()
 
-root.render(<button onClick={() => console.log('saved')}>Save</button>)
+  return (
+    <button
+      onClick={() => {
+        storage.setItem('saved', 'true')
+      }}
+    >
+      Save
+    </button>
+  )
+}
+
+await startBubbleReactApp({
+  node: <TodoApp />,
+})
 ```
 
-This is useful when you want a familiar authoring model but still want a runtime you can inspect, serialize, and control directly.
+This keeps the app-facing code close to normal React, while the runtime stays inspectable and deterministic underneath.
 
 ### 3. Project into the browser and bridge real DOM events back into the runtime
 

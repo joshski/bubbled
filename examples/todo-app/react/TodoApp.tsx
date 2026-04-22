@@ -1,8 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type ChangeEvent, type ReactNode } from 'react'
 
-import type { BubbleStorage } from '../../../bubble-capabilities'
-
-import { textInput } from '../../../bubble-react'
+import { useStorage } from '../../../bubble-react'
 import {
   appendTodo,
   normalizeTodoLabel,
@@ -15,13 +13,12 @@ import {
 export const DEFAULT_STORAGE_KEY = 'bubbled-todos'
 
 export interface TodoAppProps {
-  readonly storage: BubbleStorage
   readonly initialTodos?: readonly TodoItem[]
   readonly storageKey?: string
 }
 
 function readInitialTodos(
-  storage: BubbleStorage,
+  storage: ReturnType<typeof useStorage>,
   storageKey: string,
   initialTodos: readonly TodoItem[]
 ): readonly TodoItem[] {
@@ -35,7 +32,7 @@ function readInitialTodos(
 }
 
 function persistTodos(
-  storage: BubbleStorage,
+  storage: ReturnType<typeof useStorage>,
   storageKey: string,
   todos: readonly TodoItem[]
 ): void {
@@ -43,17 +40,21 @@ function persistTodos(
 }
 
 export function TodoApp(props: TodoAppProps): ReactNode {
+  const storage = useStorage()
   const storageKey = props.storageKey ?? DEFAULT_STORAGE_KEY
   const [todos, setTodos] = useState(() =>
-    readInitialTodos(props.storage, storageKey, props.initialTodos ?? [])
+    readInitialTodos(storage, storageKey, props.initialTodos ?? [])
   )
   const [draft, setDraft] = useState('')
-  const draftInput = textInput(draft, setDraft)
-  const canAdd = normalizeTodoLabel(draftInput.value).length > 0
+  const canAdd = normalizeTodoLabel(draft).length > 0
 
   const updateTodos = (nextTodos: readonly TodoItem[]): void => {
     setTodos(nextTodos)
-    persistTodos(props.storage, storageKey, nextTodos)
+    persistTodos(storage, storageKey, nextTodos)
+  }
+
+  const handleDraftChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    setDraft(event.currentTarget.value)
   }
 
   return (
@@ -61,7 +62,12 @@ export function TodoApp(props: TodoAppProps): ReactNode {
       <h1>Bubbled Todos</h1>
       <p>{summarizeTodos(todos)}</p>
       <div>
-        <input type="text" aria-label="New todo" {...draftInput} />
+        <input
+          type="text"
+          aria-label="New todo"
+          value={draft}
+          onChange={handleDraftChange}
+        />
         <button
           type="button"
           disabled={!canAdd}

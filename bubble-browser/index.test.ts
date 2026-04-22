@@ -1846,6 +1846,38 @@ describe('startBubbleReactApp', () => {
     expect(markup()).toBe('')
   })
 
+  test('provides a default browser network capability for async startup work', async () => {
+    const { container, markup } = createContainer()
+    const originalFetch = globalThis.fetch
+
+    try {
+      globalThis.fetch = (async () =>
+        new Response('Loaded', {
+          status: 200,
+          headers: {
+            'content-type': 'text/plain',
+          },
+        })) as typeof globalThis.fetch
+
+      const app = await startBubbleReactApp({
+        container: container as unknown as HTMLElement,
+        async node(bubble) {
+          const response = await bubble.fetch({
+            method: 'GET',
+            url: '/todos',
+          })
+
+          return createElement('p', null, response.body)
+        },
+      })
+
+      expect(markup()).toBe('<p>Loaded</p>')
+      app.unmount()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
   test('renders a default error node when the app bootstrap throws', async () => {
     const { container, markup } = createContainer()
 

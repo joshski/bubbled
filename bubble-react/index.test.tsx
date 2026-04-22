@@ -14,11 +14,14 @@ import {
   serializeBubbleSnapshot,
   type BubbleEvent,
 } from '../bubble-core'
+import { createInMemoryStorage } from '../bubble-test'
 import {
   createBubbleReactApp,
   createBubbleReactRoot,
   formSubmitHandler,
   textInput,
+  useBubble,
+  useStorage,
   valueChangeHandler,
 } from './index'
 import { readReactClientInternals } from './react-client-internals'
@@ -673,17 +676,25 @@ describe('createBubbleReactRoot', () => {
     }
     const bubbleEvent = receivedEvent
 
-    expect(bubbleEvent as unknown).toEqual({
-      type: 'click',
-      targetId: buttonId,
-      currentTargetId: buttonId,
-      phase: 'target',
-      cancelable: false,
-      defaultPrevented: false,
-      data: {},
-      preventDefault: expect.any(Function),
-      stopPropagation: expect.any(Function),
+    expect(bubbleEvent.type).toBe('click')
+    expect(bubbleEvent.targetId).toBe(buttonId)
+    expect(bubbleEvent.target).toEqual({
+      id: buttonId,
+      value: '',
+      checked: null,
     })
+    expect(bubbleEvent.currentTargetId).toBe(buttonId)
+    expect(bubbleEvent.currentTarget).toEqual({
+      id: buttonId,
+      value: '',
+      checked: null,
+    })
+    expect(bubbleEvent.phase).toBe('target')
+    expect(bubbleEvent.cancelable).toBe(false)
+    expect(bubbleEvent.defaultPrevented).toBe(false)
+    expect(bubbleEvent.data).toEqual({})
+    expect(typeof bubbleEvent.preventDefault).toBe('function')
+    expect(typeof bubbleEvent.stopPropagation).toBe('function')
   })
 
   test('keeps an unchanged click handler attached across re-renders', () => {
@@ -925,6 +936,44 @@ describe('createBubbleReactRoot', () => {
     expect(textbox.value).toBe('Published')
   })
 
+  test('standard controlled input handlers can read event.currentTarget.value', () => {
+    const bubble = createBubble()
+    const root = createBubbleReactRoot({ bubble })
+
+    function Editor() {
+      const [value, setValue] = useState('Draft')
+
+      return (
+        <input
+          type="text"
+          aria-label="Title"
+          value={value}
+          onChange={event => {
+            setValue(event.currentTarget.value)
+          }}
+        />
+      )
+    }
+
+    root.render(<Editor />)
+
+    const inputId = bubble.snapshot().query.getByRole('textbox', {
+      name: 'Title',
+    })[0]!.id
+
+    bubble.dispatchEvent({
+      type: 'change',
+      targetId: inputId,
+      data: { value: 'Published' },
+    })
+
+    const textbox = bubble.snapshot().query.getByRole('textbox', {
+      name: 'Title',
+    })[0]!
+
+    expect(textbox.value).toBe('Published')
+  })
+
   test('valueChangeHandler normalizes missing, null, undefined, and non-string values', () => {
     const received: string[] = []
     const handler = valueChangeHandler(value => {
@@ -934,7 +983,17 @@ describe('createBubbleReactRoot', () => {
     const make = (data: Record<string, unknown>): BubbleEvent => ({
       type: 'change',
       targetId: 'node',
+      target: {
+        id: 'node',
+        value: String(data['value'] ?? ''),
+        checked: null,
+      },
       currentTargetId: 'node',
+      currentTarget: {
+        id: 'node',
+        value: String(data['value'] ?? ''),
+        checked: null,
+      },
       phase: 'target',
       cancelable: false,
       defaultPrevented: false,
@@ -992,7 +1051,17 @@ describe('createBubbleReactRoot', () => {
     const make = (data: Record<string, unknown>): BubbleEvent => ({
       type: 'change',
       targetId: 'node',
+      target: {
+        id: 'node',
+        value: String(data['value'] ?? ''),
+        checked: null,
+      },
       currentTargetId: 'node',
+      currentTarget: {
+        id: 'node',
+        value: String(data['value'] ?? ''),
+        checked: null,
+      },
       phase: 'target',
       cancelable: false,
       defaultPrevented: false,
@@ -1041,7 +1110,17 @@ describe('createBubbleReactRoot', () => {
     const event: BubbleEvent = {
       type: 'submit',
       targetId: 'node',
+      target: {
+        id: 'node',
+        value: '',
+        checked: null,
+      },
       currentTargetId: 'node',
+      currentTarget: {
+        id: 'node',
+        value: '',
+        checked: null,
+      },
       phase: 'target',
       cancelable: false,
       defaultPrevented: false,
@@ -1759,5 +1838,53 @@ describe('createBubbleReactApp', () => {
         },
       ],
     })
+  })
+
+  test('runtime hooks can read the current bubble and storage capability', () => {
+    const storage = createInMemoryStorage({ draft: 'saved' })
+    const app = createBubbleReactApp({
+      capabilities: {
+        storage,
+      },
+    })
+
+    function Reader() {
+      const bubble = useBubble()
+      const runtimeStorage = useStorage()
+
+      return (
+        <p>{`${bubble.rootId}:${runtimeStorage.getItem('draft') ?? 'missing'}`}</p>
+      )
+    }
+
+    app.render(<Reader />)
+
+    expect(readSnapshot(app.bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'p',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: 'text',
+              value: `${app.bubble.rootId}:saved`,
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  test('runtime hooks throw when used outside render', () => {
+    expect(() => useBubble()).toThrow(
+      'Bubble runtime hooks can only be used while rendering a bubbled React component.'
+    )
+    expect(() => useStorage()).toThrow(
+      'Bubble runtime hooks can only be used while rendering a bubbled React component.'
+    )
   })
 })

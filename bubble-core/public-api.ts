@@ -137,7 +137,17 @@ export interface BubbleSubmitDispatchInput extends BubbleDispatchInput {
 export interface BubbleEvent {
   readonly type: string
   readonly targetId: BubbleNodeId
+  readonly target: {
+    readonly id: BubbleNodeId
+    readonly value: string
+    readonly checked: boolean | null
+  }
   readonly currentTargetId: BubbleNodeId
+  readonly currentTarget: {
+    readonly id: BubbleNodeId
+    readonly value: string
+    readonly checked: boolean | null
+  }
   readonly phase: 'capture' | 'target' | 'bubble'
   readonly cancelable: boolean
   readonly defaultPrevented: boolean

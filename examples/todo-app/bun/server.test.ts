@@ -1,19 +1,14 @@
 import { describe, expect, test } from 'vitest'
 
-import {
-  createTodoApiResponse,
-  createTodoRoutes,
-  handleTodoFallbackRequest,
-} from './server.ts'
+import { createTodoRoutes, handleTodoFallbackRequest } from './server.ts'
 
 async function withTodoServer<T>(
-  callback: (baseUrl: string) => Promise<T>,
-  options?: Parameters<typeof createTodoRoutes>[0]
+  callback: (baseUrl: string) => Promise<T>
 ): Promise<T> {
   const server = Bun.serve({
     port: 0,
     development: false,
-    routes: createTodoRoutes(options),
+    routes: createTodoRoutes(),
     fetch(request) {
       return handleTodoFallbackRequest(request)
     },
@@ -26,31 +21,7 @@ async function withTodoServer<T>(
   }
 }
 
-describe('createTodoApiResponse', () => {
-  test('serves an empty todo list as JSON by default', async () => {
-    const response = createTodoApiResponse()
-
-    expect(response.headers.get('content-type')).toContain('application/json')
-    expect(await response.json()).toEqual([])
-  })
-
-  test('serves custom initial todos when provided', async () => {
-    const customTodos = [{ id: 'c', label: 'Custom', done: false }]
-    const response = createTodoApiResponse({ initialTodos: customTodos })
-
-    expect(await response.json()).toEqual(customTodos)
-  })
-})
-
 describe('handleTodoFallbackRequest', () => {
-  test('returns 405 for unsupported methods on /api/todos', () => {
-    const response = handleTodoFallbackRequest(
-      new Request('http://localhost/api/todos', { method: 'POST' })
-    )
-
-    expect(response.status).toBe(405)
-  })
-
   test('returns 404 for unknown routes', () => {
     const response = handleTodoFallbackRequest(
       new Request('http://localhost/nope')
@@ -61,22 +32,11 @@ describe('handleTodoFallbackRequest', () => {
 })
 
 describe('createTodoRoutes', () => {
-  test('returns html and api routes with a configurable todos handler', async () => {
-    const customTodos = [{ id: 'c', label: 'Custom', done: false }]
-    const routes = createTodoRoutes({ initialTodos: customTodos })
-    const apiRoute = routes['/api/todos']
+  test('returns the html routes for the todo app', () => {
+    const routes = createTodoRoutes()
 
-    expect(Object.keys(routes).sort()).toEqual([
-      '/',
-      '/api/todos',
-      '/index.html',
-    ])
+    expect(Object.keys(routes).sort()).toEqual(['/', '/index.html'])
     expect(routes['/']).toBe(routes['/index.html'])
-    expect(typeof apiRoute.GET).toBe('function')
-
-    const response = apiRoute.GET()
-
-    expect(await response.json()).toEqual(customTodos)
   })
 })
 

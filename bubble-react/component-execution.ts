@@ -1,5 +1,6 @@
 import type { Dispatch, ReactNode, Reducer, SetStateAction } from 'react'
 
+import type { BubbleRuntime } from '../bubble-core'
 import type {
   BubbleReactClientInternals,
   BubbleReactHookDispatcher,
@@ -9,6 +10,7 @@ import {
   UNSUPPORTED_REACT_HOOK_ERROR,
   UNSUPPORTED_REACT_NODE_TYPE_ERROR,
 } from './planner-errors'
+import { withCurrentBubbleRuntime } from './runtime-hooks'
 
 interface BubbleReactHookState<TValue> {
   value: TValue
@@ -29,6 +31,7 @@ export interface BubbleReactComponentState {
 }
 
 export interface BubbleReactComponentExecutionContext {
+  bubble: BubbleRuntime
   getComponentState(path: string): BubbleReactComponentState
   getReactClientInternals(): BubbleReactClientInternals
   markComponentAsUsed(path: string): void
@@ -157,7 +160,9 @@ export function executeFunctionComponent(
 
   try {
     context.markComponentAsUsed(componentPath)
-    const renderedNode = component(props)
+    const renderedNode = withCurrentBubbleRuntime(context.bubble, () =>
+      component(props)
+    )
 
     if (renderedNode instanceof Promise) {
       throw new Error(UNSUPPORTED_REACT_NODE_TYPE_ERROR)

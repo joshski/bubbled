@@ -123,6 +123,34 @@ function assertSubmitTargetNode(
   }
 }
 
+function readEventTarget(
+  nodes: ReadonlyMap<BubbleNodeId, BubbleNode>,
+  nodeId: BubbleNodeId,
+  eventData?: Readonly<Record<string, unknown>>
+): {
+  readonly id: BubbleNodeId
+  readonly value: string
+  readonly checked: boolean | null
+} {
+  const node = nodes.get(nodeId)
+
+  if (node === undefined || node.kind !== 'element') {
+    throw new Error(`Unknown event target node ID: ${nodeId}`)
+  }
+
+  return {
+    id: node.id,
+    value:
+      eventData !== undefined && 'value' in eventData
+        ? String(eventData['value'] ?? '')
+        : (node.value ?? ''),
+    checked:
+      eventData !== undefined && 'checked' in eventData
+        ? Boolean(eventData['checked'])
+        : node.checked,
+  }
+}
+
 export function createBubbleEventRuntime({
   getNodes,
 }: CreateBubbleEventRuntimeOptions): BubbleEventRuntime {
@@ -236,8 +264,18 @@ export function createBubbleEventRuntime({
     const event: BubbleEvent = {
       type,
       targetId,
+      get target() {
+        return readEventTarget(getNodes(), targetId, eventData)
+      },
       get currentTargetId() {
         return currentTargetId
+      },
+      get currentTarget() {
+        return readEventTarget(
+          getNodes(),
+          currentTargetId,
+          currentTargetId === targetId ? eventData : undefined
+        )
       },
       get phase() {
         return phase
