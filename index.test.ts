@@ -58,6 +58,7 @@ describe('public entrypoints', () => {
     expect(Object.keys(entrypoint).sort()).toEqual([
       'createHarness',
       'createInMemoryStorage',
+      'createReactHarness',
       'createRenderHarness',
       'createSemanticAssertions',
       'createSemanticInteractions',
@@ -66,6 +67,7 @@ describe('public entrypoints', () => {
     expect(entrypoint).toMatchObject({
       createHarness: expect.any(Function),
       createInMemoryStorage: expect.any(Function),
+      createReactHarness: expect.any(Function),
       createRenderHarness: expect.any(Function),
       createSemanticAssertions: expect.any(Function),
       createSemanticInteractions: expect.any(Function),
@@ -80,18 +82,22 @@ describe('public entrypoints', () => {
     const entrypoint = await import('./bubble-browser')
 
     expect(Object.keys(entrypoint).sort()).toEqual([
+      'createBrowserNetwork',
       'createDomLayout',
       'createDomProjector',
       'measureAndPlacePopover',
       'mountBubbleApp',
       'placePopover',
+      'startBubbleReactApp',
     ])
     expect(entrypoint).toMatchObject({
+      createBrowserNetwork: expect.any(Function),
       createDomLayout: expect.any(Function),
       createDomProjector: expect.any(Function),
       measureAndPlacePopover: expect.any(Function),
       mountBubbleApp: expect.any(Function),
       placePopover: expect.any(Function),
+      startBubbleReactApp: expect.any(Function),
     })
     expectNoNewGlobals(globalsBeforeImport)
   })
@@ -102,12 +108,14 @@ describe('public entrypoints', () => {
     const entrypoint = await import('./bubble-react')
 
     expect(Object.keys(entrypoint).sort()).toEqual([
+      'createBubbleReactApp',
       'createBubbleReactRoot',
       'formSubmitHandler',
       'textInput',
       'valueChangeHandler',
     ])
     expect(entrypoint).toMatchObject({
+      createBubbleReactApp: expect.any(Function),
       createBubbleReactRoot: expect.any(Function),
       formSubmitHandler: expect.any(Function),
       textInput: expect.any(Function),

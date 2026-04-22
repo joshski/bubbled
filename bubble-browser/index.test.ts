@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { describe, expect, test } from 'vitest'
 
 import {
@@ -9,11 +10,13 @@ import {
   type BubbleTextNode,
 } from '../bubble-core'
 import {
+  createBrowserNetwork,
   createDomLayout,
   createDomProjector,
   measureAndPlacePopover,
   mountBubbleApp,
   placePopover,
+  startBubbleReactApp,
 } from './index'
 
 abstract class FakeDomNode {
@@ -1786,5 +1789,255 @@ describe('mountBubbleApp', () => {
     })
 
     expect(calls).toEqual([])
+  })
+})
+
+describe('createBrowserNetwork', () => {
+  test('adapts fetch responses into the bubble network shape', async () => {
+    const network = createBrowserNetwork({
+      fetch: (async () =>
+        new Response('{"ok":true}', {
+          status: 201,
+          headers: {
+            'content-type': 'application/json',
+          },
+        })) as unknown as typeof globalThis.fetch,
+    })
+
+    await expect(
+      network.fetch({ method: 'GET', url: 'http://example.test' })
+    ).resolves.toEqual({
+      status: 201,
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: '{"ok":true}',
+    })
+  })
+
+  test('throws when browser fetch support is unavailable', () => {
+    const originalFetch = globalThis.fetch
+
+    try {
+      ;(globalThis as { fetch?: typeof globalThis.fetch }).fetch = undefined
+
+      expect(() => createBrowserNetwork()).toThrow(
+        'Expected global fetch support in the browser runtime.'
+      )
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})
+
+describe('startBubbleReactApp', () => {
+  test('creates and mounts a React app into the provided container', async () => {
+    const { container, markup } = createContainer()
+
+    const app = await startBubbleReactApp({
+      container: container as unknown as HTMLElement,
+      node: () => createElement('button', null, 'Save'),
+    })
+
+    expect(markup()).toBe('<button>Save</button>')
+
+    app.unmount()
+
+    expect(markup()).toBe('')
+  })
+
+  test('renders a default error node when the app bootstrap throws', async () => {
+    const { container, markup } = createContainer()
+
+    await startBubbleReactApp({
+      container: container as unknown as HTMLElement,
+      async node() {
+        throw new Error('boom')
+      },
+    })
+
+    expect(markup()).toBe('<p>boom</p>')
+  })
+
+  test('renders the generic default error node for non-Error failures', async () => {
+    const { container, markup } = createContainer()
+
+    await startBubbleReactApp({
+      container: container as unknown as HTMLElement,
+      async node() {
+        throw 'boom'
+      },
+    })
+
+    expect(markup()).toBe('<p>Failed to start the bubble app.</p>')
+  })
+
+  test('resolves the default #app container from the global document', async () => {
+    const { container, markup } = createContainer()
+    const originalDocument = globalThis.document
+
+    try {
+      ;(globalThis as { document?: Document }).document = {
+        getElementById(id: string) {
+          return id === 'app' ? (container as unknown as HTMLElement) : null
+        },
+      } as Document
+
+      const app = await startBubbleReactApp({
+        node: createElement('button', null, 'Default'),
+      })
+
+      expect(markup()).toBe('<button>Default</button>')
+      app.unmount()
+    } finally {
+      ;(globalThis as { document?: Document }).document = originalDocument
+    }
+  })
+
+  test('throws when the default #app container is missing', async () => {
+    const originalDocument = globalThis.document
+
+    try {
+      ;(globalThis as { document?: Document }).document = {
+        getElementById() {
+          return null
+        },
+      } as unknown as Document
+
+      await expect(
+        startBubbleReactApp({
+          node: createElement('button', null, 'Missing default'),
+        })
+      ).rejects.toThrow('Expected a root element with id "app".')
+    } finally {
+      ;(globalThis as { document?: Document }).document = originalDocument
+    }
+  })
+
+  test('resolves a selector container through the global document', async () => {
+    const { container, markup } = createContainer()
+    const originalDocument = globalThis.document
+
+    try {
+      ;(globalThis as { document?: Document }).document = {
+        querySelector(selector: string) {
+          return selector === '#app'
+            ? (container as unknown as HTMLElement)
+            : null
+        },
+      } as unknown as Document
+
+      const app = await startBubbleReactApp({
+        container: '#app',
+        node: createElement('button', null, 'Selector'),
+      })
+
+      expect(markup()).toBe('<button>Selector</button>')
+      app.unmount()
+    } finally {
+      ;(globalThis as { document?: Document }).document = originalDocument
+    }
+  })
+
+  test('throws when a selector container cannot be resolved', async () => {
+    const originalDocument = globalThis.document
+
+    try {
+      ;(globalThis as { document?: Document }).document = {
+        querySelector() {
+          return null
+        },
+      } as unknown as Document
+
+      await expect(
+        startBubbleReactApp({
+          container: '#missing',
+          node: createElement('button', null, 'Missing'),
+        })
+      ).rejects.toThrow('Expected a root element matching "#missing".')
+    } finally {
+      ;(globalThis as { document?: Document }).document = originalDocument
+    }
+  })
+
+  test('registers and removes the beforeunload cleanup listener when browser events are available', async () => {
+    const { container, markup } = createContainer()
+    const originalAddEventListener = globalThis.addEventListener
+    const originalRemoveEventListener = globalThis.removeEventListener
+    let beforeUnloadListener: (() => void) | null = null
+    const removedListeners: Array<() => void> = []
+
+    try {
+      ;(
+        globalThis as { addEventListener?: typeof globalThis.addEventListener }
+      ).addEventListener = ((
+        type: string,
+        listener: EventListenerOrEventListenerObject
+      ) => {
+        if (type === 'beforeunload') {
+          beforeUnloadListener = listener as () => void
+        }
+      }) as typeof globalThis.addEventListener
+      ;(
+        globalThis as {
+          removeEventListener?: typeof globalThis.removeEventListener
+        }
+      ).removeEventListener = ((
+        type: string,
+        listener: EventListenerOrEventListenerObject
+      ) => {
+        if (type === 'beforeunload') {
+          removedListeners.push(listener as () => void)
+        }
+      }) as typeof globalThis.removeEventListener
+
+      const app = await startBubbleReactApp({
+        container: container as unknown as HTMLElement,
+        node: createElement('button', null, 'Unload'),
+      })
+
+      expect(typeof beforeUnloadListener).toBe('function')
+
+      const listener = beforeUnloadListener
+
+      if (listener !== null) {
+        ;(listener as () => void)()
+      }
+      expect(markup()).toBe('')
+
+      app.unmount()
+
+      expect(removedListeners).toEqual([beforeUnloadListener])
+    } finally {
+      globalThis.addEventListener = originalAddEventListener
+      globalThis.removeEventListener = originalRemoveEventListener
+    }
+  })
+
+  test('tolerates browsers without removeEventListener during unmount', async () => {
+    const { container } = createContainer()
+    const originalAddEventListener = globalThis.addEventListener
+    const originalRemoveEventListener = globalThis.removeEventListener
+
+    try {
+      ;(
+        globalThis as { addEventListener?: typeof globalThis.addEventListener }
+      ).addEventListener = (() => {}) as typeof globalThis.addEventListener
+      ;(
+        globalThis as {
+          removeEventListener?: typeof globalThis.removeEventListener
+        }
+      ).removeEventListener = undefined
+
+      const app = await startBubbleReactApp({
+        container: container as unknown as HTMLElement,
+        node: createElement('button', null, 'No remove'),
+      })
+
+      expect(() => app.unmount()).not.toThrow()
+    } finally {
+      globalThis.addEventListener = originalAddEventListener
+      globalThis.removeEventListener = originalRemoveEventListener
+    }
   })
 })

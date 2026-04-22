@@ -1,3 +1,6 @@
+import { createElement, type ReactNode } from 'react'
+
+import type { BubbleNetwork } from '../bubble-capabilities'
 import type {
   BubbleElementNode,
   BubbleMutation,
@@ -15,6 +18,11 @@ import type {
   DomTextNode,
 } from './internal/dom'
 
+import {
+  createBubbleReactApp,
+  type BubbleReactApp,
+  type CreateBubbleReactAppOptions,
+} from '../bubble-react'
 import { createDomEventBridge } from './internal/event-bridge'
 import { createDomFocusSync, type DomFocusSync } from './internal/focus-sync'
 import {
@@ -56,6 +64,95 @@ export interface BrowserMount {
   unmount(): void
 }
 
+export interface CreateBrowserNetworkOptions {
+  readonly fetch?: typeof globalThis.fetch
+}
+
+export interface StartBubbleReactAppOptions {
+  readonly bubble?: BubbleRuntime
+  readonly capabilities?: CreateBubbleReactAppOptions['capabilities']
+  readonly container?: HTMLElement | string
+  readonly node:
+    | ReactNode
+    | ((bubble: BubbleRuntime) => ReactNode | Promise<ReactNode>)
+  readonly bridgeEvents?: boolean
+  readonly syncFocus?: boolean
+  readonly renderError?: (error: unknown) => ReactNode
+}
+
+function isDomContainer(value: unknown): value is HTMLElement {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'replaceChildren' in value &&
+    'ownerDocument' in value
+  )
+}
+
+function resolveDomContainer(
+  container: HTMLElement | string | undefined
+): HTMLElement {
+  if (container === undefined) {
+    const fallback = globalThis.document?.getElementById('app')
+
+    if (isDomContainer(fallback)) {
+      return fallback
+    }
+
+    throw new Error('Expected a root element with id "app".')
+  }
+
+  if (typeof container !== 'string') {
+    return container
+  }
+
+  const element = globalThis.document?.querySelector(container)
+
+  if (isDomContainer(element)) {
+    return element
+  }
+
+  throw new Error(
+    `Expected a root element matching ${JSON.stringify(container)}.`
+  )
+}
+
+function getDefaultErrorNode(error: unknown): ReactNode {
+  return createElement(
+    'p',
+    null,
+    error instanceof Error ? error.message : 'Failed to start the bubble app.'
+  )
+}
+
+export function createBrowserNetwork(
+  options: CreateBrowserNetworkOptions = {}
+): BubbleNetwork {
+  const fetchImpl = options.fetch ?? globalThis.fetch
+
+  if (typeof fetchImpl !== 'function') {
+    throw new Error('Expected global fetch support in the browser runtime.')
+  }
+
+  return {
+    async fetch(request) {
+      const response = await fetchImpl(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+      })
+      const body = await response.text()
+      const headers: Record<string, string> = {}
+
+      response.headers.forEach((value, key) => {
+        headers[key] = value
+      })
+
+      return { status: response.status, headers, body }
+    },
+  }
+}
+
 export function mountBubbleApp(options: MountBubbleAppOptions): BrowserMount {
   const projector = createDomProjector({
     bubble: options.app.bubble,
@@ -68,6 +165,57 @@ export function mountBubbleApp(options: MountBubbleAppOptions): BrowserMount {
     unmount(): void {
       projector.unmount()
       options.app.unmount()
+    },
+  }
+}
+
+export async function startBubbleReactApp(
+  options: StartBubbleReactAppOptions
+): Promise<BubbleReactApp> {
+  const app = createBubbleReactApp({
+    bubble: options.bubble,
+    capabilities: options.capabilities,
+  })
+
+  try {
+    const node =
+      typeof options.node === 'function'
+        ? await options.node(app.bubble)
+        : options.node
+
+    app.render(node)
+  } catch (error: unknown) {
+    app.render((options.renderError ?? getDefaultErrorNode)(error))
+  }
+
+  const mount = mountBubbleApp({
+    app,
+    container: resolveDomContainer(options.container),
+    bridgeEvents: options.bridgeEvents ?? true,
+    syncFocus: options.syncFocus ?? true,
+  })
+  const removeBeforeUnloadListener =
+    typeof globalThis.addEventListener === 'function'
+      ? (() => {
+          const listener = () => {
+            mount.unmount()
+          }
+
+          globalThis.addEventListener('beforeunload', listener, { once: true })
+
+          return () => {
+            if (typeof globalThis.removeEventListener === 'function') {
+              globalThis.removeEventListener('beforeunload', listener)
+            }
+          }
+        })()
+      : () => {}
+
+  return {
+    ...app,
+    unmount(): void {
+      removeBeforeUnloadListener()
+      mount.unmount()
     },
   }
 }

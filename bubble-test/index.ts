@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import type { BubbleStorage } from '../bubble-capabilities'
 import type {
   BubbleHarness,
@@ -8,6 +10,7 @@ import type {
 } from './types'
 
 import { createBubble, type BubbleRuntime } from '../bubble-core'
+import { createBubbleReactApp } from '../bubble-react'
 import { createRenderHarness } from './render-harness'
 import { createInternalSemanticAssertions } from './semantic-assertions'
 import { createInternalSemanticInteractions } from './semantic-interactions'
@@ -72,4 +75,28 @@ export function createHarness(
     createSemanticAssertions(renderHarness),
     createSemanticInteractions(renderHarness)
   )
+}
+
+export function createReactHarness(
+  node: ReactNode,
+  options: Parameters<typeof createBubbleReactApp>[0] = {}
+): BubbleHarness & {
+  readonly app: ReturnType<typeof createBubbleReactApp>
+  rerender(node: ReactNode): void
+} {
+  const app = createBubbleReactApp({
+    ...options,
+    node,
+  })
+  const harness = createHarness(app.bubble)
+
+  return Object.assign(harness, {
+    app,
+    cleanup() {
+      app.unmount()
+    },
+    rerender(nextNode: ReactNode) {
+      app.render(nextNode)
+    },
+  })
 }

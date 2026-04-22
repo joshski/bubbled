@@ -15,6 +15,7 @@ import {
   type BubbleEvent,
 } from '../bubble-core'
 import {
+  createBubbleReactApp,
   createBubbleReactRoot,
   formSubmitHandler,
   textInput,
@@ -1687,5 +1688,76 @@ describe('createBubbleReactRoot', () => {
     ).toThrow(
       'bubble-react could not access the React client hook dispatcher internals'
     )
+  })
+})
+
+describe('createBubbleReactApp', () => {
+  test('creates an empty app when called without options', () => {
+    const app = createBubbleReactApp()
+
+    expect(readSnapshot(app.bubble)).toEqual({
+      kind: 'root',
+      children: [],
+    })
+  })
+
+  test('creates a bubble runtime, renders the initial node, and unmounts cleanly', () => {
+    const app = createBubbleReactApp({
+      node: <button>Save</button>,
+    })
+
+    expect(readSnapshot(app.bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: 'text',
+              value: 'Save',
+            },
+          ],
+        },
+      ],
+    })
+
+    app.unmount()
+
+    expect(readSnapshot(app.bubble)).toEqual({
+      kind: 'root',
+      children: [],
+    })
+  })
+
+  test('reuses the provided bubble runtime', () => {
+    const bubble = createBubble()
+    const app = createBubbleReactApp({ bubble })
+
+    expect(app.bubble).toBe(bubble)
+
+    app.render(<button>Reuse</button>)
+
+    expect(readSnapshot(bubble)).toEqual({
+      kind: 'root',
+      children: [
+        {
+          kind: 'element',
+          tag: 'button',
+          namespace: 'html',
+          attributes: {},
+          properties: {},
+          children: [
+            {
+              kind: 'text',
+              value: 'Reuse',
+            },
+          ],
+        },
+      ],
+    })
   })
 })

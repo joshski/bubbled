@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 
-import type { BubbleRuntime } from '../bubble-core'
+import type { BubbleRuntime, CreateBubbleOptions } from '../bubble-core'
 import type { BubbleReactComponentState } from './component-execution'
 
+import { createBubble } from '../bubble-core'
 import { reconcileChildren, type BubbleReactNode } from './child-reconciliation'
 import { planReactNode, type BubbleReactPlanningContext } from './planner'
 import { readReactClientInternals } from './react-client-internals'
@@ -21,6 +22,19 @@ export interface BubbleReactRoot {
 
 export interface CreateBubbleReactRootOptions {
   bubble: BubbleRuntime
+}
+
+export interface BubbleReactApp {
+  readonly bubble: BubbleRuntime
+  readonly root: BubbleReactRoot
+  render(node: ReactNode): void
+  unmount(): void
+}
+
+export interface CreateBubbleReactAppOptions {
+  readonly bubble?: BubbleRuntime
+  readonly capabilities?: CreateBubbleOptions['capabilities']
+  readonly node?: ReactNode
 }
 
 export function createBubbleReactRoot(
@@ -106,4 +120,27 @@ export function createBubbleReactRoot(
   }
 
   return { render, unmount: () => render(null) }
+}
+
+export function createBubbleReactApp(
+  options: CreateBubbleReactAppOptions = {}
+): BubbleReactApp {
+  const bubble =
+    options.bubble ?? createBubble({ capabilities: options.capabilities })
+  const root = createBubbleReactRoot({ bubble })
+
+  if (options.node !== undefined) {
+    root.render(options.node)
+  }
+
+  return {
+    bubble,
+    root,
+    render(node: ReactNode): void {
+      root.render(node)
+    },
+    unmount(): void {
+      root.unmount()
+    },
+  }
 }

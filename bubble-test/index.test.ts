@@ -1,9 +1,11 @@
+import { createElement } from 'react'
 import { describe, expect, test } from 'vitest'
 
 import { createBubble } from '../bubble-core'
 import {
   createHarness,
   createInMemoryStorage,
+  createReactHarness,
   createRenderHarness,
   createSemanticAssertions,
   createSemanticInteractions,
@@ -536,6 +538,31 @@ describe('createRenderHarness', () => {
     harness.tab({ shift: true })
 
     expect(bubble.getFocusedNodeId()).toBeNull()
+  })
+})
+
+describe('createReactHarness', () => {
+  test('renders a React node through the semantic test harness', () => {
+    const harness = createReactHarness(
+      createElement(
+        'button',
+        {
+          type: 'button',
+        },
+        'Save'
+      )
+    )
+
+    expect(harness.getByRole('button', { name: 'Save' })).toBeDefined()
+  })
+
+  test('rerender updates the mounted React tree in place', () => {
+    const harness = createReactHarness(createElement('button', null, 'Save'))
+    const buttonId = harness.getByRole('button', { name: 'Save' })
+
+    harness.rerender(createElement('button', null, 'Publish'))
+
+    expect(harness.getByRole('button', { name: 'Publish' })).toBe(buttonId)
   })
 })
 
