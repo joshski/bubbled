@@ -3,7 +3,7 @@ import todoAppPage from './index.html'
 export const TODO_APP_ROOT_PATH = '/'
 export const TODO_APP_INDEX_PATH = '/index.html'
 
-export function handleTodoFallbackRequest(request: Request): Response {
+export function handleTodoFallbackRequest(_request: Request): Response {
   return new Response('not found', { status: 404 })
 }
 
